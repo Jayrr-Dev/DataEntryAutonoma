@@ -1,14 +1,16 @@
 # Data Entry Autonoma
 
+**Human-friendly, simple desktop automation for repetitive data entry.**
+
 **By [Jayrr Dev](https://github.com/Jayrr-Dev)**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Record mouse clicks, scrolls, and keyboard input once, then run automated data entry with saved presets or CSV batch files. Built with AutoHotkey v2 for Windows.
+Record mouse clicks, scrolls, and keyboard input once, then run the same workflow again with different values from a preset or CSV file. No scripting required: click **Record**, do your task, click **Run**. Built with AutoHotkey v2 for Windows.
 
 ## What it does
 
-Data Entry Autonoma is a desktop tool for repeating structured input across apps and forms. You perform a workflow once while the app records it, then replay that workflow with different text values from a preset or a CSV file.
+Data Entry Autonoma is a human-friendly, simple desktop tool for repeating structured input across apps and forms. You perform a workflow once while the app records it, then replay that workflow with different text values from a preset or a CSV file. The interface stays small and clear: two main buttons, three tabs, and plain-language tooltips while you work.
 
 Typical uses:
 
