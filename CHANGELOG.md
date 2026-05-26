@@ -5,6 +5,35 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-05-26
+
+### Added
+
+- Shared tab layout helpers (`AddManageTabSectionLabel`, `BuildManageTabListOptions`) following AutoHotkey Tab control positioning rules
+
+### Changed
+
+- Recordings, presets, CSV, and Run Options tabs use consistent full-width list layout anchored with `Section` + `xs` (never `xm` inside tabs)
+
+### Fixed
+
+- Recordings ListView disappearing, shifting right, or showing empty after tab header and info button were added
+- Recordings **Variable count** column width and tab button row clipping
+- Run Options info button placement beside the label text
+
+## [1.0.4] - 2026-05-26
+
+### Added
+
+- Info (**i**) buttons on every tab: Recordings, Input Presets, CSV Bulk Inputs, and Run Options
+
+### Changed
+
+- CSV Bulk Inputs help text rewritten (format, saved files, Config, Browse, and batch rules)
+- Recordings and Run Options tabs include section headers for help placement
+- Dynamic tab list heights adjusted for new section headers
+- Recordings list column widths fixed so **Variable count** is not truncated; tab button rows fit without clipping
+
 ## [1.0.3] - 2026-05-26
 
 ### Added
@@ -65,6 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.0.5]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.4...v1.0.5
+[1.0.4]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.0...v1.0.1

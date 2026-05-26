@@ -23,7 +23,7 @@ Data Entry Autonoma works like showing someone how to fill out a form, then havi
 3. Click **Run** and it performs those same actions automatically: moves the mouse, clicks, scrolls, and **types text for you** into the fields you set up during recording.
 4. Store the text to type in a **preset** or **CSV file**. Each run or each CSV row can fill the form with new values while you watch or walk away.
 
-You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, three tabs, and plain-language tooltips while you work.
+You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, four tabs, and plain-language tooltips while you work.
 
 Typical uses:
 
@@ -48,6 +48,7 @@ Typical uses:
 - **Esc saves** the recording and opens a rename dialog; **Cancel** on that dialog discards the file
 - **Edit Log** opens the raw recording file for advanced edits
 - **Rename** and **Delete** for recordings from the Recordings tab
+- **i** button on the Recordings tab opens in-app help for that section
 - Recordings list shows **name** and **variable count** for each session
 
 ### Run (replay)
@@ -66,6 +67,7 @@ Typical uses:
 - Choose **Use input preset for Run** as the run input source
 - Save named preset files with speeds, pauses, run options, and variable text values
 - **Edit Preset**, **Delete Preset**, and **Refresh** list buttons
+- **i** button on the Input Presets tab opens in-app help for presets and run input source
 - Selecting a preset loads its mouse and typing options into the **Run Options** tab
 - One value per line in the preset maps to `variable-1`, `variable-2`, and so on
 
@@ -78,8 +80,20 @@ Typical uses:
 - CSV file runs the same recording once per row with different values
 - Column 1 is a row label (status display only)
 - Columns 2 and onward map to `variable-1`, `variable-2`, etc.
-- **i** button opens in-app help; step-by-step mode shows a progress table (all variable columns) and per-row Run / Skip / Run all remaining prompts
+- **i** button on the CSV Bulk Inputs tab opens format and batch help
 - Blank lines and lines starting with `#` are ignored
+- Step-by-step batch mode shows a progress table (all variable columns) and per-row Run / Skip / Run all remaining prompts
+
+### Run Options tab
+
+- **Smooth** or **Instant** mouse movement and **Human-like** or **Instant** typing for the next run
+- **i** button opens in-app help for playback settings
+- Fine-grained delay and speed numbers are edited via **Edit Preset** on the Input Presets tab
+
+### In-app help
+
+- Each tab has an **i** button beside its section label with tab-specific guidance
+- CSV help covers file format, `csv-batches\`, Config, Browse, and batch rules
 
 ### App behavior
 
@@ -94,10 +108,10 @@ Typical uses:
 | Area | Purpose |
 |------|---------|
 | **Status bar** | Current action, selection summary, batch progress |
-| **Recordings** tab | Pick, rename, edit log, or delete recordings |
-| **Input Presets** tab | Pick presets; edit/delete presets; choose preset as run input source |
-| **CSV Bulk Inputs** tab | Manage CSV files in `csv-batches\`; choose CSV as run input source |
-| **Run Options** tab | Smooth/Instant mouse and Human-like/Instant typing for the next run |
+| **Recordings** tab | Pick, rename, edit log, or delete recordings; **i** for tab help |
+| **Input Presets** tab | Pick presets; edit/delete presets; choose preset as run input source; **i** for tab help |
+| **CSV Bulk Inputs** tab | Manage CSV files in `csv-batches\`; choose CSV as run input source; **i** for tab help |
+| **Run Options** tab | Smooth/Instant mouse and Human-like/Instant typing for the next run; **i** for tab help |
 | **Record** | Start a new capture session |
 | **Run** | Replay the selected recording |
 
@@ -108,7 +122,7 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.0.3-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.0.5-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
@@ -426,6 +440,8 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
+| **1.0.5** | Tab layout fix for Recordings list (Section + xs); shared tab helpers; info buttons aligned on all tabs |
+| **1.0.4** | Tab info (i) buttons on all tabs, updated CSV help text, layout fixes for recordings list and tab buttons |
 | **1.0.3** | CSV Bulk Inputs tab, preset vs CSV run source, mouse hold/drag + hotkey recording fixes, all CSV variables in batch UI |
 | **1.0.2** | CSV Config with ask next line, batch progress table, uninstall wizard in release zip |
 | **1.0.1** | Install wizard upgrades existing installs in place; version shown in app title |

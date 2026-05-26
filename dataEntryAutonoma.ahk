@@ -23,7 +23,7 @@ CoordMode "Mouse", "Screen"
 ; =============================================================================
 
 C := {
-    appVersion: "1.0.3", ; keep in sync with VERSION at project root
+    appVersion: "1.0.5", ; keep in sync with VERSION at project root
     recordingsDir: A_ScriptDir "\recordings",
     savesDir: A_ScriptDir "\saved-inputs",
     csvBatchesDir: A_ScriptDir "\csv-batches",
@@ -36,11 +36,49 @@ C := {
     wheelDelta: 120,
     flushIntervalMs: 1000,
     batchRowPauseMs: 750,
+    recordingsTabHelpTitle: "Recordings help",
+    presetsTabHelpTitle: "Input Presets help",
+    csvBatchHelpTitle: "CSV Bulk Inputs help",
+    runOptionsTabHelpTitle: "Run Options help",
+    recordingsTabHelpMessage: "
+    (
+Select a recording, then click Run.
+
+Rename: change the recording file name
+Edit Log: open the raw recording file for advanced edits
+Delete: remove the selected recording
+
+While recording:
+- Esc saves (Cancel on the save dialog discards)
+- Normal clicks stay clicks
+- Hold or drag left-click for Excel-style selection
+- Ctrl, Shift, or Alt shortcuts are recorded and replayed
+    )",
+    presetsTabHelpMessage: "
+    (
+Choose Use input preset for Run, then pick a preset from the list.
+
+Edit Preset: set speeds, pauses, run options, and variable values (one line per variable)
+Delete Preset: remove the selected preset
+Refresh: reload recordings, presets, and CSV lists
+
+Variable lines map to variable-1, variable-2, and so on in your recording.
+Input preset and CSV bulk inputs cannot both be active for Run.
+    )",
     csvBatchHelpMessage: "
     (
-CSV batch replays the selected recording once per row. Each row supplies variable values for that full pass.
+CSV bulk inputs run the selected recording once per row. Each row supplies values for that pass.
 
-Expected format:
+Choose Use CSV bulk inputs for Run (only one input source can be active).
+
+Saved files:
+- Stored in csv-batches\
+- Edit CSV: create or edit a file
+- Rename / Delete: manage saved files
+- Browse: load an external file (optional import into csv-batches\)
+- Refresh: reload all lists
+
+CSV format:
   label,value1,value2,value3
 
 Examples:
@@ -50,17 +88,30 @@ Examples:
   Single value (maps to variable-1 only):
   hello
 
-How it works:
-  • Run replays the entire recording for row 1, then row 2, and so on
-  • Column 1 is a row label (status display only)
-  • Columns 2+ map to variable-1, variable-2, variable-3, ...
-  • Blank lines and lines starting with # are ignored
-  • Saved CSV files live in csv-batches\ and can be selected, edited, renamed, or deleted on the CSV Bulk Inputs tab
-  • Choose Use CSV bulk inputs for Run (mutually exclusive with input presets)
-  • Browse can also point to an external CSV file (optional import into csv-batches\)
-  • Config (next to the run-source radio) sets Ask to run next line or Run all rows automatically
-  • Ask to run next line shows a progress table (all variables) and a prompt before each row (Run, Skip, or Run all remaining)
-  • Esc stops the whole batch
+Rules:
+- Column 1 is a row label (display only)
+- Columns 2+ map to variable-1, variable-2, variable-3, ...
+- Blank lines and lines starting with # are ignored
+
+Config (next to the run-source radio):
+- Ask to run next line: progress table and prompt before each row (Run, Skip, Run all remaining)
+- Run all rows automatically: no prompts between rows
+
+Esc stops the whole batch.
+    )",
+    runOptionsTabHelpMessage: "
+    (
+These options apply to the next Run.
+
+Mouse movement:
+- Smooth: curved, natural mouse movement
+- Instant: jump directly to each target
+
+Typing:
+- Human-like: per-key delays
+- Instant: send text immediately
+
+For delay and speed numbers (initial delay, click pause, step pause, playback speed), use Edit Preset on the Input Presets tab.
     )",
     recordingTipText: "Esc = Save · Click = click · Hold or drag = mouse hold",
     recordingTipOffsetX: 240,
@@ -199,7 +250,10 @@ UI := {
     fontSizeSmall: 9,
     contentWidth: 420,
     tabContentWidth: 404,
-    tabListWidth: 388,
+    tabListWidth: 378,
+    tabButtonRowInset: 4,
+    recordingColNameWidth: 248,
+    recordingColVarCountWidth: 118,
     marginX: 18,
     marginY: 16,
     btnGap: 6,
@@ -209,9 +263,8 @@ UI := {
     infoBtnSize: 14,
     infoBtnFontSize: 7,
     infoBtnBg: "EEF2FF",
-    listRecordingH: 220,
-    listPresetH: 100,
-    listCsvH: 120,
+    listMinH: 120,
+    tabRadioRowH: 28,
     tabStripHeight: 36,
     tabInnerPad: 52,
     tabRowGap: 8,
@@ -324,6 +377,9 @@ S := {
     instantMouseRadio: "",
     humanTypingRadio: "",
     instantTypingRadio: "",
+    recordingInfoButton: "",
+    presetInfoButton: "",
+    runOptionsInfoButton: "",
     mainTab: ""
 }
 
@@ -412,6 +468,78 @@ ApplyManageCircularInfoButton(btn) {
 }
 
 /**
+ * Adds a tab section label row with optional inline info button.
+ * Use as the first control on a tab page so Section anchors xs lists to the tab-left margin.
+ * Never use xm inside Tab pages; xm is the window margin, not the tab interior (Gui Tab docs).
+ * @param {String} labelText Label text.
+ * @param {Func} helpHandler Optional Click handler for the info button.
+ * @returns {Gui.Button|""} Info button, or empty string when helpHandler is omitted.
+ */
+AddManageTabSectionLabel(labelText, helpHandler := "") {
+    global UI, S
+
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add("Text", "Section c" UI.textMuted, labelText)
+    if !helpHandler
+        return ""
+
+    btn := AddManageTabInfoButton()
+    btn.OnEvent("Click", helpHandler)
+    return btn
+}
+
+/**
+ * Returns Gui Add options for a full-width list on the current tab below a Section label row.
+ * xs keeps X at the tab section anchor; xm must not be used inside Tab pages.
+ * @param {Integer} height Control height in pixels.
+ * @param {String} extraOpts Extra control options (for example "-Multi").
+ * @returns {String}
+ */
+BuildManageTabListOptions(height, extraOpts := "") {
+    global UI
+
+    opts := "xs w" UI.tabListWidth " h" height " +Background" UI.listBg
+    extraOpts := Trim(extraOpts)
+    return extraOpts != "" ? opts " " extraOpts : opts
+}
+
+/**
+ * Adds a circular tab help info button beside a section label.
+ * @param {String} options Gui Add options after position (default x+2).
+ * @returns {Gui.Button}
+ */
+AddManageTabInfoButton(options := "x+2") {
+    global UI, S
+
+    btn := S.gui.Add("Button", options " w" UI.infoBtnSize " h" UI.infoBtnSize " -Theme", "i")
+    ApplyManageCircularInfoButton(btn)
+    return btn
+}
+
+/**
+ * Shows a help message in a modal dialog.
+ * @param {String} message Help body text.
+ * @param {String} title Dialog title.
+ */
+ShowManageHelpMessage(message, title) {
+    ShowManageMsgBox message, title, "Iconi"
+}
+
+/**
+ * Applies ListView column widths and formats for the recordings list.
+ */
+ApplyManageRecordingListColumns() {
+    global UI, S
+
+    if !S.recordingList
+        return
+
+    S.recordingList.ModifyCol(1, UI.recordingColNameWidth)
+    S.recordingList.ModifyCol(2, UI.recordingColVarCountWidth)
+    S.recordingList.ModifyCol(2, "Integer")
+}
+
+/**
  * Adds a muted section header label.
  * @param {Gui} gui Target window.
  * @param {String} title Section title text.
@@ -432,7 +560,7 @@ BuildManageSectionHeader(gui, title) {
  */
 GetManageThreeButtonWidth() {
     global UI
-    return Floor((UI.tabListWidth - UI.btnGap * 2) / 3)
+    return Floor((UI.tabListWidth - UI.btnGap * 2 - UI.tabButtonRowInset) / 3)
 }
 
 /**
@@ -445,20 +573,42 @@ GetManagePrimaryButtonWidth() {
 }
 
 /**
+ * Returns fixed chrome and list heights so tab lists fill the panel evenly.
+ * @returns {Object}
+ */
+GetManageInputTabMetrics() {
+    global UI
+
+    recordingChrome := UI.tabLabelHeight + UI.tabRowGap + UI.tabRowGap + UI.btnHeightSecondary
+    presetChrome := UI.tabLabelHeight + UI.tabRowGap + UI.tabRadioRowH + UI.tabRowGap
+        + UI.tabRowGap + UI.btnHeightTool
+    csvChrome := UI.tabLabelHeight + UI.tabRowGap + UI.tabRadioRowH + UI.tabRowGap
+        + UI.tabLabelHeight + UI.tabRowGap
+        + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool
+    playbackContent := UI.tabLabelHeight + UI.tabRowGap + (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap + 36
+
+    tabContentH := Max(csvChrome + UI.listMinH, playbackContent)
+    listRecordingH := Max(UI.listMinH, tabContentH - recordingChrome)
+    listPresetH := Max(UI.listMinH, tabContentH - presetChrome)
+    listCsvH := Max(UI.listMinH, tabContentH - csvChrome)
+
+    return {
+        tabContentH: tabContentH,
+        listRecordingH: listRecordingH,
+        listPresetH: listPresetH,
+        listCsvH: listCsvH
+    }
+}
+
+/**
  * Returns Tab3 height (tab strip + tallest page content) so nothing is clipped.
  * @returns {Integer}
  */
 GetManageTabPanelHeight() {
     global UI
 
-    recordingTab := UI.listRecordingH + UI.tabRowGap + UI.btnHeightSecondary
-    presetTab := UI.tabLabelHeight + UI.tabRowGap + UI.listPresetH + UI.tabRowGap + UI.btnHeightTool
-    csvTab := UI.tabLabelHeight + UI.tabRowGap + 24 + UI.tabRowGap
-        + UI.tabLabelHeight + UI.tabRowGap + UI.listCsvH + UI.tabRowGap
-        + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool
-    playbackTab := (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap + 36
-
-    return UI.tabStripHeight + UI.tabInnerPad + Max(recordingTab, presetTab, csvTab, playbackTab) + UI.tabPanelSafetyPad + 8
+    metrics := GetManageInputTabMetrics()
+    return UI.tabStripHeight + UI.tabInnerPad + metrics.tabContentH + UI.tabPanelSafetyPad + 8
 }
 
 /**
@@ -473,6 +623,7 @@ CreateManageGui() {
     hSec := UI.btnHeightSecondary
     hTool := UI.btnHeightTool
     hPrimary := UI.btnHeightPrimary
+    tabMetrics := GetManageInputTabMetrics()
 
     S.gui := Gui("+AlwaysOnTop -MaximizeBox", APP_GUI_TITLE)
     ApplyManageGuiTheme(S.gui)
@@ -504,13 +655,15 @@ CreateManageGui() {
 
     ; --- Recording tab ---
     S.mainTab.UseTab(1)
+    S.recordingInfoButton := AddManageTabSectionLabel("Saved recordings", ShowRecordingsTabHelp)
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.recordingList := S.gui.Add(
         "ListView",
-        "Section w" UI.tabListWidth " h" UI.listRecordingH " -Multi +Background" UI.listBg,
+        BuildManageTabListOptions(tabMetrics.listRecordingH, "-Multi"),
         [UI.recordingColName, UI.recordingColVarCount]
     )
     S.recordingList.OnEvent("ItemSelect", (*) => (RememberSelections(), UpdateSelectionStatus()))
-    S.recordingList.ModifyCol(2, "Integer")
+    ApplyManageRecordingListColumns()
 
     S.renameRecordingButton := S.gui.Add(
         "Button",
@@ -535,16 +688,12 @@ CreateManageGui() {
 
     ; --- Input Presets tab ---
     S.mainTab.UseTab(2)
-    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add("Text", "Section c" UI.textMuted, "Run input source")
+    S.presetInfoButton := AddManageTabSectionLabel("Run input source", ShowPresetsTabHelp)
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.usePresetRadio := S.gui.Add("Radio", "xs Checked", "Use input preset for Run")
     S.usePresetRadio.OnEvent("Click", (*) => SetInputSourceMode(C.inputSourcePreset))
 
-    S.presetList := S.gui.Add(
-        "ListBox",
-        "xs w" UI.tabListWidth " h" UI.listPresetH " +Background" UI.listBg
-    )
+    S.presetList := S.gui.Add("ListBox", BuildManageTabListOptions(tabMetrics.listPresetH))
     S.presetList.OnEvent("Change", OnPresetListChange)
 
     S.refreshButton := S.gui.Add(
@@ -585,18 +734,10 @@ CreateManageGui() {
 
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
     S.gui.Add("Text", "xs c" UI.textMuted, "Saved CSV files")
-    S.csvBatchInfoButton := S.gui.Add(
-        "Button",
-        "x+2 w" UI.infoBtnSize " h" UI.infoBtnSize " -Theme +Background" UI.infoBtnBg " c" UI.accent,
-        "i"
-    )
+    S.csvBatchInfoButton := AddManageTabInfoButton("x+2")
     S.csvBatchInfoButton.OnEvent("Click", ShowCsvBatchHelp)
-    ApplyManageCircularInfoButton(S.csvBatchInfoButton)
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-    S.csvList := S.gui.Add(
-        "ListBox",
-        "xs w" UI.tabListWidth " h" UI.listCsvH " +Background" UI.listBg
-    )
+    S.csvList := S.gui.Add("ListBox", BuildManageTabListOptions(tabMetrics.listCsvH))
     S.csvList.OnEvent("Change", OnCsvListChange)
 
     S.editCsvButton := S.gui.Add(
@@ -642,8 +783,9 @@ CreateManageGui() {
 
     ; --- Run Options tab ---
     S.mainTab.UseTab(4)
-    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add("Text", "Section w" UI.tabListWidth " c" UI.textMuted, "Mouse movement")
+    S.runOptionsInfoButton := AddManageTabSectionLabel("Run options", ShowRunOptionsTabHelp)
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Mouse movement")
     S.smoothMouseRadio := S.gui.Add(
         "Radio",
         "xs" (C.defaultSmoothMouse ? " Checked" : ""),
@@ -720,7 +862,8 @@ SetInteractiveState(enabled) {
         S.deletePresetButton, S.recordingList, S.presetList, S.csvList, S.csvEdit, S.browseCsvButton,
         S.editCsvButton, S.renameCsvButton, S.deleteCsvButton,
         S.usePresetRadio, S.useCsvRadio,
-        S.csvBatchInfoButton, S.csvBatchConfigButton, S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
+        S.recordingInfoButton, S.presetInfoButton, S.csvBatchInfoButton, S.runOptionsInfoButton,
+        S.csvBatchConfigButton, S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
         S.mainTab] {
         if ctrl
             ctrl.Enabled := enabled
@@ -798,7 +941,7 @@ ApplyInputSourceControlState() {
 
     for ctrl in [
         S.csvList, S.csvEdit, S.browseCsvButton, S.editCsvButton, S.renameCsvButton,
-        S.deleteCsvButton, S.csvBatchInfoButton, S.csvBatchConfigButton, S.refreshCsvButton,
+        S.deleteCsvButton, S.csvBatchConfigButton, S.refreshCsvButton,
         S.useCsvRadio
     ]
         if ctrl
@@ -1164,12 +1307,39 @@ BrowseCsvFile(*) {
 }
 
 /**
+ * Shows help for the Recordings tab.
+ */
+ShowRecordingsTabHelp(*) {
+    global C
+
+    ShowManageHelpMessage(C.recordingsTabHelpMessage, C.recordingsTabHelpTitle)
+}
+
+/**
+ * Shows help for the Input Presets tab.
+ */
+ShowPresetsTabHelp(*) {
+    global C
+
+    ShowManageHelpMessage(C.presetsTabHelpMessage, C.presetsTabHelpTitle)
+}
+
+/**
  * Shows CSV batch format and usage help.
  */
 ShowCsvBatchHelp(*) {
     global C
 
-    ShowManageMsgBox C.csvBatchHelpMessage, "CSV batch help", "Iconi"
+    ShowManageHelpMessage(C.csvBatchHelpMessage, C.csvBatchHelpTitle)
+}
+
+/**
+ * Shows help for the Run Options tab.
+ */
+ShowRunOptionsTabHelp(*) {
+    global C
+
+    ShowManageHelpMessage(C.runOptionsTabHelpMessage, C.runOptionsTabHelpTitle)
 }
 
 /**
@@ -1494,7 +1664,7 @@ RefreshAllLists(restore := false) {
 }
 
 RefreshRecordingList() {
-    global C, S
+    global C, S, UI
 
     S.recordingPaths := ListFiles(C.recordingsDir, C.diPrefix "*.log")
 
@@ -1511,10 +1681,7 @@ RefreshRecordingList() {
         )
     }
 
-    if S.recordingPaths.Length {
-        S.recordingList.ModifyCol(1, "AutoHdr")
-        S.recordingList.ModifyCol(2, "AutoHdr")
-    }
+    ApplyManageRecordingListColumns()
 }
 
 RefreshPresetList() {
