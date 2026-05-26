@@ -12,6 +12,7 @@ SetKeyDelay -1
 ; Unified Record and Run module with CSV batch support.
 ; Recordings: recordings\di-*.log
 ; Presets: saved-inputs\*.txt
+; CSV batches: csv-batches\*.csv
 ; Esc saves recording (Cancel on the save dialog discards). Esc stops Run or a CSV batch.
 
 EnableDpiAwareness()
@@ -25,9 +26,11 @@ C := {
     appVersion: "1.0.2", ; keep in sync with VERSION at project root
     recordingsDir: A_ScriptDir "\recordings",
     savesDir: A_ScriptDir "\saved-inputs",
+    csvBatchesDir: A_ScriptDir "\csv-batches",
     appIconFile: A_ScriptDir "\assets\dataEntryAutonoma.ico",
     stateFile: A_ScriptDir "\apply-state.ini",
     saveExt: ".txt",
+    csvExt: ".csv",
     prefix: "di-",
     diPrefix: "di-",
     wheelDelta: 120,
@@ -52,6 +55,8 @@ How it works:
   • Column 1 is a row label (status display only)
   • Columns 2+ map to variable-1, variable-2, variable-3, ...
   • Blank lines and lines starting with # are ignored
+  • Saved CSV files live in csv-batches\ and can be selected, edited, renamed, or deleted from Input Presets
+  • Browse can also point to an external CSV file
   • Preset is optional — speeds and run options only; row values are used instead of preset variables
   • Config (next to the info button) opens CSV batch options, including Ask to run next line
   • Ask to run next line shows a progress table and a prompt before each row (Run, Skip, or Run all remaining)
@@ -63,6 +68,7 @@ How it works:
     cursorTipOffsetX: 12,
     cursorTipOffsetY: 12,
     mouseHoldIndicatorText: "HOLD",
+    hotkeyTipPrefix: "Hotkey:",
     recordingTipRefreshMs: 1000,
     recordingTransientTipMs: 3000,
     minRecordedDelayMs: 200,
@@ -202,7 +208,8 @@ UI := {
     infoBtnFontSize: 7,
     infoBtnBg: "EEF2FF",
     listRecordingH: 148,
-    listPresetH: 64,
+    listPresetH: 56,
+    listCsvH: 56,
     tabStripHeight: 36,
     tabInnerPad: 52,
     tabRowGap: 8,
@@ -254,6 +261,9 @@ S := {
     leftHoldDownY: 0,
     leftHoldEndX: 0,
     leftHoldEndY: 0,
+    modCtrlDown: false,
+    modShiftDown: false,
+    modAltDown: false,
     waitingForKey: false,
     keyIndex: 0,
 
@@ -283,6 +293,8 @@ S := {
     recordingPaths: [],
     presetList: "",
     presetPaths: [],
+    csvList: "",
+    csvPaths: [],
     csvEdit: "",
     detectButton: "",
     applyButton: "",
@@ -299,6 +311,9 @@ S := {
     editRecordingButton: "",
     deleteRecordingButton: "",
     deletePresetButton: "",
+    editCsvButton: "",
+    renameCsvButton: "",
+    deleteCsvButton: "",
     smoothMouseRadio: "",
     instantMouseRadio: "",
     humanTypingRadio: "",
@@ -311,6 +326,7 @@ ApplyManageStartupIcon()
 
 CreateManageGui()
 EnsureDir(C.savesDir)
+EnsureDir(C.csvBatchesDir)
 EnsureDir(C.recordingsDir)
 OnExit (*) => Cleanup()
 
@@ -430,8 +446,9 @@ GetManageTabPanelHeight() {
     global UI
 
     recordingTab := UI.listRecordingH + UI.tabRowGap + UI.btnHeightSecondary
-    presetTab := UI.listPresetH + UI.tabRowGap + UI.tabLabelHeight + UI.tabRowGap + UI.btnHeightTool
-        + UI.tabRowGap + UI.btnHeightTool
+    presetTab := UI.listPresetH + UI.tabRowGap + UI.btnHeightTool
+        + UI.tabRowGap + UI.tabLabelHeight + UI.tabRowGap + UI.listCsvH
+        + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool
     playbackTab := (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap + 36
 
     return UI.tabStripHeight + UI.tabInnerPad + Max(recordingTab, presetTab, playbackTab) + UI.tabPanelSafetyPad
@@ -538,7 +555,42 @@ CreateManageGui() {
     )
     S.csvBatchConfigButton.OnEvent("Click", ShowCsvBatchConfig)
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-    S.csvEdit := S.gui.Add("Edit", "xs w" UI.csvEditWidth " +Background" UI.editBg, "")
+    S.csvList := S.gui.Add(
+        "ListBox",
+        "xs w" UI.tabListWidth " h" UI.listCsvH " +Background" UI.listBg
+    )
+    S.csvList.OnEvent("Change", (*) => (
+        LoadSelectedCsvFromList(),
+        RememberSelections(),
+        UpdateSelectionStatus()
+    ))
+
+    S.editCsvButton := S.gui.Add(
+        "Button",
+        "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Edit CSV"
+    )
+    S.editCsvButton.OnEvent("Click", ShowCsvEditor)
+
+    S.renameCsvButton := S.gui.Add(
+        "Button",
+        "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Rename"
+    )
+    S.renameCsvButton.OnEvent("Click", RenameSelectedCsv)
+
+    S.deleteCsvButton := S.gui.Add(
+        "Button",
+        "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Delete"
+    )
+    S.deleteCsvButton.OnEvent("Click", DeleteSelectedCsv)
+
+    S.csvEdit := S.gui.Add(
+        "Edit",
+        "xs w" UI.csvEditWidth " +Background" UI.editBg,
+        ""
+    )
     S.browseCsvButton := S.gui.Add(
         "Button",
         "x+" btnGap " w" (UI.tabListWidth - UI.csvEditWidth - btnGap) " h" hTool
@@ -645,7 +697,8 @@ SetInteractiveState(enabled) {
 
     for ctrl in [S.detectButton, S.applyButton, S.refreshButton, S.editButton,
         S.renameRecordingButton, S.editRecordingButton, S.deleteRecordingButton,
-        S.deletePresetButton, S.recordingList, S.presetList, S.csvEdit, S.browseCsvButton,
+        S.deletePresetButton, S.recordingList, S.presetList, S.csvList, S.csvEdit, S.browseCsvButton,
+        S.editCsvButton, S.renameCsvButton, S.deleteCsvButton,
         S.csvBatchInfoButton, S.csvBatchConfigButton, S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
         S.mainTab] {
         if ctrl
@@ -776,6 +829,19 @@ ShowMouseHoldCursorTip() {
 
     heldSec := Round((A_TickCount - S.leftHoldDownAt) / 1000, 1)
     ShowCursorToolTip(C.mouseHoldIndicatorText " " heldSec "s")
+}
+
+/**
+ * Shows a hotkey confirmation beside the cursor during recording.
+ * @param {String} displayLabel Human-readable shortcut label such as Ctrl + c.
+ */
+ShowShortcutRecordingTip(displayLabel) {
+    global C
+
+    ShowCursorToolTip(C.hotkeyTipPrefix " " displayLabel)
+
+    if IsRecording()
+        SetTimer RestoreRecordingTip, -C.recordingTransientTipMs
 }
 
 /**
@@ -930,7 +996,7 @@ BindManageChildGui(childGui) {
 }
 
 BrowseCsvFile(*) {
-    global S
+    global S, C
 
     selected := ShowManageFileSelect("1", S.csvEdit.Value, "Select CSV batch file", "CSV (*.csv;*.txt)")
 
@@ -938,6 +1004,20 @@ BrowseCsvFile(*) {
         return
 
     S.csvEdit.Value := selected
+
+    if !SelectCsvListByPath(selected) && S.csvList
+        S.csvList.Value := 0
+
+    if !IsManagedCsvPath(selected) {
+        importAnswer := ShowManageMsgBox(
+            "Load this external CSV into csv-batches so you can edit, rename, and delete it later?",
+            "Import CSV",
+            "YesNo Icon?"
+        )
+        if importAnswer = "Yes"
+            ImportCsvToLibrary(selected)
+    }
+
     RememberSelections()
     UpdateSelectionStatus()
 }
@@ -1215,6 +1295,7 @@ CloseCsvBatchRowPrompt() {
 RefreshAllLists(restore := false) {
     RefreshRecordingList()
     RefreshPresetList()
+    RefreshCsvList()
 
     if restore
         RestoreSelections()
@@ -1263,6 +1344,26 @@ RefreshPresetList() {
     }
 }
 
+/**
+ * Reloads saved CSV batch files from csv-batches\.
+ */
+RefreshCsvList() {
+    global C, S
+
+    EnsureDir(C.csvBatchesDir)
+    S.csvPaths := ListFiles(C.csvBatchesDir, "*" C.csvExt)
+    names := []
+
+    for path in S.csvPaths
+        names.Push(FormatCsvName(path))
+
+    if S.csvList {
+        S.csvList.Delete()
+        if names.Length
+            S.csvList.Add(names)
+    }
+}
+
 RestoreSelections() {
     global S
 
@@ -1282,8 +1383,11 @@ RestoreSelections() {
 
     LoadSelectedPresetPlaybackOptions()
 
-    if S.csvEdit
+    if S.csvEdit && saved.csv != ""
         S.csvEdit.Value := saved.csv
+
+    if saved.csv != ""
+        SelectCsvListByPath(saved.csv)
 
     S.csvAskNextLine := saved.csvAskNextLine
 }
@@ -1302,7 +1406,7 @@ UpdateSelectionStatus() {
 
     if csvPath != "" {
         if FileExist(csvPath)
-            SetStatus("Ready — " FormatRecordingName(recording) " with CSV batch")
+            SetStatus("Ready — " FormatRecordingName(recording) " with CSV " FormatCsvName(csvPath))
         else
             SetStatus("CSV file not found — " csvPath)
         return
@@ -1343,7 +1447,51 @@ GetSelectedPresetPath() {
 
 GetSelectedCsvPath() {
     global S
+
     return Trim(S.csvEdit ? S.csvEdit.Value : "")
+}
+
+/**
+ * Returns the selected saved CSV path from the CSV list.
+ * @returns {String}
+ */
+GetSelectedManagedCsvPath() {
+    global S
+
+    index := S.csvList ? S.csvList.Value : 0
+    return index && index <= S.csvPaths.Length ? S.csvPaths[index] : ""
+}
+
+/**
+ * Loads the selected saved CSV into the batch path field.
+ */
+LoadSelectedCsvFromList() {
+    global S
+
+    path := GetSelectedManagedCsvPath()
+    if path != "" && S.csvEdit
+        S.csvEdit.Value := path
+}
+
+/**
+ * Selects a saved CSV row when its full path matches.
+ * @param {String} csvPath Full CSV file path.
+ * @returns {Boolean}
+ */
+SelectCsvListByPath(csvPath) {
+    global S
+
+    if !S.csvList || csvPath = ""
+        return false
+
+    for index, savedPath in S.csvPaths {
+        if StrLower(savedPath) = StrLower(csvPath) {
+            SelectListControlRow(S.csvList, index)
+            return true
+        }
+    }
+
+    return false
 }
 
 ApplyFromGui(*) {
@@ -1699,6 +1847,200 @@ DeleteSelectedPreset(*) {
     RememberSelections()
     UpdateSelectionStatus()
     SetStatus("Deleted preset — " label)
+}
+
+/**
+ * Deletes the selected saved CSV batch after confirmation.
+ */
+DeleteSelectedCsv(*) {
+    global C, S
+
+    if S.recording || S.applying || S.batchRunning
+        return
+
+    path := GetSelectedManagedCsvPath()
+    if path = "" {
+        SetStatus("Select a saved CSV to delete.")
+        return
+    }
+
+    label := FormatCsvName(path)
+    if !ConfirmDeleteItem(label, "CSV batch")
+        return
+
+    try {
+        DeleteManagedFile(path)
+    } catch as err {
+        ShowManageMsgBox "Could not delete CSV:`n" err.Message, "Delete CSV", "Icon!"
+        SetStatus("Could not delete CSV.")
+        return
+    }
+
+    ClearCsvStateIfMatches(path)
+    RefreshCsvList()
+
+    if S.csvPaths.Length {
+        SelectFirstListItem(S.csvList)
+        LoadSelectedCsvFromList()
+    } else if S.csvEdit {
+        S.csvEdit.Value := ""
+    }
+
+    RememberSelections()
+    UpdateSelectionStatus()
+    SetStatus("Deleted CSV — " label)
+}
+
+/**
+ * Renames the selected saved CSV batch file.
+ */
+RenameSelectedCsv(*) {
+    global C, S
+
+    if S.recording || S.applying || S.batchRunning
+        return
+
+    path := GetSelectedManagedCsvPath()
+    if path = "" {
+        SetStatus("Select a saved CSV to rename.")
+        return
+    }
+
+    result := ShowManageInputBox(
+        "CSV name:",
+        "Rename CSV",
+        "w360 h130",
+        FormatCsvName(path)
+    )
+
+    if result.Result != "OK"
+        return
+
+    fileName := SafeCsvName(result.Value)
+    if fileName = "" {
+        SetStatus("Rename cancelled — invalid name.")
+        return
+    }
+
+    newPath := C.csvBatchesDir "\" fileName C.csvExt
+    if StrLower(newPath) = StrLower(path) {
+        SetStatus("Name unchanged.")
+        return
+    }
+
+    try {
+        FileMove path, newPath, 1
+    } catch as err {
+        ShowManageMsgBox "Could not rename CSV:`n" err.Message, "Rename CSV", "Icon!"
+        SetStatus("Could not rename CSV.")
+        return
+    }
+
+    if StrLower(GetSelectedCsvPath()) = StrLower(path) && S.csvEdit
+        S.csvEdit.Value := newPath
+
+    RefreshCsvList()
+    SelectByBaseName(S.csvList, S.csvPaths, FileBaseName(newPath))
+    LoadSelectedCsvFromList()
+    RememberSelections()
+    UpdateSelectionStatus()
+    SetStatus("Renamed CSV — " FormatCsvName(newPath))
+}
+
+/**
+ * Opens the CSV batch editor to create or update a saved CSV file.
+ */
+ShowCsvEditor(*) {
+    global C, S
+
+    selectedPath := GetSelectedManagedCsvPath()
+    if selectedPath = "" {
+        currentPath := GetSelectedCsvPath()
+        selectedPath := IsManagedCsvPath(currentPath) ? currentPath : ""
+    }
+
+    originalPath := selectedPath
+    existingContent := selectedPath && FileExist(selectedPath)
+        ? ReadTextFile(selectedPath)
+        : DefaultCsvTemplate()
+
+    if S.gui
+        S.gui.Hide()
+
+    editor := Gui("+ToolWindow", "Edit CSV")
+    BindManageChildGui(editor)
+    editor.SetFont("s10", "Segoe UI")
+    editor.BackColor := "FFFFFF"
+
+    editor.Add("Text", "w430 c1A1A1A", "CSV name")
+    nameEdit := editor.Add(
+        "Edit",
+        "w430",
+        selectedPath ? FormatCsvName(selectedPath) : "batch-1"
+    )
+    editor.Add("Text", "xm w430 c555555", "Format: label,value1,value2,...  Blank lines and # comments are ignored.")
+    contentEdit := editor.Add("Edit", "xm w430 r14 Multi", existingContent)
+
+    saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
+    closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
+
+    SaveCsvEditor(*) {
+        csvName := SafeCsvName(nameEdit.Value)
+        if csvName = "" {
+            ShowManageMsgBox "Enter a CSV name.", "Edit CSV", "Icon!"
+            return
+        }
+
+        csvPath := C.csvBatchesDir "\" csvName C.csvExt
+        content := Trim(contentEdit.Value, "`r`n")
+
+        if content = "" {
+            ShowManageMsgBox "Enter at least one CSV row.", "Edit CSV", "Icon!"
+            return
+        }
+
+        try {
+            EnsureDir(C.csvBatchesDir)
+            WriteTextFile(content, csvPath)
+
+            if originalPath != "" && StrLower(originalPath) != StrLower(csvPath) && FileExist(originalPath)
+                DeleteManagedFile(originalPath)
+        } catch as err {
+            ShowManageMsgBox "Could not save CSV:`n" err.Message, "Edit CSV", "Icon!"
+            return
+        }
+
+        editor.Destroy()
+
+        if S.gui
+            S.gui.Show()
+
+        RefreshCsvList()
+        SelectByBaseName(S.csvList, S.csvPaths, FileBaseName(csvPath))
+
+        if S.csvEdit
+            S.csvEdit.Value := csvPath
+
+        RememberSelections()
+        UpdateSelectionStatus()
+        SetStatus(originalPath != "" && StrLower(originalPath) = StrLower(csvPath)
+            ? "Updated CSV — " csvName
+            : "Saved CSV — " csvName)
+    }
+
+    CloseCsvEditor(*) {
+        editor.Destroy()
+        if S.gui
+            S.gui.Show()
+    }
+
+    saveBtn.OnEvent("Click", SaveCsvEditor)
+    closeBtn.OnEvent("Click", CloseCsvEditor)
+    editor.OnEvent("Close", CloseCsvEditor)
+    editor.OnEvent("Escape", CloseCsvEditor)
+
+    editor.Show("w470 h420")
+    contentEdit.Focus()
 }
 
 /**
@@ -2108,6 +2450,67 @@ ResetRecordingState() {
     S.leftHoldDownY := 0
     S.leftHoldEndX := 0
     S.leftHoldEndY := 0
+    ClearRecordedModifierState()
+}
+
+/**
+ * Clears tracked Ctrl/Shift/Alt state for recording.
+ */
+ClearRecordedModifierState() {
+    global S
+
+    S.modCtrlDown := false
+    S.modShiftDown := false
+    S.modAltDown := false
+}
+
+/**
+ * Updates tracked modifier state from a low-level keyboard event.
+ * @param {Integer} vk Virtual-key code.
+ * @param {Boolean} isDown True on key down, false on key up.
+ */
+UpdateRecordedModifierState(vk, isDown) {
+    global C, S
+
+    if vk = C.VK_LSHIFT || vk = C.VK_RSHIFT || vk = 0x10 {
+        S.modShiftDown := isDown
+        return
+    }
+
+    if vk = C.VK_LCONTROL || vk = C.VK_RCONTROL || vk = 0x11 {
+        S.modCtrlDown := isDown
+        return
+    }
+
+    if vk = C.VK_LMENU || vk = C.VK_RMENU || vk = 0x12
+        S.modAltDown := isDown
+}
+
+/**
+ * Returns the currently tracked modifier state for shortcut capture.
+ * @returns {Object}
+ */
+GetRecordedModifierSnapshot() {
+    global S
+
+    return {
+        ctrl: S.modCtrlDown,
+        shift: S.modShiftDown,
+        alt: S.modAltDown
+    }
+}
+
+/**
+ * Returns true when tracked Ctrl, Shift, or Alt is currently held.
+ * @param {Object} modifiers Optional modifier snapshot captured at key down.
+ * @returns {Boolean}
+ */
+HasRecordedModifierPressed(modifiers := "") {
+    if modifiers != "" && modifiers is Object
+        return modifiers.ctrl || modifiers.shift || modifiers.alt
+
+    snapshot := GetRecordedModifierSnapshot()
+    return snapshot.ctrl || snapshot.shift || snapshot.alt
 }
 
 /**
@@ -2294,43 +2697,40 @@ IsModifierVirtualKey(vk) {
 }
 
 /**
- * Returns true when Ctrl, Shift, or Alt is currently held.
- * @returns {Boolean}
- */
-HasModifierKeyPressed() {
-    return GetKeyState("Ctrl", "P") || GetKeyState("Shift", "P") || GetKeyState("Alt", "P")
-}
-
-/**
  * Returns true when a key press should be stored as a shortcut instead of a variable key.
  * @param {Integer} vk Virtual-key code.
+ * @param {Object} modifiers Modifier snapshot captured at key down.
  * @returns {Boolean}
  */
-ShouldRecordAsShortcut(vk) {
+ShouldRecordAsShortcut(vk, modifiers := "") {
     if IsModifierVirtualKey(vk)
         return false
 
-    return HasModifierKeyPressed()
+    return HasRecordedModifierPressed(modifiers)
 }
 
 /**
  * Builds an AutoHotkey Send string and display label for a shortcut.
  * @param {Integer} vk Virtual-key code.
+ * @param {Object} modifiers Modifier snapshot captured at key down.
  * @returns {Object}
  */
-BuildShortcutPayload(vk) {
+BuildShortcutPayload(vk, modifiers := "") {
     sendPrefix := ""
     displayParts := []
 
-    if GetKeyState("Ctrl", "P") {
+    if modifiers = "" || !(modifiers is Object)
+        modifiers := GetRecordedModifierSnapshot()
+
+    if modifiers.ctrl {
         sendPrefix .= "^"
         displayParts.Push("Ctrl")
     }
-    if GetKeyState("Shift", "P") {
+    if modifiers.shift {
         sendPrefix .= "+"
         displayParts.Push("Shift")
     }
-    if GetKeyState("Alt", "P") {
+    if modifiers.alt {
         sendPrefix .= "!"
         displayParts.Push("Alt")
     }
@@ -2355,7 +2755,7 @@ BuildShortcutPayload(vk) {
 JoinShortcutLabel(parts) {
     label := ""
     for part in parts {
-        label := label = "" ? part : label . "+" . part
+        label := label = "" ? part : label . " + " . part
     }
     return label
 }
@@ -2523,17 +2923,19 @@ KeyboardHookProc(nCode, wParam, lParam) {
         isKeyDown := (wParam = C.WM_KEYDOWN || wParam = C.WM_SYSKEYDOWN)
         isKeyUp := (wParam = C.WM_KEYUP || wParam = C.WM_SYSKEYUP)
 
-        if IsModifierVirtualKey(vk) && (isKeyDown || isKeyUp)
-            return 1
-
-        if isKeyDown {
+        if IsModifierVirtualKey(vk) {
+            if isKeyDown
+                UpdateRecordedModifierState(vk, true)
+            else if isKeyUp
+                UpdateRecordedModifierState(vk, false)
+        } else if isKeyDown {
             if vk = C.VK_ESCAPE {
                 SetTimer SaveRecording, -1
                 return 1
             }
 
             if vk != C.VK_F10
-                QueueKeyEvent({ vk: vk, sc: sc })
+                QueueKeyEvent({ vk: vk, sc: sc, modifiers: GetRecordedModifierSnapshot() })
         }
     }
 
@@ -2569,8 +2971,10 @@ ProcessKeyEvent(event, *) {
     if !IsRecording()
         return
 
-    if ShouldRecordAsShortcut(event.vk)
-        RecordShortcut(event.vk, event.sc)
+    modifiers := event.HasProp("modifiers") ? event.modifiers : GetRecordedModifierSnapshot()
+
+    if ShouldRecordAsShortcut(event.vk, modifiers)
+        RecordShortcut(event.vk, event.sc, modifiers)
     else
         RecordKey(event.vk, event.sc)
 }
@@ -2660,13 +3064,14 @@ RecordKey(vk, sc) {
  * Records a Ctrl/Shift/Alt keyboard shortcut during Detect.
  * @param {Integer} vk Virtual-key code.
  * @param {Integer} sc Scan code.
+ * @param {Object} modifiers Modifier snapshot captured at key down.
  */
-RecordShortcut(vk, sc) {
+RecordShortcut(vk, sc, modifiers := "") {
     global S
 
     S.waitingForKey := false
     ctx := GetActiveWindowContext()
-    payload := BuildShortcutPayload(vk)
+    payload := BuildShortcutPayload(vk, modifiers)
 
     WriteLine(Format(
         "{}|shortcut|{}|{}|{}|{}|{}|{}|{}|{}`n",
@@ -2681,7 +3086,7 @@ RecordShortcut(vk, sc) {
         ctx.exe
     ))
 
-    ShowTransientRecordingTip("Shortcut saved: " payload.displayLabel)
+    ShowShortcutRecordingTip(payload.displayLabel)
 }
 
 ArmKeyCapture() {
@@ -3512,7 +3917,7 @@ ReplayShortcut(action) {
     if !S.applying || S.stopBatch
         return
 
-    Send action.sendText
+    SendInput action.sendText
     SleepWhileApplying(S.segmentPauseMs)
 }
 
@@ -4631,6 +5036,138 @@ SafePresetName(name) {
     name := RegExReplace(name, "[\\/:*?`"<>|]", "-")
     name := RegExReplace(name, "i)\" C.saveExt "$", "")
     return name
+}
+
+/**
+ * Returns the display name for a saved CSV batch file.
+ * @param {String} pathOrName File path or basename.
+ * @returns {String}
+ */
+FormatCsvName(pathOrName) {
+    global C
+
+    name := FileBaseName(pathOrName)
+    return RegExReplace(name, "i)\" C.csvExt "$", "")
+}
+
+/**
+ * Sanitizes a CSV batch filename without its extension.
+ * @param {String} name Raw CSV name.
+ * @returns {String}
+ */
+SafeCsvName(name) {
+    global C
+
+    name := Trim(name)
+    name := RegExReplace(name, "[\\/:*?`"<>|]", "-")
+    name := RegExReplace(name, "i)\" C.csvExt "$", "")
+    return name
+}
+
+/**
+ * Returns true when a path points to a file in csv-batches\.
+ * @param {String} filePath Full file path.
+ * @returns {Boolean}
+ */
+IsManagedCsvPath(filePath) {
+    global C
+
+    if filePath = ""
+        return false
+
+    return StrLower(SubStr(filePath, 1, StrLen(C.csvBatchesDir))) = StrLower(C.csvBatchesDir)
+}
+
+/**
+ * Copies an external CSV file into csv-batches\ and selects it.
+ * @param {String} sourcePath External CSV path.
+ */
+ImportCsvToLibrary(sourcePath) {
+    global C, S
+
+    if sourcePath = "" || !FileExist(sourcePath)
+        return
+
+    baseName := SafeCsvName(FormatCsvName(sourcePath))
+    if baseName = ""
+        baseName := "imported-batch"
+
+    targetPath := C.csvBatchesDir "\" baseName C.csvExt
+    if FileExist(targetPath) {
+        suffix := 2
+        while FileExist(C.csvBatchesDir "\" baseName "-" suffix C.csvExt)
+            suffix++
+        targetPath := C.csvBatchesDir "\" baseName "-" suffix C.csvExt
+    }
+
+    try {
+        FileCopy sourcePath, targetPath, 1
+    } catch as err {
+        ShowManageMsgBox "Could not import CSV:`n" err.Message, "Import CSV", "Icon!"
+        return
+    }
+
+    RefreshCsvList()
+    SelectByBaseName(S.csvList, S.csvPaths, FileBaseName(targetPath))
+
+    if S.csvEdit
+        S.csvEdit.Value := targetPath
+
+    RememberSelections()
+    UpdateSelectionStatus()
+    SetStatus("Imported CSV — " FormatCsvName(targetPath))
+}
+
+/**
+ * Clears the persisted CSV path when it matches a deleted file.
+ * @param {String} deletedPath Deleted CSV full path.
+ */
+ClearCsvStateIfMatches(deletedPath) {
+    global C, S
+
+    saved := LoadManageState()
+    if StrLower(Trim(saved.csv)) = StrLower(deletedPath) {
+        SaveManageState(saved.preset, saved.recording, "", saved.csvAskNextLine)
+        if S.csvEdit
+            S.csvEdit.Value := ""
+    }
+}
+
+/**
+ * Returns starter content for a new CSV batch file.
+ * @returns {String}
+ */
+DefaultCsvTemplate() {
+    return "# label,value1,value2,value3`n1,example1,example2,example3`n2,example4,example5,example6"
+}
+
+/**
+ * Reads a text file as a single string.
+ * @param {String} filePath File path.
+ * @returns {String}
+ */
+ReadTextFile(filePath) {
+    content := ""
+
+    Loop Read filePath {
+        content .= (content = "" ? "" : "`n") A_LoopReadLine
+    }
+
+    return content
+}
+
+/**
+ * Writes text content to a UTF-8 file.
+ * @param {String} content File body.
+ * @param {String} filePath Destination path.
+ */
+WriteTextFile(content, filePath) {
+    EnsureParentDir(filePath)
+    file := FileOpen(filePath, "w", "UTF-8")
+    if !file
+        throw Error("Could not open file for writing: " filePath)
+    file.Write(content)
+    file.Close()
 }
 
 SelectByBaseName(listControl, paths, wantedBaseName) {
