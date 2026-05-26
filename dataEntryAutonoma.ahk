@@ -7,6 +7,8 @@ SetKeyDelay -1
 
 ; dataEntryAutonoma.ahk
 ; Data Entry Autonoma — record clicks, scrolls, and keys; replay with presets or CSV batches.
+; Copyright (c) 2026 Jayrr Dev — https://github.com/Jayrr-Dev/DataEntryAutonoma
+; SPDX-License-Identifier: MIT
 ; Unified Record and Run module with CSV batch support.
 ; Recordings: recordings\di-*.log
 ; Presets: saved-inputs\*.txt

@@ -2,14 +2,17 @@
 
 **By [Jayrr Dev](https://github.com/Jayrr-Dev)**
 
-Record mouse clicks, scrolls, and keyboard triggers once — then replay automated data entry with saved presets or CSV batch files. Built with AutoHotkey v2 for Windows.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+Record mouse clicks, scrolls, and keyboard triggers once — then run automated data entry with saved presets or CSV batch files. Built with AutoHotkey v2 for Windows.
 
 ## Features
 
-- **Detect** — Record click targets, scroll actions, and variable keys in one session
-- **Apply** — Replay recordings with human-like mouse movement and typing
+- **Record** — Capture click targets, scroll actions, and variable keys in one session
+- **Run** — Replay recordings with human-like mouse movement and typing
+- **Shift-hold delays** — Hold Shift while recording to insert timed pauses
 - **CSV batch** — Run the same recording once per CSV row with different variable values
-- **Presets** — Save playback speed, typing speed, and variable text lists
+- **Presets** — Save run speed, typing speed, and variable text lists
 - **Recordings table** — View recording name and variable count at a glance
 - **CRUD** — Rename, edit, and delete recordings and presets from the UI
 - **Standalone exe** — Compile to `DataEntryAutonoma.exe`; end users do not need AutoHotkey installed
@@ -26,15 +29,16 @@ Record mouse clicks, scrolls, and keyboard triggers once — then replay automat
 
 1. Clone this repository
 2. Run `dataEntryAutonoma.ahk`
-3. Click **Detect** to record — click targets, then press a key after each target (Esc saves and exits)
-4. Create inputs under **Edit Inputs** or prepare a CSV batch file
-5. Select a recording and preset (or CSV), then click **Apply**
+3. Click **Record** to capture clicks, scrolls, and keys (Esc saves; Cancel on the dialog discards)
+4. Create a preset under **Edit Preset** or prepare a CSV batch file
+5. Select a recording and preset (or CSV), then click **Run**
 
 ## Project layout
 
 ```
 DataEntryAutonoma/
   dataEntryAutonoma.ahk   # Main application
+  LICENSE                 # MIT license (attribution required)
   compile.ps1             # Build standalone exe
   build.bat               # Build shortcut
   BUILD.md                # Detailed build & distribution guide
@@ -71,11 +75,25 @@ See [BUILD.md](BUILD.md) for distribution layout and prerequisites.
 
 ## Workflow tips
 
-- After each click during recording, press any key (except Esc) to mark the variable step
-- A persistent tooltip shows **Esc to save and exit** while recording
-- During apply, tooltips show **Assigned Var 1**, **Assigned Var 2**, etc.
-- Esc stops recording, playback, or an entire CSV batch
+- After each click during recording, press any key to mark a variable step (optional for click-only targets)
+- Hold **Shift** during recording to add a timed delay; release to confirm
+- A persistent tooltip shows **Esc = Save** while recording
+- During Run, tooltips show **Assigned Var 1**, **Assigned Var 2**, etc.
+- Esc stops recording, a run, or an entire CSV batch
 
-## License
+## License & attribution
 
-Copyright © Jayrr Dev. All rights reserved.
+This project is **open source** under the [MIT License](LICENSE).
+
+You may use, modify, and distribute this software freely, but **you must give credit to Jayrr Dev**:
+
+1. Keep the [LICENSE](LICENSE) file and copyright notice in all copies or substantial portions of the software.
+2. Include attribution in documentation, about screens, or README when you redistribute or build on this project — for example:
+
+   > Based on [Data Entry Autonoma](https://github.com/Jayrr-Dev/DataEntryAutonoma) by [Jayrr Dev](https://github.com/Jayrr-Dev).
+
+The MIT license legally requires the copyright and permission notice to remain intact; the attribution above is the expected way to credit the original author.
+
+## Author
+
+**Jayrr Dev** — [github.com/Jayrr-Dev](https://github.com/Jayrr-Dev)
