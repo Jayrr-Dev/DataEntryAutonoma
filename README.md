@@ -43,7 +43,7 @@ Typical uses:
 - **Window matching** uses hwnd, class, title, and exe so replay can find the right window again
 - **Scroll capture** records wheel direction, delta, and notch count at the cursor position
 - **Variable keys** are created only when you press a key after a click; click-only steps replay as clicks with no typing
-- **Left-click hold and drag** records mouse button down, optional drag, and release (useful for Excel range selection); hold left-click for 2 seconds to start, release to save
+- **Left-click hold and drag** records mouse button down, optional drag, and release (useful for Excel range selection); quick taps stay clicks, longer holds or drags are saved on release
 - **Keyboard shortcuts** with Ctrl, Shift, or Alt are recorded and replayed (for example Ctrl+C, Shift+F10)
 - **Esc saves** the recording and opens a rename dialog; **Cancel** on that dialog discards the file
 - **Edit Log** opens the raw recording file for advanced edits
@@ -312,12 +312,12 @@ For many rows, prepare a CSV file instead of typing variables into a preset.
 1. Click **Record**. The main window hides so you can work in other apps.
 2. Click targets in your app. After each click you may press a key to mark typed input for that field, or skip the key for click-only navigation.
 3. Scroll when needed; wheel actions are captured at the cursor.
-4. Hold **left-click** for 2 seconds to start a mouse hold or drag, move if needed (for example to select cells in Excel), then release to save it.
+4. **Drag** or **hold left-click** to record a mouse hold (for example to select cells in Excel), then release to save it. Quick clicks stay normal clicks.
 5. Press **Ctrl**, **Shift**, or **Alt** with another key to record keyboard shortcuts (for example Ctrl+C).
 6. Press **Esc** when finished. Name the recording in the dialog or click **Cancel** to throw it away.
 7. Close the app window while recording to cancel without saving.
 
-Corner tooltip while recording: **Esc = Save · Hold left-click 2s = drag/hold**
+Corner tooltip while recording: **Esc = Save · Click = click · Hold or drag = mouse hold**
 
 ## Run workflow
 
@@ -465,7 +465,7 @@ See [BUILD.md](BUILD.md) for distribution layout and advanced compile options.
 | Key | While recording | While running / CSV batch |
 |-----|-----------------|---------------------------|
 | **Esc** | Save (opens name dialog) | Stop run or batch |
-| **Left-click** (hold 2s) | Start mouse hold/drag, release to save | Replays button down, drag or wait, button up |
+| **Left-click** (hold or drag) | Record mouse hold/drag, release to save | Replays button down, drag or wait, button up |
 | **Ctrl/Shift/Alt + key** | Record shortcut | Replays shortcut |
 
 Cancel on the save dialog discards the recording. Closing the app window while recording also cancels without saving.

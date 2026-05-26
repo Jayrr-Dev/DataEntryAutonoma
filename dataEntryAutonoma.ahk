@@ -57,15 +57,16 @@ How it works:
   • Ask to run next line shows a progress table and a prompt before each row (Run, Skip, or Run all remaining)
   • Esc stops the whole batch
     )",
-    recordingTipText: "Esc = Save · Hold left-click 2s = drag/hold",
+    recordingTipText: "Esc = Save · Click = click · Hold or drag = mouse hold",
     recordingTipOffsetX: 240,
     recordingTipOffsetY: 16,
     cursorTipOffsetX: 12,
     cursorTipOffsetY: 12,
+    mouseHoldIndicatorText: "HOLD",
     recordingTipRefreshMs: 1000,
     recordingTransientTipMs: 3000,
-    minMouseHoldActivationMs: 2000,
     minRecordedDelayMs: 200,
+    mouseHoldDragThresholdPx: 5,
     mouseHoldTipRefreshMs: 100,
     fileDeleteAttempts: 5,
     fileDeleteRetryMs: 250,
@@ -765,6 +766,36 @@ ShowCursorToolTip(message) {
 }
 
 /**
+ * Shows a hold indicator immediately to the right of the cursor.
+ */
+ShowMouseHoldCursorTip() {
+    global C, S
+
+    if !S.leftHoldActive || S.leftHoldDownAt = 0
+        return
+
+    heldSec := Round((A_TickCount - S.leftHoldDownAt) / 1000, 1)
+    ShowCursorToolTip(C.mouseHoldIndicatorText " " heldSec "s")
+}
+
+/**
+ * Restores the correct recording tooltip for the current hold state.
+ */
+RestoreRecordingStatusTip() {
+    global S
+
+    if !IsRecording() {
+        ToolTip
+        return
+    }
+
+    if S.leftHoldActive
+        RefreshRecordingLeftMouseHoldTip()
+    else
+        ShowRecordingTip()
+}
+
+/**
  * Shows the persistent recording tooltip in a fixed screen corner.
  */
 ShowRecordingTip() {
@@ -780,7 +811,7 @@ HideRecordingTip() {
     SetTimer MaintainRecordingTip, 0
     SetTimer RestoreRecordingTip, 0
     SetTimer RefreshRecordingLeftMouseHoldTip, 0
-    SetTimer CheckLeftMouseHoldActivation, 0
+    SetTimer CheckLeftMouseHoldRecording, 0
     ToolTip
 }
 
@@ -788,18 +819,11 @@ HideRecordingTip() {
  * Keeps the recording tooltip visible while Detect mode is active.
  */
 MaintainRecordingTip(*) {
-    if IsRecording()
-        ShowRecordingTip()
+    RestoreRecordingStatusTip()
 }
 
-/**
- * Restores the persistent recording tooltip after a short transient message.
- */
 RestoreRecordingTip(*) {
-    if IsRecording()
-        ShowRecordingTip()
-    else
-        ToolTip
+    RestoreRecordingStatusTip()
 }
 
 /**
@@ -1993,7 +2017,7 @@ StartRecording() {
     SetTimer FlushLog, C.flushIntervalMs
 
     ShowRecordingTip()
-    ShowTransientRecordingTip("Recording... Esc to save · Hold left-click 2 seconds for drag/hold · Ctrl/Shift/Alt shortcuts supported.")
+    ShowTransientRecordingTip("Recording... Quick click = click. Hold or drag left-click = mouse hold. Ctrl/Shift/Alt shortcuts supported.")
     SetTimer MaintainRecordingTip, C.recordingTipRefreshMs
 }
 
@@ -2087,10 +2111,76 @@ ResetRecordingState() {
 }
 
 /**
- * Activates mouse-hold recording after the left button stays down long enough.
+ * Returns pixel distance moved during the current left-button hold tracking.
+ * @returns {Number}
  */
-CheckLeftMouseHoldActivation(*) {
+GetMouseHoldMoveDistance() {
+    global S
+
+    return Sqrt((S.leftHoldEndX - S.leftHoldDownX) ** 2 + (S.leftHoldEndY - S.leftHoldDownY) ** 2)
+}
+
+/**
+ * Returns true when the tracked left-button gesture moved enough to count as a drag.
+ * @returns {Boolean}
+ */
+HasMouseHoldDragged() {
+    global C
+
+    return GetMouseHoldMoveDistance() >= C.mouseHoldDragThresholdPx
+}
+
+/**
+ * Marks drag/hold recording active and shows the HOLD cursor indicator.
+ */
+ActivateRecordingLeftMouseHold() {
     global S, C
+
+    if S.leftHoldActive
+        return
+
+    S.leftHoldActive := true
+    S.leftHoldActiveStartedAt := A_TickCount
+    SetTimer CheckLeftMouseHoldRecording, 0
+    SetTimer RefreshRecordingLeftMouseHoldTip, C.mouseHoldTipRefreshMs
+    RefreshRecordingLeftMouseHoldTip()
+}
+
+/**
+ * Tracks mouse position during a pending or active left-button hold.
+ * @param {Number} x Screen X coordinate.
+ * @param {Number} y Screen Y coordinate.
+ */
+UpdateRecordingLeftMouseHoldTracking(x, y) {
+    global S, C
+
+    if !S.leftHoldPending && !S.leftHoldActive
+        return
+
+    S.leftHoldEndX := x
+    S.leftHoldEndY := y
+
+    if S.leftHoldPending && !S.leftHoldActive && ShouldRecordLeftMouseHold()
+        ActivateRecordingLeftMouseHold()
+    else if S.leftHoldActive
+        RefreshRecordingLeftMouseHoldTip()
+}
+
+/**
+ * Returns true when the current left-button gesture should be recorded as a hold.
+ * @returns {Boolean}
+ */
+ShouldRecordLeftMouseHold() {
+    global S, C
+
+    return HasMouseHoldDragged() || (A_TickCount - S.leftHoldDownAt) >= C.minRecordedDelayMs
+}
+
+/**
+ * Shows the HOLD indicator once a hold or drag is detected.
+ */
+CheckLeftMouseHoldRecording(*) {
+    global S
 
     if !S.recording || !S.leftHoldPending || S.leftHoldActive
         return
@@ -2100,16 +2190,12 @@ CheckLeftMouseHoldActivation(*) {
         return
     }
 
-    S.leftHoldActive := true
-    S.leftHoldActiveStartedAt := A_TickCount
-    S.leftHoldEndX := S.leftHoldDownX
-    S.leftHoldEndY := S.leftHoldDownY
-    SetTimer RefreshRecordingLeftMouseHoldTip, C.mouseHoldTipRefreshMs
-    RefreshRecordingLeftMouseHoldTip()
+    if ShouldRecordLeftMouseHold()
+        ActivateRecordingLeftMouseHold()
 }
 
 /**
- * Updates the live left-hold tooltip in seconds.
+ * Updates the active hold indicator beside the cursor.
  */
 RefreshRecordingLeftMouseHoldTip(*) {
     global S
@@ -2119,8 +2205,7 @@ RefreshRecordingLeftMouseHoldTip(*) {
         return
     }
 
-    seconds := Round((A_TickCount - S.leftHoldActiveStartedAt) / 1000, 1)
-    ShowCursorToolTip(Format("Recording mouse hold: {1} s", seconds))
+    ShowMouseHoldCursorTip()
 }
 
 /**
@@ -2129,7 +2214,7 @@ RefreshRecordingLeftMouseHoldTip(*) {
 CancelRecordingLeftMouseHoldState() {
     global S
 
-    SetTimer CheckLeftMouseHoldActivation, 0
+    SetTimer CheckLeftMouseHoldRecording, 0
     SetTimer RefreshRecordingLeftMouseHoldTip, 0
     S.leftHoldPending := false
     S.leftHoldActive := false
@@ -2141,7 +2226,7 @@ CancelRecordingLeftMouseHoldState() {
     S.leftHoldEndY := 0
 
     if IsRecording()
-        ShowRecordingTip()
+        RestoreRecordingStatusTip()
     else
         ToolTip
 }
@@ -2156,11 +2241,13 @@ CommitRecordingLeftMouseHold(*) {
         return
 
     SetTimer RefreshRecordingLeftMouseHoldTip, 0
-    durationMs := Max(0, A_TickCount - S.leftHoldActiveStartedAt)
+
+    durationMs := Max(0, A_TickCount - S.leftHoldDownAt)
     startX := S.leftHoldDownX
     startY := S.leftHoldDownY
     endX := S.leftHoldEndX
     endY := S.leftHoldEndY
+    dragged := HasMouseHoldDragged()
 
     S.leftHoldPending := false
     S.leftHoldActive := false
@@ -2176,10 +2263,8 @@ CommitRecordingLeftMouseHold(*) {
         return
     }
 
-    if durationMs < C.minRecordedDelayMs
-        && Abs(endX - startX) < 3
-        && Abs(endY - startY) < 3 {
-        ShowRecordingTip()
+    if !dragged && durationMs < C.minRecordedDelayMs {
+        RestoreRecordingStatusTip()
         return
     }
 
@@ -2192,7 +2277,7 @@ CommitRecordingLeftMouseHold(*) {
     WriteMouseHoldLine("LButton", durationMs, startCoords, endX, endY, ctx)
 
     seconds := Round(durationMs / 1000, 1)
-    ShowTransientRecordingTip(Format("Mouse hold saved: {1} s", seconds), endX, endY)
+    ShowTransientRecordingTip(Format("HOLD saved: {1} s", seconds), endX, endY)
 }
 
 /**
@@ -2355,25 +2440,23 @@ MouseHookProc(nCode, wParam, lParam) {
 
         switch wParam {
             case C.WM_LBUTTONDOWN:
-                if S.leftHoldPending || S.leftHoldActive
-                    return 1
-
                 S.leftHoldPending := true
                 S.leftHoldDownAt := A_TickCount
                 S.leftHoldDownX := x
                 S.leftHoldDownY := y
                 S.leftHoldEndX := x
                 S.leftHoldEndY := y
-                SetTimer CheckLeftMouseHoldActivation, -C.minMouseHoldActivationMs
-                return 1
+                SetTimer CheckLeftMouseHoldRecording, -C.minRecordedDelayMs
 
             case C.WM_LBUTTONUP:
                 if S.leftHoldPending || S.leftHoldActive {
-                    SetTimer CheckLeftMouseHoldActivation, 0
+                    SetTimer CheckLeftMouseHoldRecording, 0
+                    S.leftHoldEndX := x
+                    S.leftHoldEndY := y
 
-                    if S.leftHoldActive {
-                        S.leftHoldEndX := x
-                        S.leftHoldEndY := y
+                    if S.leftHoldActive || ShouldRecordLeftMouseHold() {
+                        if !S.leftHoldActive
+                            ActivateRecordingLeftMouseHold()
                         CommitRecordingLeftMouseHold()
                     } else {
                         QueueMouseEvent({
@@ -2384,15 +2467,11 @@ MouseHookProc(nCode, wParam, lParam) {
                         })
                         CancelRecordingLeftMouseHoldState()
                     }
-
-                    return 1
                 }
 
             case C.WM_MOUSEMOVE:
-                if S.leftHoldActive {
-                    S.leftHoldEndX := x
-                    S.leftHoldEndY := y
-                }
+                if S.leftHoldPending || S.leftHoldActive
+                    UpdateRecordingLeftMouseHoldTracking(x, y)
 
             case C.WM_RBUTTONDOWN:
                 QueueMouseEvent({ type: "click", button: "RButton", x: x, y: y })
@@ -3381,7 +3460,7 @@ ReplayScroll(action) {
  * @param {Object} action Parsed mouse_hold action.
  */
 ReplayMouseHold(action) {
-    global S
+    global C, S
 
     startPoint := ResolveTargetPoint(action.startTarget)
     endPoint := ResolveTargetPoint(action.endTarget)
@@ -3398,6 +3477,8 @@ ReplayMouseHold(action) {
 
     if !S.applying || S.stopBatch
         return
+
+    ShowCursorToolTip(C.mouseHoldIndicatorText)
 
     MouseButtonDown(action.button)
 
@@ -3417,6 +3498,7 @@ ReplayMouseHold(action) {
         return
 
     MouseButtonUp(action.button)
+    ToolTip
     SleepWhileApplying(S.segmentPauseMs)
 }
 
@@ -3727,7 +3809,7 @@ ProcessDetectLogEvent(line, parsed, pendingClick) {
  * @returns {Object|String}
  */
 ParseMouseHoldAction(parts, coordinateMode) {
-    if parts.Length < 21 || !IsNumericText(parts[5]) || !IsNumericText(parts[6])
+    if parts.Length < 22 || !IsNumericText(parts[5]) || !IsNumericText(parts[6])
         return ""
 
     startTarget := MakeTarget(
@@ -3747,13 +3829,14 @@ ParseMouseHoldAction(parts, coordinateMode) {
         parts[17],
         parts[18],
         parts[19],
+        parts[20],
         NormalizeRecordedButton(parts[3])
     )
 
     endTarget := MakeTarget(
-        coordinateMode,
-        SafeInteger(parts[20], 0),
-        SafeInteger(parts[21], 0)
+        "absolute",
+        SafeInteger(parts[21], 0),
+        SafeInteger(parts[22], 0)
     )
 
     return {
