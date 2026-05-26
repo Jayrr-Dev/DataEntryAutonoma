@@ -349,12 +349,12 @@ GetManageThreeButtonWidth() {
 }
 
 /**
- * Width for two equal primary action buttons (tab list width minus gap).
+ * Width for two equal primary action buttons (full content width minus gap).
  * @returns {Integer}
  */
 GetManagePrimaryButtonWidth() {
     global UI
-    return Floor((UI.tabListWidth - UI.btnGap) / 2)
+    return Floor((UI.contentWidth - UI.btnGap) / 2)
 }
 
 /**
@@ -525,7 +525,7 @@ CreateManageGui() {
 
     S.mainTab.UseTab()
 
-    S.gui.Add("Text", "xm w" UI.contentWidth " h8", "")
+    S.gui.Add("Text", "xm w" UI.contentWidth " h4", "")
 
     S.detectButton := S.gui.Add(
         "Button",
