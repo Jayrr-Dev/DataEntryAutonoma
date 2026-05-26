@@ -7,10 +7,10 @@ SetKeyDelay -1
 
 ; dataEntryAutonoma.ahk
 ; Data Entry Autonoma — record clicks, scrolls, and keys; replay with presets or CSV batches.
-; Unified Detect (record) and Apply (replay) module with CSV batch support.
+; Unified Record and Run module with CSV batch support.
 ; Recordings: recordings\di-*.log
 ; Presets: saved-inputs\*.txt
-; Esc saves recording (Cancel on the save dialog discards). Esc stops playback or a CSV batch.
+; Esc saves recording (Cancel on the save dialog discards). Esc stops Run or a CSV batch.
 
 EnableDpiAwareness()
 CoordMode "Mouse", "Screen"
@@ -45,11 +45,11 @@ Examples:
   hello
 
 How it works:
-  • Apply runs the entire recording for row 1, then row 2, and so on
+  • Run replays the entire recording for row 1, then row 2, and so on
   • Column 1 is a row label (status display only)
   • Columns 2+ map to variable-1, variable-2, variable-3, ...
   • Blank lines and lines starting with # are ignored
-  • Preset is optional — speeds and playback options only; row values are used instead of preset variables
+  • Preset is optional — speeds and run options only; row values are used instead of preset variables
   • Esc stops the whole batch
     )",
     recordingTipText: "Esc = Save · Hold Shift = delay",
@@ -385,7 +385,7 @@ GetManageTabPanelHeight() {
 }
 
 /**
- * Builds the unified Detect + Apply window.
+ * Builds the unified Record + Run window.
  */
 CreateManageGui() {
     global C, S, UI
@@ -407,7 +407,7 @@ CreateManageGui() {
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textMuted,
-        "Record once. Replay with presets or CSV batches."
+        "Record once. Run with presets or CSV batches."
     )
 
     S.statusCtrl := S.gui.Add(
@@ -422,7 +422,7 @@ CreateManageGui() {
     S.mainTab := S.gui.Add(
         "Tab3",
         "xm w" UI.contentWidth " h" GetManageTabPanelHeight(),
-        ["Recording", "Input Presets", "Playback Options"]
+        ["Recordings", "Input Presets", "Run Options"]
     )
 
     ; --- Recording tab ---
@@ -508,7 +508,7 @@ CreateManageGui() {
     )
     S.deletePresetButton.OnEvent("Click", DeleteSelectedPreset)
 
-    ; --- Playback Options tab ---
+    ; --- Run Options tab ---
     S.mainTab.UseTab(3)
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
     S.gui.Add("Text", "Section w" UI.tabListWidth " c" UI.textMuted, "Mouse movement")
@@ -542,14 +542,14 @@ CreateManageGui() {
     S.detectButton := S.gui.Add(
         "Button",
         "xm w" primaryBtnW " h" hPrimary " +Background" UI.detectBg " c" UI.detectText,
-        "Detect"
+        "Record"
     )
     S.detectButton.OnEvent("Click", (*) => StartRecording())
 
     S.applyButton := S.gui.Add(
         "Button",
         "x+" btnGap " w" primaryBtnW " h" hPrimary " Default +Background" UI.accent " c" UI.accentText,
-        "Apply"
+        "Run"
     )
     S.applyButton.OnEvent("Click", ApplyFromGui)
 
@@ -557,7 +557,7 @@ CreateManageGui() {
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textHint,
-        "Detect records clicks, scrolls, and keys. Esc saves a recording (Cancel on the dialog discards). Esc stops Apply."
+        "Record captures clicks, scrolls, and keys. Esc saves (Cancel on the dialog discards). Esc stops Run."
     )
 
     S.gui.Show()
@@ -1016,7 +1016,7 @@ ApplyFromGui(*) {
         return
     }
 
-    SetStatus("Starting playback...")
+    SetStatus("Running...")
     SetTimer (ApplySingleTimer).Bind(logPath, presetPath), -1
 }
 
