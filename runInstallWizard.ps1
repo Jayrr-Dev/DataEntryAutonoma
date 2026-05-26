@@ -4,8 +4,9 @@
     Graphical install wizard for Data Entry Autonoma.
 
 .DESCRIPTION
-    Copies the standalone exe (preferred) or script bundle to a chosen folder,
+    Installs the standalone DataEntryAutonoma.exe to a chosen folder,
     creates data folders, and optional Desktop / Start Menu shortcuts.
+    No AutoHotkey install is required on the target PC.
     Run from the project root:  .\runInstallWizard.ps1
 #>
 
@@ -26,23 +27,17 @@ $ICON_FILE_NAME = "dataEntryAutonoma.ico"
 $LICENSE_FILE_NAME = "LICENSE"
 $README_FILE_NAME = "README.md"
 
-$INSTALL_MODE_EXE = "exe"
-$INSTALL_MODE_SCRIPT = "script"
-
 $DEFAULT_INSTALL_DIR = Join-Path (Join-Path $env:LOCALAPPDATA "Programs") $APP_FOLDER_NAME
-$AHK_V2_DEFAULT_PATH = "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
 $DIST_RELATIVE_PATH = "dist"
 $ASSETS_RELATIVE_PATH = "assets"
 
 $WIZARD_WIDTH = 520
-$WIZARD_HEIGHT = 420
+$WIZARD_HEIGHT = 440
 $CONTENT_WIDTH = 460
 
 $COLOR_BG = [System.Drawing.Color]::FromArgb(248, 249, 250)
 $COLOR_TEXT = [System.Drawing.Color]::FromArgb(26, 26, 26)
 $COLOR_MUTED = [System.Drawing.Color]::FromArgb(107, 114, 128)
-$COLOR_ACCENT = [System.Drawing.Color]::FromArgb(37, 99, 235)
-$COLOR_ACCENT_TEXT = [System.Drawing.Color]::White
 
 $PROJECT_ROOT = $PSScriptRoot
 $DIST_EXE_PATH = Join-Path $PROJECT_ROOT (Join-Path $DIST_RELATIVE_PATH $EXE_FILE_NAME)
@@ -54,23 +49,24 @@ $COMPILE_SCRIPT_PATH = Join-Path $PROJECT_ROOT "compile.ps1"
 # Install helpers
 # =============================================================================
 
-# Returns true when the compiled standalone exe exists in dist.
-function Test-StandaloneExeAvailable {
-    return Test-Path $DIST_EXE_PATH
-}
-
-# Returns the AutoHotkey v2 runner path when installed, otherwise empty string.
-function Get-AutoHotkeyV2Path {
-    if (Test-Path $AHK_V2_DEFAULT_PATH) {
-        return $AHK_V2_DEFAULT_PATH
-    }
-
-    $command = Get-Command "AutoHotkey64.exe" -ErrorAction SilentlyContinue
-    if ($command -and $command.Source -match "\\v2\\") {
-        return $command.Source
+# Returns the selected standalone exe path when the file exists.
+function Get-StandaloneExeSourcePath {
+    if ($script:StandaloneExeSourcePath -and (Test-Path $script:StandaloneExeSourcePath)) {
+        return $script:StandaloneExeSourcePath
     }
 
     return ""
+}
+
+# Returns true when a standalone exe is ready to install.
+function Test-StandaloneExeAvailable {
+    return [bool](Get-StandaloneExeSourcePath)
+}
+
+# Returns true when this machine can build the exe from source (maintainers only).
+function Test-CanBuildStandaloneExe {
+    $ahk2Exe = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
+    return (Test-Path $COMPILE_SCRIPT_PATH) -and (Test-Path $ahk2Exe) -and (Test-Path $SOURCE_SCRIPT_PATH)
 }
 
 # Ensures a directory exists.
@@ -101,7 +97,6 @@ function New-InstallShortcuts {
     param(
         [string]$InstallDir,
         [string]$TargetPath,
-        [string]$Arguments = "",
         [string]$IconPath = "",
         [bool]$DesktopShortcut,
         [bool]$StartMenuShortcut
@@ -123,9 +118,6 @@ function New-InstallShortcuts {
     foreach ($shortcutPath in $targets) {
         $shortcut = $shell.CreateShortcut($shortcutPath)
         $shortcut.TargetPath = $TargetPath
-        if ($Arguments) {
-            $shortcut.Arguments = $Arguments
-        }
         $shortcut.WorkingDirectory = $InstallDir
         if ($IconPath -and (Test-Path $IconPath)) {
             $shortcut.IconLocation = $IconPath
@@ -135,12 +127,14 @@ function New-InstallShortcuts {
     }
 }
 
-# Performs the file copy and folder setup for the selected install mode.
+# Copies the standalone exe and creates data folders in the install directory.
 function Install-ApplicationFiles {
-    param(
-        [string]$InstallDir,
-        [string]$InstallMode
-    )
+    param([string]$InstallDir)
+
+    $exeSource = Get-StandaloneExeSourcePath
+    if (-not $exeSource) {
+        throw "No $EXE_FILE_NAME selected. Browse for the exe or download a release from GitHub."
+    }
 
     Ensure-Directory $InstallDir
     Ensure-Directory (Join-Path $InstallDir "recordings")
@@ -149,50 +143,23 @@ function Install-ApplicationFiles {
     Copy-InstallFile (Join-Path $PROJECT_ROOT $LICENSE_FILE_NAME) (Join-Path $InstallDir $LICENSE_FILE_NAME)
     Copy-InstallFile (Join-Path $PROJECT_ROOT $README_FILE_NAME) (Join-Path $InstallDir $README_FILE_NAME)
 
-    if ($InstallMode -eq $INSTALL_MODE_EXE) {
-        $destinationExe = Join-Path $InstallDir $EXE_FILE_NAME
-        Copy-Item -Path $DIST_EXE_PATH -Destination $destinationExe -Force
+    $destinationExe = Join-Path $InstallDir $EXE_FILE_NAME
+    Copy-Item -Path $exeSource -Destination $destinationExe -Force
 
-        $iconPath = ""
-        if (Test-Path $SOURCE_ICON_PATH) {
-            $iconPath = Join-Path $InstallDir (Join-Path $ASSETS_RELATIVE_PATH $ICON_FILE_NAME)
-            Ensure-Directory (Split-Path $iconPath -Parent)
-            Copy-Item -Path $SOURCE_ICON_PATH -Destination $iconPath -Force
-        }
-
-        return @{
-            LaunchPath = $destinationExe
-            LaunchArgs = ""
-            IconPath = $iconPath
-            Mode = $INSTALL_MODE_EXE
-        }
+    $iconPath = ""
+    if (Test-Path $SOURCE_ICON_PATH) {
+        $iconPath = Join-Path $InstallDir (Join-Path $ASSETS_RELATIVE_PATH $ICON_FILE_NAME)
+        Ensure-Directory (Split-Path $iconPath -Parent)
+        Copy-Item -Path $SOURCE_ICON_PATH -Destination $iconPath -Force
     }
-
-    $destinationScript = Join-Path $InstallDir $SCRIPT_FILE_NAME
-    Copy-Item -Path $SOURCE_SCRIPT_PATH -Destination $destinationScript -Force
-
-    $assetsDestination = Join-Path $InstallDir $ASSETS_RELATIVE_PATH
-    if (Test-Path (Join-Path $PROJECT_ROOT $ASSETS_RELATIVE_PATH)) {
-        Ensure-Directory $assetsDestination
-        Copy-Item -Path (Join-Path $PROJECT_ROOT (Join-Path $ASSETS_RELATIVE_PATH "*")) -Destination $assetsDestination -Recurse -Force
-    }
-
-    $ahkPath = Get-AutoHotkeyV2Path
-    if (-not $ahkPath) {
-        throw "AutoHotkey v2 was not found. Install it from https://www.autohotkey.com/ or choose Standalone (.exe) mode after building the exe."
-    }
-
-    $iconPath = Join-Path $InstallDir (Join-Path $ASSETS_RELATIVE_PATH $ICON_FILE_NAME)
 
     return @{
-        LaunchPath = $ahkPath
-        LaunchArgs = "`"$destinationScript`""
+        LaunchPath = $destinationExe
         IconPath = $iconPath
-        Mode = $INSTALL_MODE_SCRIPT
     }
 }
 
-# Runs compile.ps1 to build dist\DataEntryAutonoma.exe.
+# Runs compile.ps1 to build dist\DataEntryAutonoma.exe (maintainers only).
 function Invoke-BuildStandaloneExe {
     if (-not (Test-Path $COMPILE_SCRIPT_PATH)) {
         throw "Build script not found: $COMPILE_SCRIPT_PATH"
@@ -203,22 +170,18 @@ function Invoke-BuildStandaloneExe {
     if (-not (Test-Path $DIST_EXE_PATH)) {
         throw "Build finished but $EXE_FILE_NAME was not created."
     }
+
+    $script:StandaloneExeSourcePath = $DIST_EXE_PATH
 }
 
-# Starts the installed app. Omits ArgumentList when launching a standalone exe.
+# Starts the installed standalone application.
 function Start-InstalledApplication {
     param(
         [string]$LaunchPath,
-        [string]$LaunchArgs,
         [string]$WorkingDirectory
     )
 
-    if ([string]::IsNullOrWhiteSpace($LaunchArgs)) {
-        Start-Process -FilePath $LaunchPath -WorkingDirectory $WorkingDirectory
-        return
-    }
-
-    Start-Process -FilePath $LaunchPath -ArgumentList $LaunchArgs -WorkingDirectory $WorkingDirectory
+    Start-Process -FilePath $LaunchPath -WorkingDirectory $WorkingDirectory
 }
 
 # =============================================================================
@@ -238,7 +201,7 @@ $form.BackColor = $COLOR_BG
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 
 $script:CurrentStep = 0
-$script:InstallMode = if (Test-StandaloneExeAvailable) { $INSTALL_MODE_EXE } else { $INSTALL_MODE_SCRIPT }
+$script:StandaloneExeSourcePath = if (Test-Path $DIST_EXE_PATH) { $DIST_EXE_PATH } else { "" }
 $script:InstallDir = $DEFAULT_INSTALL_DIR
 $script:CreateDesktopShortcut = $true
 $script:CreateStartMenuShortcut = $true
@@ -316,9 +279,9 @@ function Show-WizardStep {
             $body = New-BodyLabel @"
 Thank you for installing $APP_DISPLAY_NAME.
 
-This wizard will copy the app to a folder on your PC, create recordings and preset folders, and optionally add shortcuts.
+This wizard installs the standalone Windows app ($EXE_FILE_NAME). AutoHotkey is not required on your PC.
 
-Click Next to choose how you want to install.
+Click Next to locate the application file, choose an install folder, and add shortcuts.
 "@ 200
             $body.Location = New-Object System.Drawing.Point(0, 44)
             $contentPanel.Controls.Add($body)
@@ -329,51 +292,60 @@ Click Next to choose how you want to install.
             $btnNext.Text = "Next >"
             $btnCancel.Enabled = $true
 
-            $title = New-TitleLabel "Install type"
+            $title = New-TitleLabel "Application file"
             $title.Location = New-Object System.Drawing.Point(0, 0)
             $contentPanel.Controls.Add($title)
 
             $exeAvailable = Test-StandaloneExeAvailable
-            $ahkPath = Get-AutoHotkeyV2Path
+            $canBuild = Test-CanBuildStandaloneExe
 
-            $radioExe = New-Object System.Windows.Forms.RadioButton
-            $radioExe.Text = "Standalone app ($EXE_FILE_NAME) - recommended, no AutoHotkey needed"
-            $radioExe.AutoSize = $true
-            $radioExe.Location = New-Object System.Drawing.Point(0, 48)
-            $radioExe.Enabled = $exeAvailable
-            $radioExe.Checked = $exeAvailable -and ($script:InstallMode -eq $INSTALL_MODE_EXE)
-            $contentPanel.Controls.Add($radioExe)
-
-            $radioScript = New-Object System.Windows.Forms.RadioButton
-            $radioScript.Text = "Script mode ($SCRIPT_FILE_NAME) - requires AutoHotkey v2"
-            $radioScript.AutoSize = $true
-            $radioScript.Location = New-Object System.Drawing.Point(0, 78)
-            $radioScript.Enabled = [bool]$ahkPath -and (Test-Path $SOURCE_SCRIPT_PATH)
-            $radioScript.Checked = (-not $exeAvailable) -or ($script:InstallMode -eq $INSTALL_MODE_SCRIPT)
-            $contentPanel.Controls.Add($radioScript)
+            $intro = New-BodyLabel "Select $EXE_FILE_NAME to install. End users do not need AutoHotkey." 40
+            $intro.Location = New-Object System.Drawing.Point(0, 40)
+            $contentPanel.Controls.Add($intro)
 
             $statusText = if ($exeAvailable) {
-                "Found built exe at dist\$EXE_FILE_NAME."
+                "Ready to install:`r`n$script:StandaloneExeSourcePath"
             } else {
-                "Standalone exe not found yet. Build it below, or use Script mode if AutoHotkey v2 is installed."
+                "No exe selected yet. Browse for $EXE_FILE_NAME from a GitHub release, download folder, or USB drive."
             }
-            $status = New-BodyLabel $statusText 60
-            $status.Location = New-Object System.Drawing.Point(0, 112)
+            $status = New-BodyLabel $statusText 72
+            $status.Location = New-Object System.Drawing.Point(0, 84)
             $contentPanel.Controls.Add($status)
 
+            $btnBrowseExe = New-Object System.Windows.Forms.Button
+            $btnBrowseExe.Text = "Browse for $EXE_FILE_NAME..."
+            $btnBrowseExe.Size = New-Object System.Drawing.Size(220, 30)
+            $btnBrowseExe.Location = New-Object System.Drawing.Point(0, 164)
+            $contentPanel.Controls.Add($btnBrowseExe)
+
             $btnBuild = New-Object System.Windows.Forms.Button
-            $btnBuild.Text = "Build $EXE_FILE_NAME now"
-            $btnBuild.Size = New-Object System.Drawing.Size(180, 30)
-            $btnBuild.Location = New-Object System.Drawing.Point(0, 178)
-            $btnBuild.Enabled = -not $exeAvailable -and (Test-Path $COMPILE_SCRIPT_PATH)
+            $btnBuild.Text = "Build exe (developers)"
+            $btnBuild.Size = New-Object System.Drawing.Size(160, 30)
+            $btnBuild.Location = New-Object System.Drawing.Point(230, 164)
+            $btnBuild.Enabled = $canBuild
             $contentPanel.Controls.Add($btnBuild)
 
             $buildStatus = New-Object System.Windows.Forms.Label
             $buildStatus.AutoSize = $false
-            $buildStatus.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, 40)
-            $buildStatus.Location = New-Object System.Drawing.Point(0, 214)
+            $buildStatus.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, 36)
+            $buildStatus.Location = New-Object System.Drawing.Point(0, 204)
             $buildStatus.ForeColor = $COLOR_MUTED
+            if (-not $canBuild -and -not $exeAvailable) {
+                $buildStatus.Text = "Download $EXE_FILE_NAME from GitHub Releases, or build on a PC with AutoHotkey v2 and compiler."
+            }
             $contentPanel.Controls.Add($buildStatus)
+
+            $btnBrowseExe.Add_Click({
+                $dialog = New-Object System.Windows.Forms.OpenFileDialog
+                $dialog.Title = "Select $EXE_FILE_NAME"
+                $dialog.Filter = "Application (*.exe)|$EXE_FILE_NAME|All executables (*.exe)|*.exe"
+                $dialog.FileName = $EXE_FILE_NAME
+                if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                    $script:StandaloneExeSourcePath = $dialog.FileName
+                    $status.Text = "Ready to install:`r`n$script:StandaloneExeSourcePath"
+                    $buildStatus.Text = ""
+                }
+            })
 
             $btnBuild.Add_Click({
                 try {
@@ -382,18 +354,13 @@ Click Next to choose how you want to install.
                     [System.Windows.Forms.Application]::DoEvents()
                     Invoke-BuildStandaloneExe
                     $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
-                    $buildStatus.Text = "Build complete. Standalone mode is now available."
-                    $radioExe.Enabled = $true
-                    $radioExe.Checked = $true
-                    $script:InstallMode = $INSTALL_MODE_EXE
+                    $buildStatus.Text = "Build complete."
+                    $status.Text = "Ready to install:`r`n$script:StandaloneExeSourcePath"
                 } catch {
                     $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
                     $buildStatus.Text = $_.Exception.Message
                 }
             })
-
-            $script:Step1_RadioExe = $radioExe
-            $script:Step1_RadioScript = $radioScript
         }
 
         2 {
@@ -467,8 +434,7 @@ Click Next to choose how you want to install.
             $chkLaunch.Checked = $script:LaunchWhenFinished
             $contentPanel.Controls.Add($chkLaunch)
 
-            $summaryMode = if ($script:InstallMode -eq $INSTALL_MODE_EXE) { "Standalone exe" } else { "Script + AutoHotkey v2" }
-            $summary = New-BodyLabel "Install type: $summaryMode`r`nInstall folder:`r`n$script:InstallDir" 100
+            $summary = New-BodyLabel "Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 100
             $summary.Location = New-Object System.Drawing.Point(0, 150)
             $contentPanel.Controls.Add($summary)
 
@@ -499,12 +465,11 @@ Click Next to choose how you want to install.
 
             try {
                 [System.Windows.Forms.Application]::DoEvents()
-                $script:LastInstallResult = Install-ApplicationFiles -InstallDir $script:InstallDir -InstallMode $script:InstallMode
+                $script:LastInstallResult = Install-ApplicationFiles -InstallDir $script:InstallDir
 
                 New-InstallShortcuts `
                     -InstallDir $script:InstallDir `
                     -TargetPath $script:LastInstallResult.LaunchPath `
-                    -Arguments $script:LastInstallResult.LaunchArgs `
                     -IconPath $script:LastInstallResult.IconPath `
                     -DesktopShortcut $script:CreateDesktopShortcut `
                     -StartMenuShortcut $script:CreateStartMenuShortcut
@@ -547,13 +512,6 @@ $script:InstallDir
 
 function Save-CurrentStepState {
     switch ($script:CurrentStep) {
-        1 {
-            if ($script:Step1_RadioExe.Checked) {
-                $script:InstallMode = $INSTALL_MODE_EXE
-            } else {
-                $script:InstallMode = $INSTALL_MODE_SCRIPT
-            }
-        }
         2 {
             $script:InstallDir = $script:Step2_PathBox.Text.Trim()
         }
@@ -568,21 +526,18 @@ function Save-CurrentStepState {
 function Test-CurrentStepValid {
     switch ($script:CurrentStep) {
         1 {
-            if ($script:Step1_RadioExe.Checked -and -not (Test-StandaloneExeAvailable)) {
+            if (-not (Test-StandaloneExeAvailable)) {
                 [System.Windows.Forms.MessageBox]::Show(
-                    "Standalone exe is not available yet. Build it first or choose Script mode.",
+                    @"
+Please select $EXE_FILE_NAME before continuing.
+
+  • Click Browse for $EXE_FILE_NAME
+  • Use a file from GitHub Releases or another PC
+  • Developers: click Build exe if AutoHotkey v2 is installed on this machine
+"@,
                     $APP_DISPLAY_NAME,
                     [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Warning
-                ) | Out-Null
-                return $false
-            }
-            if ($script:Step1_RadioScript.Checked -and -not (Get-AutoHotkeyV2Path)) {
-                [System.Windows.Forms.MessageBox]::Show(
-                    "AutoHotkey v2 is not installed. Install it from https://www.autohotkey.com/ or build the standalone exe.",
-                    $APP_DISPLAY_NAME,
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                    [System.Windows.Forms.MessageBoxIcon]::Information
                 ) | Out-Null
                 return $false
             }
@@ -620,7 +575,6 @@ $btnNext.Add_Click({
         if ($script:LaunchWhenFinished -and $script:LastInstallResult -and -not $script:Step4_Failed) {
             Start-InstalledApplication `
                 -LaunchPath $script:LastInstallResult.LaunchPath `
-                -LaunchArgs $script:LastInstallResult.LaunchArgs `
                 -WorkingDirectory $script:InstallDir
         }
         $form.Close()

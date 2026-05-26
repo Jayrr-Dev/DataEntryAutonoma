@@ -105,14 +105,15 @@ Windows only. The easiest way to install is the **setup wizard** (recommended). 
      .\runInstallWizard.ps1
      ```
 3. Follow the on-screen steps:
-   - **Welcome** → **Install type** (standalone `.exe` or script mode)
+   - **Welcome** → **Application file** (select `DataEntryAutonoma.exe`)
+   - On a **new PC**, click **Browse for DataEntryAutonoma.exe...** and pick the exe from a GitHub release, download folder, or USB drive
    - **Install location** (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`)
    - **Shortcuts** (Desktop, Start Menu, launch when finished)
 4. Click **Install**, then **Close** when setup completes.
 
-**Standalone mode (recommended):** Uses `DataEntryAutonoma.exe`. No AutoHotkey needed on your PC. If the exe is not built yet, the wizard offers **Build DataEntryAutonoma.exe now** (requires AutoHotkey v2 with compiler on your machine).
+**Standalone only:** The wizard installs `DataEntryAutonoma.exe`. **AutoHotkey is not required** on the PC where you install or run the app.
 
-**Script mode:** Copies `dataEntryAutonoma.ahk` and requires [AutoHotkey v2](https://www.autohotkey.com/) installed.
+**Developers only:** If you cloned the repo and have AutoHotkey v2 with compiler, use **Build exe (developers)** on the Application file step. End users should browse for a downloaded exe instead.
 
 The wizard creates `recordings\` and `saved-inputs\` folders and optional shortcuts for you.
 
