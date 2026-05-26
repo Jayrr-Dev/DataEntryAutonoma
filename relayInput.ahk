@@ -5,7 +5,8 @@ SendMode "Input"
 SetMouseDelay -1
 SetKeyDelay -1
 
-; manageInput.ahk
+; relayInput.ahk
+; Input Relay — record clicks, scrolls, and keys; replay with presets or CSV batches.
 ; Unified Detect (record) and Apply (replay) module with CSV batch support.
 ; Recordings: recordings\di-*.log
 ; Presets: saved-inputs\*.txt
@@ -134,7 +135,7 @@ UI := {
 }
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
-MANAGE_INPUT_GUI_TITLE := "Manage Input"
+APP_GUI_TITLE := "Input Relay"
 
 ; =============================================================================
 ; State
@@ -269,17 +270,17 @@ CreateManageGui() {
     hTool := UI.btnHeightTool
     hPrimary := UI.btnHeightPrimary
 
-    S.gui := Gui("+AlwaysOnTop -MaximizeBox", MANAGE_INPUT_GUI_TITLE)
+    S.gui := Gui("+AlwaysOnTop -MaximizeBox", APP_GUI_TITLE)
     ApplyManageGuiTheme(S.gui)
     S.gui.OnEvent("Close", GuiClosed)
 
     S.gui.SetFont("s" UI.fontSizeTitle, UI.fontFamily)
-    S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textPrimary, "Manage Input")
+    S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textPrimary, "Input Relay")
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textMuted,
-        "Record, replay, and batch-apply input with presets or CSV."
+        "Record once. Replay with presets or CSV batches."
     )
 
     S.statusCtrl := S.gui.Add(
@@ -539,7 +540,7 @@ EnsureManageOwnDialogs() {
  * @param {String} options MsgBox option string.
  * @returns {String} Name of the button pressed.
  */
-ShowManageMsgBox(message, title := MANAGE_INPUT_GUI_TITLE, options := "Icon!") {
+ShowManageMsgBox(message, title := APP_GUI_TITLE, options := "Icon!") {
     EnsureManageOwnDialogs()
     return MsgBox(message, title, options)
 }
@@ -740,7 +741,7 @@ ApplyFromGui(*) {
     if csvPath != "" {
         if !FileExist(csvPath) {
             SetStatus("CSV file not found.")
-            ShowManageMsgBox "CSV file not found:`n" csvPath, "Manage Input", "Icon!"
+            ShowManageMsgBox "CSV file not found:`n" csvPath, "Input Relay", "Icon!"
             return
         }
 
@@ -768,7 +769,7 @@ ApplySingleTimer(logPath, presetPath, *) {
         RunApply(logPath, presetPath)
     } catch as err {
         SetStatus("Playback error.")
-        ShowManageMsgBox "Playback failed:`n" err.Message, "Manage Input", "Icon!"
+        ShowManageMsgBox "Playback failed:`n" err.Message, "Input Relay", "Icon!"
     }
 }
 
@@ -783,7 +784,7 @@ ApplyBatchTimer(logPath, csvPath, presetPath, *) {
         RunApplyBatch(logPath, csvPath, presetPath)
     } catch as err {
         SetStatus("Batch playback error.")
-        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Manage Input", "Icon!"
+        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Input Relay", "Icon!"
     }
 }
 
@@ -1329,7 +1330,7 @@ StartRecording() {
         InstallRecordHooks()
     } catch as err {
         Cleanup()
-        ShowManageMsgBox "Could not start recording:`n" err.Message, "Manage Input", "Icon!"
+        ShowManageMsgBox "Could not start recording:`n" err.Message, "Input Relay", "Icon!"
         SetStatus("Ready")
         return
     }
@@ -1934,13 +1935,13 @@ RunApply(logPath, presetPath) {
 
     if !FileExist(logPath) {
         SetStatus("Recording file not found.")
-        ShowManageMsgBox "Recording file not found:`n" logPath, "Manage Input", "Icon!"
+        ShowManageMsgBox "Recording file not found:`n" logPath, "Input Relay", "Icon!"
         return false
     }
 
     if !FileExist(presetPath) {
         SetStatus("Preset file not found.")
-        ShowManageMsgBox "Preset file not found:`n" presetPath, "Manage Input", "Icon!"
+        ShowManageMsgBox "Preset file not found:`n" presetPath, "Input Relay", "Icon!"
         return false
     }
 
@@ -1953,7 +1954,7 @@ RunApply(logPath, presetPath) {
 
     if S.variables.Length = 0 {
         SetStatus("No variables in selected preset.")
-        ShowManageMsgBox "The selected preset has no variable values.`n`nUse Edit Inputs to add them.", "Manage Input", "Icon!"
+        ShowManageMsgBox "The selected preset has no variable values.`n`nUse Edit Inputs to add them.", "Input Relay", "Icon!"
         return false
     }
 
@@ -1988,7 +1989,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
 
     if !FileExist(logPath) {
         SetStatus("Recording file not found.")
-        ShowManageMsgBox "Recording file not found:`n" logPath, "Manage Input", "Icon!"
+        ShowManageMsgBox "Recording file not found:`n" logPath, "Input Relay", "Icon!"
         return false
     }
 
@@ -1996,7 +1997,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
     if rows.Length = 0 {
         SetStatus("CSV has no data rows.")
         ShowManageMsgBox "The CSV file has no usable data rows.`n`nExpected format:`n1,word,word2,word3`n2,word4,word5,word6",
-            "Manage Input", "Icon!"
+            "Input Relay", "Icon!"
         return false
     }
 
@@ -2052,7 +2053,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
         }
     } catch as err {
         stopped := true
-        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Manage Input", "Icon!"
+        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Input Relay", "Icon!"
     } finally {
         S.batchRunning := false
         S.stopBatch := false
@@ -2088,18 +2089,18 @@ PrepareApplyLog(logPath) {
             SetStatus("Recording has clicks but no variable keys.")
             ShowManageMsgBox "This recording has " parsed.clickCount " click(s) but no variable keys.`n`n"
                 . "Re-record with Detect: click a target, then press any key (except Esc) after each click.",
-                "Manage Input", "Icon!"
+                "Input Relay", "Icon!"
         } else if parsed.keyCount > 0 && parsed.clickCount = 0 {
             SetStatus("Recording has keys but no click target before them.")
-            ShowManageMsgBox "This recording has key events but no click targets before them.", "Manage Input", "Icon!"
+            ShowManageMsgBox "This recording has key events but no click targets before them.", "Input Relay", "Icon!"
         } else if parsed.keyCount > 0 && parsed.clickCount > 0 {
             SetStatus("Recording has clicks and keys but no matched apply pairs.")
             ShowManageMsgBox "This recording has clicks and keys, but they are not paired.`n`n"
                 . "Each key needs a click immediately before it in the log.",
-                "Manage Input", "Icon!"
+                "Input Relay", "Icon!"
         } else {
             SetStatus("No apply/scroll actions in that recording.")
-            ShowManageMsgBox "No apply or scroll actions were found in that recording.", "Manage Input", "Icon!"
+            ShowManageMsgBox "No apply or scroll actions were found in that recording.", "Input Relay", "Icon!"
         }
         return ""
     }
@@ -3080,15 +3081,15 @@ SaveManageState(presetName, recordingName, csvPath := "") {
 ; =============================================================================
 
 /**
- * When a second launch finds an existing Manage Input window, show it and exit
+ * When a second launch finds an existing Input Relay window, show it and exit
  * so #SingleInstance Force does not replace the running instance.
  * Restores the main GUI if it was hidden during Detect or Apply.
  */
 ActivateExistingManageInstance() {
-    global MANAGE_INPUT_GUI_TITLE
+    global APP_GUI_TITLE
 
     DetectHiddenWindows true
-    hwnd := WinExist(MANAGE_INPUT_GUI_TITLE)
+    hwnd := WinExist(APP_GUI_TITLE)
     DetectHiddenWindows false
 
     if !hwnd

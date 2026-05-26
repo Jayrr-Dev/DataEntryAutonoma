@@ -1,6 +1,8 @@
-# Building ManageInput.exe
+# Building InputRelay.exe
 
-End users do **not** need AutoHotkey installed. Ship `ManageInput.exe` plus the data folders below.
+**Input Relay** — record input once, replay with presets or CSV batches.
+
+End users do **not** need AutoHotkey installed. Ship `InputRelay.exe` plus the data folders below.
 
 ## Prerequisites (build machine only)
 
@@ -25,12 +27,12 @@ Or double-click / run:
 build.bat
 ```
 
-**Output:** `dist\ManageInput.exe`
+**Output:** `dist\InputRelay.exe`
 
 ### Exact compile command
 
 ```bat
-"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in "manageInput.ahk" /out "dist\ManageInput.exe" /base "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
+"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in "relayInput.ahk" /out "dist\InputRelay.exe" /base "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
 ```
 
 ## Distribute to end users
@@ -38,8 +40,8 @@ build.bat
 Copy this layout (folders can start empty; the app creates them on first run if missing):
 
 ```
-ManageInput/
-  ManageInput.exe
+InputRelay/
+  InputRelay.exe
   recordings/          ← recording logs (di-*.log)
   saved-inputs/        ← input presets (*.txt)
   apply-state.ini      ← optional; created automatically for last selections
@@ -47,7 +49,7 @@ ManageInput/
 
 - Paths are relative to the **exe directory** (`A_ScriptDir` when compiled).
 - CSV batch files can live anywhere; users pick them via Browse.
-- Entry script: `manageInput.ahk`.
+- Entry script: `relayInput.ahk`.
 
 ## Development vs compiled
 
@@ -57,4 +59,4 @@ ManageInput/
 | `saved-inputs\` | next to script | next to exe |
 | `apply-state.ini` | next to script | next to exe |
 
-No source changes are required for exe compatibility; `manageInput.ahk` already uses `A_ScriptDir` for all local data paths.
+No source changes are required for exe compatibility; `relayInput.ahk` already uses `A_ScriptDir` for all local data paths.
