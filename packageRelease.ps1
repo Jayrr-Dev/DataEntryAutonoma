@@ -29,6 +29,7 @@ $FILES_AT_ROOT = @(
     "LICENSE",
     "README.md",
     "CHANGELOG.md",
+    "VERSION",
     "runInstallWizard.bat",
     "runInstallWizard.ps1"
 )
@@ -90,6 +91,6 @@ Compress-Archive -Path (Join-Path $STAGING_DIR "*") -DestinationPath $ZIP_PATH -
 
 $zipSizeMb = [math]::Round((Get-Item $ZIP_PATH).Length / 1MB, 2)
 Write-Host ""
-Write-Host "Release package created successfully."
+Write-Host "Release package created successfully (v$VERSION)."
 Write-Host "  Folder: $STAGING_DIR"
 Write-Host "  Zip:    $ZIP_PATH ($zipSizeMb MB)"

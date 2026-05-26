@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Recordings, presets, CSV, and Run Options tabs use consistent full-width list layout anchored with `Section` + `xs` (never `xm` inside tabs)
+- Release zip and install wizard now include `VERSION`; `compile.ps1` and `packageRelease.ps1` report version from `VERSION`
+- `BUILD.md` and `README.md` updated for `csv-batches\`, tab help, and version sync checklist
 
 ### Fixed
 

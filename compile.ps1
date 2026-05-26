@@ -11,6 +11,8 @@
 $ErrorActionPreference = "Stop"
 
 $PROJECT_ROOT = $PSScriptRoot
+$VERSION_FILE = Join-Path $PROJECT_ROOT "VERSION"
+$APP_VERSION = if (Test-Path $VERSION_FILE) { (Get-Content -LiteralPath $VERSION_FILE -Raw).Trim() } else { "unknown" }
 $INPUT_SCRIPT = Join-Path $PROJECT_ROOT "dataEntryAutonoma.ahk"
 $OUTPUT_DIR = Join-Path $PROJECT_ROOT "dist"
 $OUTPUT_EXE = Join-Path $OUTPUT_DIR "DataEntryAutonoma.exe"
@@ -40,6 +42,7 @@ Install AutoHotkey v2 from https://www.autohotkey.com/
 New-Item -ItemType Directory -Force -Path $OUTPUT_DIR | Out-Null
 
 Write-Host "Compiling $INPUT_SCRIPT"
+Write-Host "  version: $APP_VERSION (keep in sync with C.appVersion in dataEntryAutonoma.ahk)"
 Write-Host "  -> $OUTPUT_EXE"
 
 if (Test-Path $APP_ICON) {

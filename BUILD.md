@@ -57,13 +57,15 @@ DataEntryAutonoma/
     dataEntryAutonoma.ico   ← optional but recommended for tray/taskbar icons
   recordings/               ← recording logs (di-*.log)
   saved-inputs/             ← input presets (*.txt)
+  csv-batches/              ← saved CSV bulk input files (*.csv)
   apply-state.ini           ← optional; created automatically for last selections
+  VERSION                   ← optional; copied by install wizard when present
   runUninstallWizard.bat    ← optional; copied by install wizard for removal
   runUninstallWizard.ps1
 ```
 
 - Paths are relative to the **exe directory** (`A_ScriptDir` when compiled).
-- CSV batch files can live anywhere; users pick them via Browse.
+- Saved CSV bulk files live in `csv-batches\` (created on first run if missing).
 - Entry script: `dataEntryAutonoma.ahk`.
 
 ## Development vs compiled
@@ -72,6 +74,7 @@ DataEntryAutonoma/
 |------|-----------------|-------------------|
 | `recordings\` | next to script | next to exe |
 | `saved-inputs\` | next to script | next to exe |
+| `csv-batches\` | next to script | next to exe |
 | `apply-state.ini` | next to script | next to exe |
 
 No source changes are required for exe compatibility; `dataEntryAutonoma.ahk` already uses `A_ScriptDir` for all local data paths.
@@ -93,11 +96,20 @@ packageRelease.bat
 
 **Output:**
 
-- `release\DataEntryAutonoma-v<VERSION>-win64.zip` (end-user download; contents at archive root)
+- `release\DataEntryAutonoma-v<VERSION>-win64.zip` (for example `DataEntryAutonoma-v1.0.5-win64.zip`)
 - `release\DataEntryAutonoma-v<VERSION>-win64\` (same layout for inspection)
+
+**Version sync (keep these aligned on every release):**
+
+| File | Field |
+|------|--------|
+| `VERSION` | Plain text, for example `1.0.5` |
+| `dataEntryAutonoma.ahk` | `C.appVersion` |
+| `CHANGELOG.md` | New release section |
+| `README.md` | Download zip name and version history table |
 
 Version is read from the `VERSION` file at the project root (keep in sync with `C.appVersion` in `dataEntryAutonoma.ahk`).
 
-The package includes `DataEntryAutonoma.exe`, `assets\dataEntryAutonoma.ico`, empty `recordings\` and `saved-inputs\`, `LICENSE`, `README.md`, `CHANGELOG.md`, and `runInstallWizard.bat` / `runInstallWizard.ps1`. Uninstall wizard scripts are included when present. Publish the zip to [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases).
+The package includes `DataEntryAutonoma.exe`, `assets\dataEntryAutonoma.ico`, empty `recordings\`, `saved-inputs\`, and `csv-batches\`, `LICENSE`, `README.md`, `CHANGELOG.md`, `VERSION`, and `runInstallWizard.bat` / `runInstallWizard.ps1`. Uninstall wizard scripts are included when present. Publish the zip to [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases).
 
 The `release\` folder is build output and is listed in `.gitignore`.

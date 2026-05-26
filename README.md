@@ -126,7 +126,7 @@ Windows only. **AutoHotkey is not required** to run the app.
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
-The release zip includes the standalone exe, `assets\dataEntryAutonoma.ico`, empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders, the install and uninstall wizard scripts, `README.md`, `CHANGELOG.md`, and `LICENSE`. You do **not** need to install AutoHotkey or clone the repository.
+The release zip includes the standalone exe, `assets\dataEntryAutonoma.ico`, empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders, the install and uninstall wizard scripts, `README.md`, `CHANGELOG.md`, `VERSION`, and `LICENSE`. You do **not** need to install AutoHotkey or clone the repository.
 
 **Upgrading:** Run the install wizard again and choose the same install folder. The wizard overwrites the app files but keeps your `recordings\`, `saved-inputs\`, and `csv-batches\` data.
 
@@ -190,10 +190,12 @@ Use **Path 1** if you just want to run the app. Use **Path 2** if you are develo
 3. **Copy these items** into that folder:
    ```
    DataEntryAutonoma.exe
+   assets\              (optional but recommended for tray/window icons)
    recordings\          (can be an empty folder)
    saved-inputs\        (can be an empty folder)
+   csv-batches\         (can be an empty folder)
    ```
-   The app can create `recordings` and `saved-inputs` on first run if they are missing, but including empty folders keeps the layout clear.
+   The app can create `recordings`, `saved-inputs`, and `csv-batches` on first run if they are missing, but including empty folders keeps the layout clear.
 
 4. **Run the app**
    - Double-click `DataEntryAutonoma.exe`.
@@ -458,7 +460,9 @@ DataEntryAutonoma/
   runUninstallWizard.bat  # Double-click to run the uninstaller
   LICENSE                 # MIT license (attribution required)
   CHANGELOG.md            # Release notes
-  VERSION                 # Current version (read by packageRelease.ps1)
+  VERSION                 # Current version (read by packageRelease.ps1; sync with C.appVersion)
+  packageRelease.ps1      # Build release zip from dist\DataEntryAutonoma.exe
+  packageRelease.bat      # Shortcut for packageRelease.ps1
   compile.ps1             # Build standalone exe
   build.bat               # Build shortcut
   BUILD.md                # Detailed build and distribution guide

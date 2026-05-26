@@ -34,6 +34,7 @@ $ICON_FILE_NAME = "dataEntryAutonoma.ico"
 $LICENSE_FILE_NAME = "LICENSE"
 $README_FILE_NAME = "README.md"
 $CHANGELOG_FILE_NAME = "CHANGELOG.md"
+$VERSION_FILE_NAME = "VERSION"
 $INSTALL_WIZARD_PS1 = "runInstallWizard.ps1"
 $INSTALL_WIZARD_BAT = "runInstallWizard.bat"
 $UNINSTALL_WIZARD_PS1 = "runUninstallWizard.ps1"
@@ -153,6 +154,21 @@ function Set-WizardStatusMessage {
     }
 }
 
+# Returns the app version from VERSION in the active release or project root.
+function Get-LocalProjectVersion {
+    $versionPath = Get-ReleaseSourcePath $VERSION_FILE_NAME
+    if (Test-Path $versionPath) {
+        return (Get-Content -LiteralPath $versionPath -Raw).Trim()
+    }
+
+    $projectVersionPath = Join-Path $PROJECT_ROOT $VERSION_FILE_NAME
+    if (Test-Path $projectVersionPath) {
+        return (Get-Content -LiteralPath $projectVersionPath -Raw).Trim()
+    }
+
+    return ""
+}
+
 # Returns a short label for the install source shown on the welcome screen.
 function Get-InstallSourceSummary {
     if (-not (Test-StandaloneExeAvailable)) {
@@ -161,6 +177,11 @@ function Get-InstallSourceSummary {
 
     if ($script:DownloadedReleaseVersion) {
         return "Ready to install version $($script:DownloadedReleaseVersion)."
+    }
+
+    $localVersion = Get-LocalProjectVersion
+    if ($localVersion) {
+        return "Ready to install version $localVersion from this folder."
     }
 
     return "Ready to install from this folder."
@@ -350,6 +371,7 @@ function Install-ApplicationFiles {
     Copy-InstallFile (Join-Path $releaseRoot $LICENSE_FILE_NAME) (Join-Path $InstallDir $LICENSE_FILE_NAME)
     Copy-InstallFile (Join-Path $releaseRoot $README_FILE_NAME) (Join-Path $InstallDir $README_FILE_NAME)
     Copy-InstallFile (Join-Path $releaseRoot $CHANGELOG_FILE_NAME) (Join-Path $InstallDir $CHANGELOG_FILE_NAME)
+    Copy-InstallFile (Join-Path $releaseRoot $VERSION_FILE_NAME) (Join-Path $InstallDir $VERSION_FILE_NAME)
     Copy-InstallFile (Join-Path $releaseRoot $INSTALL_WIZARD_PS1) (Join-Path $InstallDir $INSTALL_WIZARD_PS1)
     Copy-InstallFile (Join-Path $releaseRoot $INSTALL_WIZARD_BAT) (Join-Path $InstallDir $INSTALL_WIZARD_BAT)
     Copy-InstallFile (Join-Path $releaseRoot $UNINSTALL_WIZARD_PS1) (Join-Path $InstallDir $UNINSTALL_WIZARD_PS1)
@@ -644,7 +666,12 @@ Click Next to choose where to install.
             Update-UpgradeDetection -InstallDir $script:InstallDir
             $installType = if ($script:IsUpgrade) { "Upgrade" } else { "Fresh install" }
 
-            $versionLine = if ($script:DownloadedReleaseVersion) { "Version: v$($script:DownloadedReleaseVersion)`r`n" } else { "" }
+            $displayVersion = if ($script:DownloadedReleaseVersion) {
+                $script:DownloadedReleaseVersion
+            } else {
+                Get-LocalProjectVersion
+            }
+            $versionLine = if ($displayVersion) { "Version: v$displayVersion`r`n" } else { "" }
             $summary = New-BodyLabel "$installType`r`n`r`n$versionLine Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 100
             $summary.Location = New-Object System.Drawing.Point(0, 150)
             $contentPanel.Controls.Add($summary)
