@@ -22,6 +22,7 @@ CoordMode "Mouse", "Screen"
 ; =============================================================================
 
 C := {
+    appVersion: "1.0.1", ; keep in sync with VERSION at project root
     recordingsDir: A_ScriptDir "\recordings",
     savesDir: A_ScriptDir "\saved-inputs",
     appIconFile: A_ScriptDir "\assets\dataEntryAutonoma.ico",
@@ -186,7 +187,7 @@ UI := {
 }
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
-APP_GUI_TITLE := "Data Entry Autonoma"
+APP_GUI_TITLE := "Data Entry Autonoma v" C.appVersion
 
 ; =============================================================================
 ; State
@@ -411,7 +412,7 @@ CreateManageGui() {
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textMuted,
-        "Record once. Run with presets or CSV batches."
+        "Record once. Run with presets or CSV batches.  v" C.appVersion
     )
 
     S.statusCtrl := S.gui.Add(

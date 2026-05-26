@@ -26,6 +26,11 @@ $SCRIPT_FILE_NAME = "dataEntryAutonoma.ahk"
 $ICON_FILE_NAME = "dataEntryAutonoma.ico"
 $LICENSE_FILE_NAME = "LICENSE"
 $README_FILE_NAME = "README.md"
+$CHANGELOG_FILE_NAME = "CHANGELOG.md"
+$INSTALL_WIZARD_PS1 = "runInstallWizard.ps1"
+$INSTALL_WIZARD_BAT = "runInstallWizard.bat"
+$UNINSTALL_WIZARD_PS1 = "runUninstallWizard.ps1"
+$UNINSTALL_WIZARD_BAT = "runUninstallWizard.bat"
 
 $DEFAULT_INSTALL_DIR = Join-Path (Join-Path $env:LOCALAPPDATA "Programs") $APP_FOLDER_NAME
 $DIST_RELATIVE_PATH = "dist"
@@ -86,10 +91,40 @@ function Copy-InstallFile {
     )
 
     if (-not (Test-Path $Source)) {
-        return
+        return $false
     }
 
     Copy-Item -Path $Source -Destination $Destination -Force
+    return $true
+}
+
+# Returns true when the install folder already contains a previous installation.
+function Test-ExistingInstallation {
+    param([string]$InstallDir)
+
+    return Test-Path (Join-Path $InstallDir $EXE_FILE_NAME)
+}
+
+# Sets $script:IsUpgrade from the current install directory.
+function Update-UpgradeDetection {
+    param([string]$InstallDir)
+
+    $script:IsUpgrade = Test-ExistingInstallation -InstallDir $InstallDir
+}
+
+# Updates the install-location step upgrade notice label.
+function Update-Step2UpgradeNotice {
+    param(
+        [string]$PathText,
+        [System.Windows.Forms.Label]$NoticeLabel
+    )
+
+    Update-UpgradeDetection -InstallDir $PathText.Trim()
+    if ($script:IsUpgrade) {
+        $NoticeLabel.Text = "Upgrading existing installation (your recordings and presets will be kept)."
+    } else {
+        $NoticeLabel.Text = ""
+    }
 }
 
 # Creates Desktop and Start Menu shortcuts for the installed app.
@@ -127,7 +162,7 @@ function New-InstallShortcuts {
     }
 }
 
-# Copies the standalone exe and creates data folders in the install directory.
+# Copies the standalone exe and supporting files; preserves user data folders on upgrade.
 function Install-ApplicationFiles {
     param([string]$InstallDir)
 
@@ -136,12 +171,19 @@ function Install-ApplicationFiles {
         throw "No $EXE_FILE_NAME selected. Browse for the exe or download a release from GitHub."
     }
 
+    Update-UpgradeDetection -InstallDir $InstallDir
+
     Ensure-Directory $InstallDir
     Ensure-Directory (Join-Path $InstallDir "recordings")
     Ensure-Directory (Join-Path $InstallDir "saved-inputs")
 
     Copy-InstallFile (Join-Path $PROJECT_ROOT $LICENSE_FILE_NAME) (Join-Path $InstallDir $LICENSE_FILE_NAME)
     Copy-InstallFile (Join-Path $PROJECT_ROOT $README_FILE_NAME) (Join-Path $InstallDir $README_FILE_NAME)
+    Copy-InstallFile (Join-Path $PROJECT_ROOT $CHANGELOG_FILE_NAME) (Join-Path $InstallDir $CHANGELOG_FILE_NAME)
+    Copy-InstallFile (Join-Path $PROJECT_ROOT $INSTALL_WIZARD_PS1) (Join-Path $InstallDir $INSTALL_WIZARD_PS1)
+    Copy-InstallFile (Join-Path $PROJECT_ROOT $INSTALL_WIZARD_BAT) (Join-Path $InstallDir $INSTALL_WIZARD_BAT)
+    Copy-InstallFile (Join-Path $PROJECT_ROOT $UNINSTALL_WIZARD_PS1) (Join-Path $InstallDir $UNINSTALL_WIZARD_PS1)
+    Copy-InstallFile (Join-Path $PROJECT_ROOT $UNINSTALL_WIZARD_BAT) (Join-Path $InstallDir $UNINSTALL_WIZARD_BAT)
 
     $destinationExe = Join-Path $InstallDir $EXE_FILE_NAME
     Copy-Item -Path $exeSource -Destination $destinationExe -Force
@@ -156,6 +198,7 @@ function Install-ApplicationFiles {
     return @{
         LaunchPath = $destinationExe
         IconPath = $iconPath
+        IsUpgrade = $script:IsUpgrade
     }
 }
 
@@ -208,6 +251,7 @@ $script:CreateStartMenuShortcut = $true
 $script:LaunchWhenFinished = $true
 $script:LastInstallResult = $null
 $script:Step4_Failed = $false
+$script:IsUpgrade = $false
 
 $contentPanel = New-Object System.Windows.Forms.Panel
 $contentPanel.Location = New-Object System.Drawing.Point(30, 20)
@@ -388,9 +432,21 @@ Click Next to locate the application file, choose an install folder, and add sho
             $btnBrowse.Location = New-Object System.Drawing.Point(360, 90)
             $contentPanel.Controls.Add($btnBrowse)
 
-            $hint = New-BodyLabel "Default location does not require administrator rights. The installer will create recordings and saved-inputs folders inside this directory." 80
+            $hintText = "Default location does not require administrator rights. The installer will create recordings and saved-inputs folders inside this directory."
+            $hint = New-BodyLabel $hintText 56
             $hint.Location = New-Object System.Drawing.Point(0, 130)
             $contentPanel.Controls.Add($hint)
+
+            $upgradeNotice = New-BodyLabel "" 40
+            $upgradeNotice.Location = New-Object System.Drawing.Point(0, 188)
+            $upgradeNotice.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
+            $contentPanel.Controls.Add($upgradeNotice)
+
+            Update-Step2UpgradeNotice -PathText $pathBox.Text -NoticeLabel $upgradeNotice
+
+            $pathBox.Add_TextChanged({
+                Update-Step2UpgradeNotice -PathText $script:Step2_PathBox.Text -NoticeLabel $script:Step2_UpgradeNotice
+            })
 
             $btnBrowse.Add_Click({
                 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -402,6 +458,7 @@ Click Next to locate the application file, choose an install folder, and add sho
             })
 
             $script:Step2_PathBox = $pathBox
+            $script:Step2_UpgradeNotice = $upgradeNotice
         }
 
         3 {
@@ -434,7 +491,10 @@ Click Next to locate the application file, choose an install folder, and add sho
             $chkLaunch.Checked = $script:LaunchWhenFinished
             $contentPanel.Controls.Add($chkLaunch)
 
-            $summary = New-BodyLabel "Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 100
+            Update-UpgradeDetection -InstallDir $script:InstallDir
+            $installType = if ($script:IsUpgrade) { "Upgrade" } else { "Fresh install" }
+
+            $summary = New-BodyLabel "$installType`r`n`r`nInstall: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 100
             $summary.Location = New-Object System.Drawing.Point(0, 150)
             $contentPanel.Controls.Add($summary)
 
@@ -463,9 +523,15 @@ Click Next to locate the application file, choose an install folder, and add sho
             $status.Location = New-Object System.Drawing.Point(0, 92)
             $contentPanel.Controls.Add($status)
 
+            Update-UpgradeDetection -InstallDir $script:InstallDir
+            if ($script:IsUpgrade) {
+                $status.Text = "Upgrading existing installation (your recordings and presets will be kept)..."
+            }
+
             try {
                 [System.Windows.Forms.Application]::DoEvents()
                 $script:LastInstallResult = Install-ApplicationFiles -InstallDir $script:InstallDir
+                $script:IsUpgrade = $script:LastInstallResult.IsUpgrade
 
                 New-InstallShortcuts `
                     -InstallDir $script:InstallDir `
@@ -477,7 +543,8 @@ Click Next to locate the application file, choose an install folder, and add sho
                 $progress.Style = "Continuous"
                 $progress.Value = 100
                 $status.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
-                $status.Text = "Installation completed successfully.`r`n`r`nInstalled to:`r`n$script:InstallDir"
+                $completionLabel = if ($script:IsUpgrade) { "Upgrade" } else { "Installation" }
+                $status.Text = "$completionLabel completed successfully.`r`n`r`nInstalled to:`r`n$script:InstallDir"
             } catch {
                 $progress.Style = "Continuous"
                 $progress.Value = 0

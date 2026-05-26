@@ -12,8 +12,13 @@
 
 $ErrorActionPreference = "Stop"
 
-$VERSION = "1.0.0"
 $PROJECT_ROOT = $PSScriptRoot
+$VERSION_FILE = Join-Path $PROJECT_ROOT "VERSION"
+if (Test-Path $VERSION_FILE) {
+    $VERSION = (Get-Content -LiteralPath $VERSION_FILE -Raw).Trim()
+} else {
+    $VERSION = "1.0.1"
+}
 $DIST_EXE = Join-Path $PROJECT_ROOT "dist\DataEntryAutonoma.exe"
 $RELEASE_DIR = Join-Path $PROJECT_ROOT "release"
 $PACKAGE_NAME = "DataEntryAutonoma-v$VERSION-win64"
@@ -23,8 +28,14 @@ $ZIP_PATH = Join-Path $RELEASE_DIR "$PACKAGE_NAME.zip"
 $FILES_AT_ROOT = @(
     "LICENSE",
     "README.md",
+    "CHANGELOG.md",
     "runInstallWizard.bat",
     "runInstallWizard.ps1"
+)
+
+$OPTIONAL_FILES_AT_ROOT = @(
+    "runUninstallWizard.bat",
+    "runUninstallWizard.ps1"
 )
 
 if (-not (Test-Path $DIST_EXE)) {
@@ -62,6 +73,13 @@ foreach ($fileName in $FILES_AT_ROOT) {
         Write-Error "Required file not found: $sourcePath"
     }
     Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $STAGING_DIR $fileName)
+}
+
+foreach ($fileName in $OPTIONAL_FILES_AT_ROOT) {
+    $sourcePath = Join-Path $PROJECT_ROOT $fileName
+    if (Test-Path $sourcePath) {
+        Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $STAGING_DIR $fileName)
+    }
 }
 
 if (Test-Path $ZIP_PATH) {

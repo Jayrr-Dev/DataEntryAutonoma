@@ -58,6 +58,8 @@ DataEntryAutonoma/
   recordings/               ← recording logs (di-*.log)
   saved-inputs/             ← input presets (*.txt)
   apply-state.ini           ← optional; created automatically for last selections
+  runUninstallWizard.bat    ← optional; copied by install wizard for removal
+  runUninstallWizard.ps1
 ```
 
 - Paths are relative to the **exe directory** (`A_ScriptDir` when compiled).
@@ -91,9 +93,11 @@ packageRelease.bat
 
 **Output:**
 
-- `release\DataEntryAutonoma-v1.0.0-win64.zip` (end-user download; contents at archive root)
-- `release\DataEntryAutonoma-v1.0.0-win64\` (same layout for inspection)
+- `release\DataEntryAutonoma-v<VERSION>-win64.zip` (end-user download; contents at archive root)
+- `release\DataEntryAutonoma-v<VERSION>-win64\` (same layout for inspection)
 
-The package includes `DataEntryAutonoma.exe`, `assets\dataEntryAutonoma.ico`, empty `recordings\` and `saved-inputs\`, `LICENSE`, `README.md`, and `runInstallWizard.bat` / `runInstallWizard.ps1`. Publish the zip to [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases).
+Version is read from the `VERSION` file at the project root (keep in sync with `C.appVersion` in `dataEntryAutonoma.ahk`).
+
+The package includes `DataEntryAutonoma.exe`, `assets\dataEntryAutonoma.ico`, empty `recordings\` and `saved-inputs\`, `LICENSE`, `README.md`, `CHANGELOG.md`, and `runInstallWizard.bat` / `runInstallWizard.ps1`. Uninstall wizard scripts are included when present. Publish the zip to [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases).
 
 The `release\` folder is build output and is listed in `.gitignore`.

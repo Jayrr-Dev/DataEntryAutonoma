@@ -103,11 +103,13 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.0.0-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.0.1-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
-The release zip includes the standalone exe, `assets\dataEntryAutonoma.ico`, empty `recordings\` and `saved-inputs\` folders, the install wizard scripts, `README.md`, and `LICENSE`. You do **not** need to install AutoHotkey or clone the repository.
+The release zip includes the standalone exe, `assets\dataEntryAutonoma.ico`, empty `recordings\` and `saved-inputs\` folders, the install and uninstall wizard scripts, `README.md`, `CHANGELOG.md`, and `LICENSE`. You do **not** need to install AutoHotkey or clone the repository.
+
+**Upgrading:** Run the install wizard again and choose the same install folder. The wizard overwrites the app files but keeps your `recordings\` and `saved-inputs\` data.
 
 ---
 
@@ -132,6 +134,21 @@ If you already extracted the release zip (or cloned the repo for development), y
 **Developers only:** If you cloned the repo and have AutoHotkey v2 with compiler, use **Build exe (developers)** on the Application file step. End users should browse for a downloaded exe instead.
 
 The wizard creates `recordings\` and `saved-inputs\` folders and optional shortcuts for you.
+
+**Reinstalling or upgrading:** If you point the wizard at a folder that already contains `DataEntryAutonoma.exe`, it upgrades in place. Your recordings and presets in `recordings\` and `saved-inputs\` are preserved; the exe, assets, LICENSE, README, and wizard scripts are overwritten. It also copies `runUninstallWizard.bat` and `runUninstallWizard.ps1` into the install folder.
+
+---
+
+### Uninstall wizard (optional)
+
+To remove the app, shortcuts, and optional user data:
+
+1. Run **`runUninstallWizard.bat`** from the install folder (or from an extracted release zip / repo clone).
+2. Choose the install folder (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`).
+3. Select what to remove (application files, recordings, presets, `apply-state.ini`, shortcuts).
+4. Confirm on the summary step, then click **Uninstall**.
+
+If you run the uninstaller from inside the install folder, remaining files (including the uninstaller itself) are deleted automatically after the wizard closes.
 
 ---
 
@@ -397,6 +414,15 @@ When you build the exe with `compile.ps1`, Ahk2Exe packages the script and inter
 
 See [Installation](#installation) for full step-by-step instructions.
 
+## Version history
+
+Release notes are in [CHANGELOG.md](CHANGELOG.md).
+
+| Version | Highlights |
+|---------|------------|
+| **1.0.1** | Install wizard upgrades existing installs in place; version shown in app title |
+| **1.0.0** | Initial release: Record/Run, presets, CSV batch, install wizard, standalone exe |
+
 ## Project layout
 
 ```
@@ -404,7 +430,11 @@ DataEntryAutonoma/
   dataEntryAutonoma.ahk   # Main application
   runInstallWizard.ps1    # Graphical install wizard
   runInstallWizard.bat    # Double-click to run the wizard
+  runUninstallWizard.ps1  # Graphical uninstall wizard
+  runUninstallWizard.bat  # Double-click to run the uninstaller
   LICENSE                 # MIT license (attribution required)
+  CHANGELOG.md            # Release notes
+  VERSION                 # Current version (read by packageRelease.ps1)
   compile.ps1             # Build standalone exe
   build.bat               # Build shortcut
   BUILD.md                # Detailed build and distribution guide
