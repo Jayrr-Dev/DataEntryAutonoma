@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recordings ListView disappearing, shifting right, or showing empty after tab header and info button were added
 - Recordings **Variable count** column width and tab button row clipping
 - Run Options info button placement beside the label text
+- Install wizard crash on startup (`ThreadException` handler registered on Form instead of Application)
 
 ## [1.0.4] - 2026-05-26
 

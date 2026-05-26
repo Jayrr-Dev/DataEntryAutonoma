@@ -459,6 +459,15 @@ function Show-WizardError {
 # =============================================================================
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
+[System.Windows.Forms.Application]::SetUnhandledExceptionMode([System.Windows.Forms.UnhandledExceptionMode]::CatchException)
+[System.Windows.Forms.Application]::add_ThreadException({
+    param($sender, $eventArgs)
+
+    Show-WizardError "Setup error:`r`n$($eventArgs.Exception.Message)"
+    $eventArgs.ExceptionHandled = $true
+    $script:WizardBusy = $false
+    Set-WizardNavigationEnabled $true
+})
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "$APP_DISPLAY_NAME Setup"
@@ -469,14 +478,6 @@ $form.MinimizeBox = $false
 $form.StartPosition = "CenterScreen"
 $form.BackColor = $COLOR_BG
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-$form.Add_ThreadException({
-    param($sender, $eventArgs)
-
-    Show-WizardError "Setup error:`r`n$($eventArgs.Exception.Message)"
-    $eventArgs.ExceptionHandled = $true
-    $script:WizardBusy = $false
-    Set-WizardNavigationEnabled $true
-})
 
 $script:CurrentStep = 0
 Initialize-InstallSource
@@ -542,6 +543,7 @@ function New-BodyLabel {
     $label.AutoSize = $false
     $label.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, $Height)
     $label.ForeColor = $COLOR_MUTED
+    $label.UseMnemonic = $false
     return $label
 }
 
@@ -672,8 +674,8 @@ Click Next to choose where to install.
                 Get-LocalProjectVersion
             }
             $versionLine = if ($displayVersion) { "Version: v$displayVersion`r`n" } else { "" }
-            $summary = New-BodyLabel "$installType`r`n`r`n$versionLine Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 100
-            $summary.Location = New-Object System.Drawing.Point(0, 150)
+            $summary = New-BodyLabel "$installType`r`n`r`n$versionLine Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 132
+            $summary.Location = New-Object System.Drawing.Point(0, 148)
             $contentPanel.Controls.Add($summary)
 
             $script:Step2_Desktop = $chkDesktop

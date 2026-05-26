@@ -14,6 +14,8 @@ Record mouse clicks, scrolls, and keyboard input once, then click **Run** to rep
 
 **Developers:** the source is built with [AutoHotkey v2](https://www.autohotkey.com/) and compiled into that exe.
 
+**Current release:** v1.0.5
+
 ## What it does
 
 Data Entry Autonoma works like showing someone how to fill out a form, then having them do it again for you.
@@ -23,7 +25,20 @@ Data Entry Autonoma works like showing someone how to fill out a form, then havi
 3. Click **Run** and it performs those same actions automatically: moves the mouse, clicks, scrolls, and **types text for you** into the fields you set up during recording.
 4. Store the text to type in a **preset** or **CSV file**. Each run or each CSV row can fill the form with new values while you watch or walk away.
 
-You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, four tabs, and plain-language tooltips while you work.
+You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, four tabs, tab-specific **i** help buttons, and plain-language tooltips while you work.
+
+## What's new (v1.0.5)
+
+- **Four tabs:** Recordings, Input Presets, CSV Bulk Inputs, and Run Options
+- **In-app help:** an **i** button on each tab explains that section (recording tips, presets, CSV format, run options)
+- **CSV Bulk Inputs tab:** manage saved CSV files in `csv-batches\` with Edit, Rename, Delete, Browse, and Refresh
+- **Run input source:** choose either an **input preset** or **CSV bulk inputs** for Run (one at a time)
+- **CSV batch Config:** ask before each row or run all rows automatically, with a progress table showing every variable column
+- **Smarter recording:** mouse hold/drag for Excel-style selection, shortcut capture (Ctrl/Shift/Alt), and hotkey feedback beside the cursor
+- **Install wizard:** guided setup with upgrade detection, version display, Desktop and Start Menu shortcuts
+- **Uninstall wizard:** remove the app, shortcuts, and optional user data
+
+See [Version history](#version-history) and [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 Typical uses:
 
@@ -45,11 +60,10 @@ Typical uses:
 - **Variable keys** are created only when you press a key after a click; click-only steps replay as clicks with no typing
 - **Left-click hold and drag** records mouse button down, optional drag, and release (useful for Excel range selection); quick taps stay clicks, longer holds or drags are saved on release
 - **Keyboard shortcuts** with Ctrl, Shift, or Alt are recorded and replayed (for example Ctrl+C, Shift+F10)
+- **Hotkey feedback** beside the cursor while recording (for example `Hotkey: Ctrl + c`)
 - **Esc saves** the recording and opens a rename dialog; **Cancel** on that dialog discards the file
-- **Edit Log** opens the raw recording file for advanced edits
-- **Rename** and **Delete** for recordings from the Recordings tab
-- **i** button on the Recordings tab opens in-app help for that section
 - Recordings list shows **name** and **variable count** for each session
+- **Rename**, **Edit Log**, and **Delete** from the Recordings tab
 
 ### Run (replay)
 
@@ -92,11 +106,20 @@ Typical uses:
 
 ### In-app help
 
-- Each tab has an **i** button beside its section label with tab-specific guidance
-- CSV help covers file format, `csv-batches\`, Config, Browse, and batch rules
+Each tab has an **i** button beside its section label. Click it for tab-specific guidance:
+
+| Tab | Help covers |
+|-----|-------------|
+| **Recordings** | Selecting recordings, Rename / Edit Log / Delete, recording tips (Esc, clicks, hold/drag, shortcuts) |
+| **Input Presets** | Run input source, Edit Preset, variables, preset vs CSV exclusivity |
+| **CSV Bulk Inputs** | CSV format, `csv-batches\`, Edit/Rename/Delete/Browse, Config, batch rules |
+| **Run Options** | Smooth vs Instant mouse, Human-like vs Instant typing, where to set delays and speeds |
+
+There is no separate Help button; use the **i** on the tab you are working in.
 
 ### App behavior
 
+- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.0.5`)
 - **Single instance**: only one app window at a time
 - **Always on top** main window for quick access
 - Remembers last selected recording, preset, and CSV in `apply-state.ini`
@@ -107,6 +130,7 @@ Typical uses:
 
 | Area | Purpose |
 |------|---------|
+| **Title / subtitle** | App name and current version |
 | **Status bar** | Current action, selection summary, batch progress |
 | **Recordings** tab | Pick, rename, edit log, or delete recordings; **i** for tab help |
 | **Input Presets** tab | Pick presets; edit/delete presets; choose preset as run input source; **i** for tab help |
@@ -142,7 +166,8 @@ If you already extracted the release zip (or cloned the repo for development), y
    .\runInstallWizard.ps1
    ```
 3. Follow the on-screen steps:
-   - **Welcome** → **Install location** → **Shortcuts**
+   - **Welcome** → **Install location** → **Shortcuts and launch**
+   - Shows install type (fresh or upgrade), version, and target folder before you click **Install**
    - If the app files are not already in the folder, the wizard downloads them automatically when you click **Next**
    - Default install folder: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`
 4. Click **Install**, then **Close** when setup completes.
@@ -236,7 +261,7 @@ Use this path to run the latest source code or contribute changes.
 
 3. **Open the project folder**
    - The main script is `dataEntryAutonoma.ahk` in the project root.
-   - Keep the whole folder together. The script expects `recordings\`, `saved-inputs\`, and `assets\` beside it.
+   - Keep the whole folder together. The script expects `recordings\`, `saved-inputs\`, `csv-batches\`, and `assets\` beside it.
 
 4. **Run the script**
    - Double-click `dataEntryAutonoma.ahk`, or
@@ -248,7 +273,7 @@ Use this path to run the latest source code or contribute changes.
 
 5. **Confirm it works**
    - The **Data Entry Autonoma** window opens.
-   - Folders `recordings` and `saved-inputs` are created automatically if missing.
+   - Folders `recordings\`, `saved-inputs\`, and `csv-batches\` are created automatically if missing.
 
 6. **Reload after edits**
    - Right-click the tray icon → **Reload Script** when you change the `.ahk` file.
@@ -277,7 +302,8 @@ For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 w
 
 5. **Find the output**
    - Built file: `dist\DataEntryAutonoma.exe`
-   - Copy that exe plus empty `recordings` and `saved-inputs` folders when sharing with others (same layout as Path 1).
+   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.0.5-win64.zip`
+   - Copy the exe plus empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders when sharing with others (same layout as Path 1).
 
 6. **If PowerShell blocks the script**
    ```powershell
@@ -322,10 +348,11 @@ After [installation](#installation):
 1. Run `dataEntryAutonoma.ahk` or `DataEntryAutonoma.exe`
 2. Click **Record**, perform your workflow (clicks, scrolls, keys where needed)
 3. Press **Esc** to save; enter a name or click **Cancel** to discard
-4. Open **Input Presets**, click **Edit Preset**, add your variable values and timing — **or** use **CSV Bulk Inputs** for many rows
-5. Select a recording, choose **Input preset** or **CSV bulk inputs** as the run source, then click **Run**
+4. On **Input Presets**, click **Edit Preset**, add variable values and timing — **or** on **CSV Bulk Inputs**, create or pick a CSV for many rows
+5. Select a recording, choose **Use input preset for Run** or **Use CSV bulk inputs for Run**, then click **Run**
+6. Click **i** on any tab if you need help with that section
 
-For many rows, create or import a CSV on the **CSV Bulk Inputs** tab instead of typing variables into a preset.
+For many rows, use **CSV Bulk Inputs** instead of typing variables into a preset. Use **Config** on that tab to choose step-by-step prompts or automatic batch run.
 
 ## Recording workflow
 
@@ -421,7 +448,7 @@ You can inspect or edit a log with **Edit Log** on the Recordings tab.
 | **`DataEntryAutonoma.exe`** | **No** | Standalone app. The AutoHotkey runtime is bundled inside the exe when it is compiled. Works on a clean Windows PC. |
 | **`dataEntryAutonoma.ahk`** (source script) | **Yes** | For development only. Requires [AutoHotkey v2](https://www.autohotkey.com/) installed. |
 
-When you build the exe with `compile.ps1`, Ahk2Exe packages the script and interpreter into one file. End users only need Windows 10 or 11 and the exe (plus optional `assets\`, `recordings\`, and `saved-inputs\` folders).
+When you build the exe with `compile.ps1`, Ahk2Exe packages the script and interpreter into one file. End users only need Windows 10 or 11 and the exe (plus optional `assets\`, `recordings\`, `saved-inputs\`, and `csv-batches\` folders).
 
 **Quick test on a PC without AutoHotkey:** copy `DataEntryAutonoma.exe` to the machine, double-click it, and the main window should open. No install step for AutoHotkey is involved.
 
@@ -429,7 +456,7 @@ When you build the exe with `compile.ps1`, Ahk2Exe packages the script and inter
 
 | Use case | Requirement |
 |----------|-------------|
-| Easiest install | Windows 10 or 11, run [Install wizard](#easiest-install-wizard-recommended) |
+| Easiest install | Windows 10 or 11, run the [Install wizard](#install-wizard-optional) |
 | End users | Windows 10 or 11, `DataEntryAutonoma.exe` ([Installation Path 1](#path-1-end-user-standalone-exe-recommended)) |
 | Developers | Windows 10 or 11, [AutoHotkey v2](https://www.autohotkey.com/) ([Installation Path 2](#path-2-developer-run-the-ahk-script)) |
 | Building the exe | AutoHotkey v2 with Ahk2Exe ([Installation Path 3](#path-3-build-the-standalone-exe-optional)) |
@@ -442,7 +469,7 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
-| **1.0.5** | Tab layout fix for Recordings list (Section + xs); shared tab helpers; info buttons aligned on all tabs |
+| **1.0.5** | Tab layout fixes, **i** help on all tabs, install wizard fixes, `VERSION` in release zip, CSV/preset run-source layout |
 | **1.0.4** | Tab info (i) buttons on all tabs, updated CSV help text, layout fixes for recordings list and tab buttons |
 | **1.0.3** | CSV Bulk Inputs tab, preset vs CSV run source, mouse hold/drag + hotkey recording fixes, all CSV variables in batch UI |
 | **1.0.2** | CSV Config with ask next line, batch progress table, uninstall wizard in release zip |
