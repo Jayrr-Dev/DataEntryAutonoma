@@ -12,8 +12,15 @@
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $ErrorActionPreference = "Stop"
+
+if ([Net.ServicePointManager]::SecurityProtocol -band [Net.SecurityProtocolType]::Tls12) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} else {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+}
 
 # =============================================================================
 # Constants
@@ -123,7 +130,12 @@ function Invoke-DownloadLatestRelease {
 
     $headers = @{ "User-Agent" = $DOWNLOAD_USER_AGENT }
     Invoke-WebRequest -Uri $asset.DownloadUrl -OutFile $zipPath -Headers $headers -UseBasicParsing
-    Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force
+
+    if (Test-Path $extractPath) {
+        Remove-Item -LiteralPath $extractPath -Recurse -Force
+    }
+    Ensure-Directory $extractPath
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractPath)
 
     $exePath = Join-Path $extractPath $EXE_FILE_NAME
     if (-not (Test-Path $exePath)) {
@@ -299,6 +311,40 @@ function Start-InstalledApplication {
     Start-Process -FilePath $LaunchPath -WorkingDirectory $WorkingDirectory
 }
 
+# Returns true when a WinForms control can still be updated safely.
+function Test-ControlUsable {
+    param([System.Windows.Forms.Control]$Control)
+
+    return $null -ne $Control -and -not $Control.IsDisposed
+}
+
+# Enables or disables wizard navigation while a long-running step is active.
+function Set-WizardNavigationEnabled {
+    param([bool]$Enabled)
+
+    if ($Enabled) {
+        $btnBack.Enabled = ($script:CurrentStep -gt 0) -and ($script:CurrentStep -lt 4)
+        $btnNext.Enabled = $script:CurrentStep -lt 4
+        $btnCancel.Enabled = $script:CurrentStep -lt 4
+    } else {
+        $btnBack.Enabled = $false
+        $btnNext.Enabled = $false
+        $btnCancel.Enabled = $false
+    }
+}
+
+# Shows an unexpected wizard error without crashing the WinForms host.
+function Show-WizardError {
+    param([string]$Message)
+
+    [System.Windows.Forms.MessageBox]::Show(
+        $Message,
+        $APP_DISPLAY_NAME,
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error
+    ) | Out-Null
+}
+
 # =============================================================================
 # Wizard UI
 # =============================================================================
@@ -314,6 +360,14 @@ $form.MinimizeBox = $false
 $form.StartPosition = "CenterScreen"
 $form.BackColor = $COLOR_BG
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$form.Add_ThreadException({
+    param($sender, $eventArgs)
+
+    Show-WizardError "Setup error:`r`n$($eventArgs.Exception.Message)"
+    $eventArgs.ExceptionHandled = $true
+    $script:WizardBusy = $false
+    Set-WizardNavigationEnabled $true
+})
 
 $script:CurrentStep = 0
 $script:ReleaseSourceRoot = $PROJECT_ROOT
@@ -326,6 +380,13 @@ $script:LaunchWhenFinished = $true
 $script:LastInstallResult = $null
 $script:Step4_Failed = $false
 $script:IsUpgrade = $false
+$script:WizardBusy = $false
+$script:CanBuildStandaloneExe = $false
+$script:Step1_StatusLabel = $null
+$script:Step1_BuildStatusLabel = $null
+$script:Step1_DownloadButton = $null
+$script:Step1_BrowseButton = $null
+$script:Step1_BuildButton = $null
 
 $contentPanel = New-Object System.Windows.Forms.Panel
 $contentPanel.Location = New-Object System.Drawing.Point(30, 20)
@@ -415,7 +476,8 @@ Click Next to download the latest release, choose an install folder, and add sho
             $contentPanel.Controls.Add($title)
 
             $exeAvailable = Test-StandaloneExeAvailable
-            $canBuild = Test-CanBuildStandaloneExe
+            $script:CanBuildStandaloneExe = Test-CanBuildStandaloneExe
+            $canBuild = $script:CanBuildStandaloneExe
 
             $intro = New-BodyLabel "Download the latest release or select $EXE_FILE_NAME manually. AutoHotkey is not required." 40
             $intro.Location = New-Object System.Drawing.Point(0, 40)
@@ -463,26 +525,70 @@ Click Next to download the latest release, choose an install folder, and add sho
             }
             $contentPanel.Controls.Add($buildStatus)
 
+            $script:Step1_StatusLabel = $status
+            $script:Step1_BuildStatusLabel = $buildStatus
+            $script:Step1_DownloadButton = $btnDownloadLatest
+            $script:Step1_BrowseButton = $btnBrowseExe
+            $script:Step1_BuildButton = $btnBuild
+
             $btnDownloadLatest.Add_Click({
+                if ($script:WizardBusy) {
+                    return
+                }
+
+                $script:WizardBusy = $true
+                Set-WizardNavigationEnabled $false
+
+                if (Test-ControlUsable $script:Step1_DownloadButton) {
+                    $script:Step1_DownloadButton.Enabled = $false
+                }
+                if (Test-ControlUsable $script:Step1_BrowseButton) {
+                    $script:Step1_BrowseButton.Enabled = $false
+                }
+                if (Test-ControlUsable $script:Step1_BuildButton) {
+                    $script:Step1_BuildButton.Enabled = $false
+                }
+
                 try {
-                    $btnDownloadLatest.Enabled = $false
-                    $btnBrowseExe.Enabled = $false
-                    $btnBuild.Enabled = $false
-                    $buildStatus.ForeColor = $COLOR_MUTED
-                    $buildStatus.Text = "Checking for the latest release..."
+                    if (Test-ControlUsable $script:Step1_BuildStatusLabel) {
+                        $script:Step1_BuildStatusLabel.ForeColor = $COLOR_MUTED
+                        $script:Step1_BuildStatusLabel.Text = "Checking for the latest release..."
+                    }
                     [System.Windows.Forms.Application]::DoEvents()
 
                     $release = Invoke-DownloadLatestRelease
-                    $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
-                    $buildStatus.Text = "Downloaded v$($release.Version) ($($release.FileName))."
-                    $status.Text = "Ready to install v$($release.Version):`r`n$script:StandaloneExeSourcePath"
+
+                    if ($script:CurrentStep -ne 1) {
+                        return
+                    }
+
+                    if (Test-ControlUsable $script:Step1_BuildStatusLabel) {
+                        $script:Step1_BuildStatusLabel.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
+                        $script:Step1_BuildStatusLabel.Text = "Downloaded v$($release.Version) ($($release.FileName))."
+                    }
+                    if (Test-ControlUsable $script:Step1_StatusLabel) {
+                        $script:Step1_StatusLabel.Text = "Ready to install v$($release.Version):`r`n$script:StandaloneExeSourcePath"
+                    }
                 } catch {
-                    $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
-                    $buildStatus.Text = $_.Exception.Message
+                    if ($script:CurrentStep -eq 1 -and (Test-ControlUsable $script:Step1_BuildStatusLabel)) {
+                        $script:Step1_BuildStatusLabel.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+                        $script:Step1_BuildStatusLabel.Text = $_.Exception.Message
+                    }
                 } finally {
-                    $btnDownloadLatest.Enabled = $true
-                    $btnBrowseExe.Enabled = $true
-                    $btnBuild.Enabled = $canBuild
+                    $script:WizardBusy = $false
+                    Set-WizardNavigationEnabled $true
+
+                    if ($script:CurrentStep -eq 1) {
+                        if (Test-ControlUsable $script:Step1_DownloadButton) {
+                            $script:Step1_DownloadButton.Enabled = $true
+                        }
+                        if (Test-ControlUsable $script:Step1_BrowseButton) {
+                            $script:Step1_BrowseButton.Enabled = $true
+                        }
+                        if (Test-ControlUsable $script:Step1_BuildButton) {
+                            $script:Step1_BuildButton.Enabled = $script:CanBuildStandaloneExe
+                        }
+                    }
                 }
             })
 
@@ -501,19 +607,42 @@ Click Next to download the latest release, choose an install folder, and add sho
             })
 
             $btnBuild.Add_Click({
+                if ($script:WizardBusy) {
+                    return
+                }
+
+                $script:WizardBusy = $true
+                Set-WizardNavigationEnabled $false
+
                 try {
-                    $buildStatus.ForeColor = $COLOR_MUTED
-                    $buildStatus.Text = "Building... this may take a moment."
+                    if (Test-ControlUsable $script:Step1_BuildStatusLabel) {
+                        $script:Step1_BuildStatusLabel.ForeColor = $COLOR_MUTED
+                        $script:Step1_BuildStatusLabel.Text = "Building... this may take a moment."
+                    }
                     [System.Windows.Forms.Application]::DoEvents()
                     Invoke-BuildStandaloneExe
                     $script:ReleaseSourceRoot = $PROJECT_ROOT
                     $script:DownloadedReleaseVersion = ""
-                    $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
-                    $buildStatus.Text = "Build complete."
-                    $status.Text = "Ready to install:`r`n$script:StandaloneExeSourcePath"
+
+                    if ($script:CurrentStep -ne 1) {
+                        return
+                    }
+
+                    if (Test-ControlUsable $script:Step1_BuildStatusLabel) {
+                        $script:Step1_BuildStatusLabel.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
+                        $script:Step1_BuildStatusLabel.Text = "Build complete."
+                    }
+                    if (Test-ControlUsable $script:Step1_StatusLabel) {
+                        $script:Step1_StatusLabel.Text = "Ready to install:`r`n$script:StandaloneExeSourcePath"
+                    }
                 } catch {
-                    $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
-                    $buildStatus.Text = $_.Exception.Message
+                    if ($script:CurrentStep -eq 1 -and (Test-ControlUsable $script:Step1_BuildStatusLabel)) {
+                        $script:Step1_BuildStatusLabel.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+                        $script:Step1_BuildStatusLabel.Text = $_.Exception.Message
+                    }
+                } finally {
+                    $script:WizardBusy = $false
+                    Set-WizardNavigationEnabled $true
                 }
             })
         }
@@ -553,9 +682,16 @@ Click Next to download the latest release, choose an install folder, and add sho
             $upgradeNotice.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
             $contentPanel.Controls.Add($upgradeNotice)
 
+            $script:Step2_PathBox = $pathBox
+            $script:Step2_UpgradeNotice = $upgradeNotice
+
             Update-Step2UpgradeNotice -PathText $pathBox.Text -NoticeLabel $upgradeNotice
 
             $pathBox.Add_TextChanged({
+                if (-not (Test-ControlUsable $script:Step2_PathBox) -or -not (Test-ControlUsable $script:Step2_UpgradeNotice)) {
+                    return
+                }
+
                 Update-Step2UpgradeNotice -PathText $script:Step2_PathBox.Text -NoticeLabel $script:Step2_UpgradeNotice
             })
 
@@ -567,9 +703,6 @@ Click Next to download the latest release, choose an install folder, and add sho
                     $pathBox.Text = Join-Path $dialog.SelectedPath $APP_FOLDER_NAME
                 }
             })
-
-            $script:Step2_PathBox = $pathBox
-            $script:Step2_UpgradeNotice = $upgradeNotice
         }
 
         3 {
@@ -742,6 +875,10 @@ Please select $EXE_FILE_NAME before continuing.
 $btnCancel.Add_Click({ $form.Close() })
 
 $btnBack.Add_Click({
+    if ($script:WizardBusy) {
+        return
+    }
+
     if ($script:CurrentStep -gt 0) {
         Save-CurrentStepState
         $script:CurrentStep -= 1
@@ -750,6 +887,11 @@ $btnBack.Add_Click({
 })
 
 $btnNext.Add_Click({
+    if ($script:WizardBusy) {
+        return
+    }
+
+    try {
     if ($script:CurrentStep -eq 5) {
         if ($script:LaunchWhenFinished -and $script:LastInstallResult -and -not $script:Step4_Failed) {
             Start-InstalledApplication `
@@ -784,6 +926,9 @@ $btnNext.Add_Click({
 
     $script:CurrentStep += 1
     Show-WizardStep
+    } catch {
+        Show-WizardError "Setup error:`r`n$($_.Exception.Message)"
+    }
 })
 
 Show-WizardStep
