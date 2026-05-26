@@ -1,20 +1,30 @@
 # Data Entry Autonoma
 
-**Human-friendly, simple desktop automation for repetitive data entry.**
+**Human-friendly, simple desktop automation for repetitive data entry, including automated text input.**
 
 **By [Jayrr Dev](https://github.com/Jayrr-Dev)**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Record mouse clicks, scrolls, and keyboard input once, then run the same workflow again with different values from a preset or CSV file. No scripting required: click **Record**, do your task, click **Run**. Built with AutoHotkey v2 for Windows.
+Show the app what to do once. It remembers your mouse clicks, scrolls, and keypresses, then repeats those same actions for you automatically, including typing text into fields for you.
+
+Record mouse clicks, scrolls, and keyboard input once, then click **Run** to replay that exact sequence. The app can **automatically type text** into the fields you marked during recording, using values from a preset or CSV file so each run can enter different names, numbers, and notes without you typing them again. No scripting required. Built with AutoHotkey v2 for Windows.
 
 ## What it does
 
-Data Entry Autonoma is a human-friendly, simple desktop tool for repeating structured input across apps and forms. You perform a workflow once while the app records it, then replay that workflow with different text values from a preset or a CSV file. The interface stays small and clear: two main buttons, three tabs, and plain-language tooltips while you work.
+Data Entry Autonoma works like showing someone how to fill out a form, then having them do it again for you.
+
+1. Click **Record** and use your mouse and keyboard normally: click buttons, scroll lists, type in fields (or press a key after a click to mark a field for automated text input later).
+2. The app saves every click, scroll, and keypress as a replayable sequence.
+3. Click **Run** and it performs those same actions automatically: moves the mouse, clicks, scrolls, and **types text for you** into the fields you set up during recording.
+4. Store the text to type in a **preset** or **CSV file**. Each run or each CSV row can fill the form with new values while you watch or walk away.
+
+You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, three tabs, and plain-language tooltips while you work.
 
 Typical uses:
 
-- Filling the same form many times with different names, IDs, amounts, or notes
+- Automatically typing names, IDs, amounts, or notes into the same form over and over
+- Filling the same form many times with different values from a preset or CSV
 - Running one recorded workflow across dozens or hundreds of CSV rows overnight or in batches
 - Automating click, scroll, and type sequences in legacy desktop software
 - Saving repeatable UI paths (tabs, buttons, fields) without writing a custom script each time
@@ -69,7 +79,7 @@ Typical uses:
 - **Always on top** main window for quick access
 - Remembers last selected recording, preset, and CSV in `apply-state.ini`
 - **Standalone exe** via `compile.ps1`; end users do not need AutoHotkey installed
-- Open source under MIT with required attribution (see [License & attribution](#license--attribution))
+- Open source under MIT with required attribution (see [License and attribution](#license-and-attribution))
 
 ## Main window
 
@@ -82,14 +92,158 @@ Typical uses:
 | **Record** | Start a new capture session |
 | **Run** | Replay the selected recording |
 
+## Installation
+
+Windows only. Use **Path 1** if you just want to run the app. Use **Path 2** if you are developing or running from source. Use **Path 3** only if you need to build the standalone `.exe` yourself.
+
+### Path 1: End user (standalone `.exe`, recommended)
+
+No AutoHotkey install required on your PC.
+
+1. **Get the app files**
+   - Download or clone this repository from [github.com/Jayrr-Dev/DataEntryAutonoma](https://github.com/Jayrr-Dev/DataEntryAutonoma).
+   - You need `DataEntryAutonoma.exe`. It is produced by the build step (Path 3) or supplied in a release package from the project author.
+
+2. **Create a folder** for the app, for example:
+   ```
+   C:\Tools\DataEntryAutonoma\
+   ```
+
+3. **Copy these items** into that folder:
+   ```
+   DataEntryAutonoma.exe
+   recordings\          (can be an empty folder)
+   saved-inputs\        (can be an empty folder)
+   ```
+   The app can create `recordings` and `saved-inputs` on first run if they are missing, but including empty folders keeps the layout clear.
+
+4. **Run the app**
+   - Double-click `DataEntryAutonoma.exe`.
+   - The main window opens and stays on top. A tray icon also appears.
+
+5. **First launch check**
+   - You should see tabs: **Recordings**, **Input Presets**, **Run Options**.
+   - You should see **Record** and **Run** at the bottom.
+   - Status bar should show **Ready**.
+
+6. **Optional: CSV files**
+   - CSV batch files can live anywhere on your PC. Use **Browse** on the Input Presets tab to select one.
+
+**Windows SmartScreen:** If Windows warns about an unknown publisher, that is common for unsigned executables. Only continue if you trust the source (this repo or your own build).
+
+---
+
+### Path 2: Developer (run the `.ahk` script)
+
+Use this path to run the latest source code or contribute changes.
+
+1. **Install AutoHotkey v2**
+   - Download from [autohotkey.com](https://www.autohotkey.com/).
+   - Install the **v2** release (not v1.1).
+   - Default install includes `AutoHotkey64.exe` used to run `.ahk` scripts.
+
+2. **Get the source code**
+
+   **Option A: Git clone**
+   ```powershell
+   git clone https://github.com/Jayrr-Dev/DataEntryAutonoma.git
+   cd DataEntryAutonoma
+   ```
+
+   **Option B: Download ZIP**
+   - On GitHub, click **Code** → **Download ZIP**.
+   - Extract the ZIP to a folder such as `C:\Dev\DataEntryAutonoma`.
+
+3. **Open the project folder**
+   - The main script is `dataEntryAutonoma.ahk` in the project root.
+   - Keep the whole folder together. The script expects `recordings\`, `saved-inputs\`, and `assets\` beside it.
+
+4. **Run the script**
+   - Double-click `dataEntryAutonoma.ahk`, or
+   - Right-click → **Run with AutoHotkey v2**, or
+   - From PowerShell in the project folder:
+     ```powershell
+     & "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" ".\dataEntryAutonoma.ahk"
+     ```
+
+5. **Confirm it works**
+   - The **Data Entry Autonoma** window opens.
+   - Folders `recordings` and `saved-inputs` are created automatically if missing.
+
+6. **Reload after edits**
+   - Right-click the tray icon → **Reload Script** when you change the `.ahk` file.
+
+**Wrong version error:** If you see errors about `#Requires AutoHotkey v2.0`, you are running v1.1 or an old runner. Install and use AutoHotkey **v2**.
+
+---
+
+### Path 3: Build the standalone `.exe` (optional)
+
+For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 with the compiler (Ahk2Exe).
+
+1. **Install AutoHotkey v2** with compiler support from [autohotkey.com](https://www.autohotkey.com/).
+
+2. **Check default paths** (edit `compile.ps1` if yours differ):
+   - `C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe`
+   - `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe`
+
+3. **Open PowerShell** in the project root (the folder that contains `dataEntryAutonoma.ahk`).
+
+4. **Run the build**
+   ```powershell
+   .\compile.ps1
+   ```
+   Or double-click `build.bat`.
+
+5. **Find the output**
+   - Built file: `dist\DataEntryAutonoma.exe`
+   - Copy that exe plus empty `recordings` and `saved-inputs` folders when sharing with others (same layout as Path 1).
+
+6. **If PowerShell blocks the script**
+   ```powershell
+   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+   ```
+   Then run `.\compile.ps1` again. Only do this if you trust this project’s scripts.
+
+More build and packaging notes: [BUILD.md](BUILD.md).
+
+---
+
+### Where your data is stored
+
+All paths are relative to the app folder (next to the `.exe` or `.ahk`):
+
+| File or folder | Purpose |
+|----------------|---------|
+| `recordings\` | Saved recording logs (`di-*.log`) |
+| `saved-inputs\` | Preset files with speeds, options, and variable text |
+| `apply-state.ini` | Last selected recording, preset, and CSV (auto-created) |
+| CSV file | Anywhere you choose; path stored in `apply-state.ini` |
+
+---
+
+### Installation troubleshooting
+
+| Problem | What to try |
+|---------|-------------|
+| Script will not start | Install AutoHotkey **v2**, not v1.1 |
+| `Ahk2Exe not found` when building | Reinstall AutoHotkey v2 or fix paths at the top of `compile.ps1` |
+| Save dialog hidden after recording | Update to the latest script; the app shows the main window before the name dialog |
+| App closes when I close the window during recording | Expected: closing the window cancels the recording |
+| Only one instance allowed | By design. Close the existing window or tray instance first |
+| Recordings or presets missing after move | Move the whole folder together. Do not move only the `.exe` without its data folders |
+
+---
+
 ## Quick start
 
-1. Clone this repository
-2. Run `dataEntryAutonoma.ahk`
-3. Click **Record**, perform your workflow (clicks, scrolls, keys where needed)
-4. Press **Esc** to save; enter a name or click **Cancel** to discard
-5. Open **Input Presets**, click **Edit Preset**, add your variable values and timing
-6. Select a recording and preset, then click **Run**
+After [installation](#installation):
+
+1. Run `dataEntryAutonoma.ahk` or `DataEntryAutonoma.exe`
+2. Click **Record**, perform your workflow (clicks, scrolls, keys where needed)
+3. Press **Esc** to save; enter a name or click **Cancel** to discard
+4. Open **Input Presets**, click **Edit Preset**, add your variable values and timing
+5. Select a recording and preset, then click **Run**
 
 For many rows, prepare a CSV file instead of typing variables into a preset.
 
@@ -180,10 +334,11 @@ You can inspect or edit a log with **Edit Log** on the Recordings tab.
 
 | Use case | Requirement |
 |----------|-------------|
-| Development | [AutoHotkey v2](https://www.autohotkey.com/) |
-| End users | `DataEntryAutonoma.exe` only (see [BUILD.md](BUILD.md)) |
+| End users | Windows 10 or 11, `DataEntryAutonoma.exe` ([Installation Path 1](#path-1-end-user-standalone-exe-recommended)) |
+| Developers | Windows 10 or 11, [AutoHotkey v2](https://www.autohotkey.com/) ([Installation Path 2](#path-2-developer-run-the-ahk-script)) |
+| Building the exe | AutoHotkey v2 with Ahk2Exe ([Installation Path 3](#path-3-build-the-standalone-exe-optional)) |
 
-Windows only.
+See [Installation](#installation) for full step-by-step instructions.
 
 ## Project layout
 
@@ -203,15 +358,15 @@ DataEntryAutonoma/
 
 ## Build executable
 
-From the project root:
+If you already followed [Path 3 in Installation](#path-3-build-the-standalone-exe-optional), you have the exe at `dist\DataEntryAutonoma.exe`.
+
+Quick command from the project root:
 
 ```powershell
 .\compile.ps1
 ```
 
-Output: `dist\DataEntryAutonoma.exe`
-
-See [BUILD.md](BUILD.md) for distribution layout and prerequisites.
+See [BUILD.md](BUILD.md) for distribution layout and advanced compile options.
 
 ## Keyboard shortcuts
 
