@@ -1,8 +1,8 @@
-# Building InputRelay.exe
+# Building DataEntryAutonoma.exe
 
-**Input Relay** — record input once, replay with presets or CSV batches.
+**Data Entry Autonoma** — record input once, replay with presets or CSV batches.
 
-End users do **not** need AutoHotkey installed. Ship `InputRelay.exe` plus the data folders below.
+End users do **not** need AutoHotkey installed. Ship `DataEntryAutonoma.exe` plus the data folders below.
 
 ## Prerequisites (build machine only)
 
@@ -27,12 +27,12 @@ Or double-click / run:
 build.bat
 ```
 
-**Output:** `dist\InputRelay.exe`
+**Output:** `dist\DataEntryAutonoma.exe`
 
 ### Exact compile command
 
 ```bat
-"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in "relayInput.ahk" /out "dist\InputRelay.exe" /base "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
+"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in "dataEntryAutonoma.ahk" /out "dist\DataEntryAutonoma.exe" /base "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
 ```
 
 ## Distribute to end users
@@ -40,8 +40,8 @@ build.bat
 Copy this layout (folders can start empty; the app creates them on first run if missing):
 
 ```
-InputRelay/
-  InputRelay.exe
+DataEntryAutonoma/
+  DataEntryAutonoma.exe
   recordings/          ← recording logs (di-*.log)
   saved-inputs/        ← input presets (*.txt)
   apply-state.ini      ← optional; created automatically for last selections
@@ -49,7 +49,7 @@ InputRelay/
 
 - Paths are relative to the **exe directory** (`A_ScriptDir` when compiled).
 - CSV batch files can live anywhere; users pick them via Browse.
-- Entry script: `relayInput.ahk`.
+- Entry script: `dataEntryAutonoma.ahk`.
 
 ## Development vs compiled
 
@@ -59,4 +59,4 @@ InputRelay/
 | `saved-inputs\` | next to script | next to exe |
 | `apply-state.ini` | next to script | next to exe |
 
-No source changes are required for exe compatibility; `relayInput.ahk` already uses `A_ScriptDir` for all local data paths.
+No source changes are required for exe compatibility; `dataEntryAutonoma.ahk` already uses `A_ScriptDir` for all local data paths.

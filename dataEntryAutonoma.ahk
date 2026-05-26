@@ -5,8 +5,8 @@ SendMode "Input"
 SetMouseDelay -1
 SetKeyDelay -1
 
-; relayInput.ahk
-; Input Relay — record clicks, scrolls, and keys; replay with presets or CSV batches.
+; dataEntryAutonoma.ahk
+; Data Entry Autonoma — record clicks, scrolls, and keys; replay with presets or CSV batches.
 ; Unified Detect (record) and Apply (replay) module with CSV batch support.
 ; Recordings: recordings\di-*.log
 ; Presets: saved-inputs\*.txt
@@ -135,7 +135,7 @@ UI := {
 }
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
-APP_GUI_TITLE := "Input Relay"
+APP_GUI_TITLE := "Data Entry Autonoma"
 
 ; =============================================================================
 ; State
@@ -275,7 +275,7 @@ CreateManageGui() {
     S.gui.OnEvent("Close", GuiClosed)
 
     S.gui.SetFont("s" UI.fontSizeTitle, UI.fontFamily)
-    S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textPrimary, "Input Relay")
+    S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textPrimary, "Data Entry Autonoma")
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.gui.Add(
         "Text",
@@ -741,7 +741,7 @@ ApplyFromGui(*) {
     if csvPath != "" {
         if !FileExist(csvPath) {
             SetStatus("CSV file not found.")
-            ShowManageMsgBox "CSV file not found:`n" csvPath, "Input Relay", "Icon!"
+            ShowManageMsgBox "CSV file not found:`n" csvPath, "Data Entry Autonoma", "Icon!"
             return
         }
 
@@ -769,7 +769,7 @@ ApplySingleTimer(logPath, presetPath, *) {
         RunApply(logPath, presetPath)
     } catch as err {
         SetStatus("Playback error.")
-        ShowManageMsgBox "Playback failed:`n" err.Message, "Input Relay", "Icon!"
+        ShowManageMsgBox "Playback failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
     }
 }
 
@@ -784,7 +784,7 @@ ApplyBatchTimer(logPath, csvPath, presetPath, *) {
         RunApplyBatch(logPath, csvPath, presetPath)
     } catch as err {
         SetStatus("Batch playback error.")
-        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Input Relay", "Icon!"
+        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
     }
 }
 
@@ -1330,7 +1330,7 @@ StartRecording() {
         InstallRecordHooks()
     } catch as err {
         Cleanup()
-        ShowManageMsgBox "Could not start recording:`n" err.Message, "Input Relay", "Icon!"
+        ShowManageMsgBox "Could not start recording:`n" err.Message, "Data Entry Autonoma", "Icon!"
         SetStatus("Ready")
         return
     }
@@ -1935,13 +1935,13 @@ RunApply(logPath, presetPath) {
 
     if !FileExist(logPath) {
         SetStatus("Recording file not found.")
-        ShowManageMsgBox "Recording file not found:`n" logPath, "Input Relay", "Icon!"
+        ShowManageMsgBox "Recording file not found:`n" logPath, "Data Entry Autonoma", "Icon!"
         return false
     }
 
     if !FileExist(presetPath) {
         SetStatus("Preset file not found.")
-        ShowManageMsgBox "Preset file not found:`n" presetPath, "Input Relay", "Icon!"
+        ShowManageMsgBox "Preset file not found:`n" presetPath, "Data Entry Autonoma", "Icon!"
         return false
     }
 
@@ -1954,7 +1954,7 @@ RunApply(logPath, presetPath) {
 
     if S.variables.Length = 0 {
         SetStatus("No variables in selected preset.")
-        ShowManageMsgBox "The selected preset has no variable values.`n`nUse Edit Inputs to add them.", "Input Relay", "Icon!"
+        ShowManageMsgBox "The selected preset has no variable values.`n`nUse Edit Inputs to add them.", "Data Entry Autonoma", "Icon!"
         return false
     }
 
@@ -1989,7 +1989,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
 
     if !FileExist(logPath) {
         SetStatus("Recording file not found.")
-        ShowManageMsgBox "Recording file not found:`n" logPath, "Input Relay", "Icon!"
+        ShowManageMsgBox "Recording file not found:`n" logPath, "Data Entry Autonoma", "Icon!"
         return false
     }
 
@@ -1997,7 +1997,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
     if rows.Length = 0 {
         SetStatus("CSV has no data rows.")
         ShowManageMsgBox "The CSV file has no usable data rows.`n`nExpected format:`n1,word,word2,word3`n2,word4,word5,word6",
-            "Input Relay", "Icon!"
+            "Data Entry Autonoma", "Icon!"
         return false
     }
 
@@ -2053,7 +2053,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
         }
     } catch as err {
         stopped := true
-        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Input Relay", "Icon!"
+        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
     } finally {
         S.batchRunning := false
         S.stopBatch := false
@@ -2089,18 +2089,18 @@ PrepareApplyLog(logPath) {
             SetStatus("Recording has clicks but no variable keys.")
             ShowManageMsgBox "This recording has " parsed.clickCount " click(s) but no variable keys.`n`n"
                 . "Re-record with Detect: click a target, then press any key (except Esc) after each click.",
-                "Input Relay", "Icon!"
+                "Data Entry Autonoma", "Icon!"
         } else if parsed.keyCount > 0 && parsed.clickCount = 0 {
             SetStatus("Recording has keys but no click target before them.")
-            ShowManageMsgBox "This recording has key events but no click targets before them.", "Input Relay", "Icon!"
+            ShowManageMsgBox "This recording has key events but no click targets before them.", "Data Entry Autonoma", "Icon!"
         } else if parsed.keyCount > 0 && parsed.clickCount > 0 {
             SetStatus("Recording has clicks and keys but no matched apply pairs.")
             ShowManageMsgBox "This recording has clicks and keys, but they are not paired.`n`n"
                 . "Each key needs a click immediately before it in the log.",
-                "Input Relay", "Icon!"
+                "Data Entry Autonoma", "Icon!"
         } else {
             SetStatus("No apply/scroll actions in that recording.")
-            ShowManageMsgBox "No apply or scroll actions were found in that recording.", "Input Relay", "Icon!"
+            ShowManageMsgBox "No apply or scroll actions were found in that recording.", "Data Entry Autonoma", "Icon!"
         }
         return ""
     }
@@ -3081,7 +3081,7 @@ SaveManageState(presetName, recordingName, csvPath := "") {
 ; =============================================================================
 
 /**
- * When a second launch finds an existing Input Relay window, show it and exit
+ * When a second launch finds an existing Data Entry Autonoma window, show it and exit
  * so #SingleInstance Force does not replace the running instance.
  * Restores the main GUI if it was hidden during Detect or Apply.
  */

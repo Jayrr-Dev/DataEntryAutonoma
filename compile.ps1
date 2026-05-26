@@ -1,19 +1,19 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Compiles relayInput.ahk into a standalone InputRelay.exe (no AHK install required on target PCs).
+    Compiles dataEntryAutonoma.ahk into a standalone DataEntryAutonoma.exe (no AHK install required on target PCs).
 
 .DESCRIPTION
-    Uses Ahk2Exe with the AutoHotkey v2 64-bit base interpreter. Output goes to dist\InputRelay.exe.
+    Uses Ahk2Exe with the AutoHotkey v2 64-bit base interpreter. Output goes to dist\DataEntryAutonoma.exe.
     Run from the project root:  .\compile.ps1
 #>
 
 $ErrorActionPreference = "Stop"
 
 $PROJECT_ROOT = $PSScriptRoot
-$INPUT_SCRIPT = Join-Path $PROJECT_ROOT "relayInput.ahk"
+$INPUT_SCRIPT = Join-Path $PROJECT_ROOT "dataEntryAutonoma.ahk"
 $OUTPUT_DIR = Join-Path $PROJECT_ROOT "dist"
-$OUTPUT_EXE = Join-Path $OUTPUT_DIR "InputRelay.exe"
+$OUTPUT_EXE = Join-Path $OUTPUT_DIR "DataEntryAutonoma.exe"
 
 $AHK2EXE = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
 $AHK_BASE = "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
