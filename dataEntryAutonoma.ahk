@@ -2361,7 +2361,13 @@ RecordClick(button, screenX, screenY) {
     ArmKeyCapture()
     WriteMouseLine("click", button, coords, ctx)
 
-    ShowTransientRecordingTip("Click saved. Press any key after this click only if you want typed input here.", screenX, screenY)
+    ShowTransientRecordingTip(
+        button = "LButton"
+            ? "Click saved. Press any key after this click only if you want typed input here."
+            : "Click saved (" button "). Press any key after this click only if you want typed input here.",
+        screenX,
+        screenY
+    )
 }
 
 RecordScroll(event) {
@@ -3096,7 +3102,7 @@ ReplayApply(action) {
     if !S.applying || S.stopBatch
         return
 
-    ClickPoint(point.x, point.y)
+    ClickPoint(point.x, point.y, action.target.button)
 
     if !S.applying || S.stopBatch
         return
@@ -3407,7 +3413,58 @@ ParseCommentLine(line, parsed) {
     }
 }
 
+/**
+ * Returns true when a log field names a supported mouse button.
+ * @param {String} value Raw log field value.
+ * @returns {Boolean}
+ */
+IsRecordedMouseButton(value) {
+    normalized := StrLower(Trim(value))
+    return normalized = "lbutton" || normalized = "left"
+        || normalized = "rbutton" || normalized = "right"
+        || normalized = "mbutton" || normalized = "middle"
+        || normalized = "xbutton1" || normalized = "x1"
+        || normalized = "xbutton2" || normalized = "x2"
+}
+
+/**
+ * Normalizes a recorded mouse button name for replay metadata.
+ * @param {String} button Raw or canonical button name.
+ * @returns {String}
+ */
+NormalizeRecordedButton(button) {
+    normalized := StrLower(Trim(button))
+
+    switch normalized {
+        case "rbutton", "right":
+            return "RButton"
+        case "mbutton", "middle":
+            return "MButton"
+        case "xbutton1", "x1":
+            return "XButton1"
+        case "xbutton2", "x2":
+            return "XButton2"
+        default:
+            return "LButton"
+    }
+}
+
+/**
+ * Reads the mouse button from a click log line.
+ * @param {Array} parts Pipe-delimited log fields.
+ * @returns {String}
+ */
+ParseClickButtonFromParts(parts) {
+    if parts.Length < 4
+        return "LButton"
+
+    candidate := parts[3]
+    return IsRecordedMouseButton(candidate) ? NormalizeRecordedButton(candidate) : "LButton"
+}
+
 ParseClickTarget(parts, coordinateMode) {
+    button := ParseClickButtonFromParts(parts)
+
     if parts.Length >= 19 && IsNumericText(parts[4]) && IsNumericText(parts[5]) {
         return MakeTarget(
             "rich",
@@ -3426,7 +3483,8 @@ ParseClickTarget(parts, coordinateMode) {
             parts[16],
             parts[17],
             parts[18],
-            parts[19]
+            parts[19],
+            button
         )
     }
 
@@ -3438,7 +3496,8 @@ ParseClickTarget(parts, coordinateMode) {
             "", "", "", "", "", "", "", "", "",
             "", "",
             parts.Length >= 6 ? parts[6] : "",
-            parts.Length >= 7 ? parts[7] : ""
+            parts.Length >= 7 ? parts[7] : "",
+            button
         )
     }
 
@@ -3483,7 +3542,7 @@ ParseScrollTarget(parts, coordinateMode) {
     return ""
 }
 
-MakeTarget(mode, screenX, screenY, clientX := "", clientY := "", pctX := "", pctY := "", clientW := "", clientH := "", winX := "", winY := "", winW := "", winH := "", hwnd := "", className := "", title := "", exe := "") {
+MakeTarget(mode, screenX, screenY, clientX := "", clientY := "", pctX := "", pctY := "", clientW := "", clientH := "", winX := "", winY := "", winW := "", winH := "", hwnd := "", className := "", title := "", exe := "", button := "LButton") {
     return {
         mode: mode,
         screenX: screenX,
@@ -3501,7 +3560,8 @@ MakeTarget(mode, screenX, screenY, clientX := "", clientY := "", pctX := "", pct
         hwnd: hwnd,
         className: className,
         title: title,
-        exe: exe
+        exe: exe,
+        button: NormalizeRecordedButton(button)
     }
 }
 
@@ -3652,7 +3712,13 @@ ClampPoint(x, y) {
 ; Apply — mouse and keyboard playback
 ; =============================================================================
 
-ClickPoint(x, y) {
+/**
+ * Moves to a screen point and performs the requested mouse button click.
+ * @param {Number} x Screen X coordinate.
+ * @param {Number} y Screen Y coordinate.
+ * @param {String} button Recorded button name (LButton, RButton, MButton, XButton1, XButton2).
+ */
+ClickPoint(x, y, button := "LButton") {
     global S
 
     point := ClampPoint(x, y)
@@ -3662,8 +3728,34 @@ ClickPoint(x, y) {
     if !S.applying || S.stopBatch
         return
 
-    DllCall("mouse_event", "UInt", 0x0002, "UInt", 0, "UInt", 0, "UInt", 0, "UPtr", 0)
-    DllCall("mouse_event", "UInt", 0x0004, "UInt", 0, "UInt", 0, "UInt", 0, "UPtr", 0)
+    normalized := NormalizeRecordedButton(button)
+    downFlag := 0x0002
+    upFlag := 0x0004
+    xData := 0
+
+    switch normalized {
+        case "RButton":
+            downFlag := 0x0008
+            upFlag := 0x0010
+        case "MButton":
+            downFlag := 0x0020
+            upFlag := 0x0040
+        case "XButton1":
+            downFlag := 0x0080
+            upFlag := 0x0100
+            xData := 0x0001
+        case "XButton2":
+            downFlag := 0x0080
+            upFlag := 0x0100
+            xData := 0x0002
+    }
+
+    DllCall("mouse_event", "UInt", downFlag, "UInt", 0, "UInt", 0, "UInt", xData, "UPtr", 0)
+
+    if !S.applying || S.stopBatch
+        return
+
+    DllCall("mouse_event", "UInt", upFlag, "UInt", 0, "UInt", 0, "UInt", xData, "UPtr", 0)
 }
 
 /**

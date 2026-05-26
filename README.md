@@ -39,7 +39,7 @@ Typical uses:
 ### Recording
 
 - **Record** button starts a capture session for clicks, scrolls, and optional keystrokes
-- **Click targets** store screen coordinates, window client coordinates, and percentage positions inside the target window
+- **Click targets** store screen coordinates, window client coordinates, percentage positions inside the target window, and the mouse button used (left, right, or middle)
 - **Window matching** uses hwnd, class, title, and exe so replay can find the right window again
 - **Scroll capture** records wheel direction, delta, and notch count at the cursor position
 - **Variable keys** are created only when you press a key after a click; click-only steps replay as clicks with no typing
@@ -103,7 +103,7 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.0.1-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.0.2-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
@@ -123,8 +123,8 @@ If you already extracted the release zip (or cloned the repo for development), y
    .\runInstallWizard.ps1
    ```
 3. Follow the on-screen steps:
-   - **Welcome** → **Application file** (select `DataEntryAutonoma.exe`)
-   - On a **new PC**, click **Browse for DataEntryAutonoma.exe...** and pick the exe from a GitHub release, download folder, or USB drive
+   - **Welcome** → **Application file**
+   - Click **Download latest version** to fetch the newest release from GitHub (recommended), or **Browse for DataEntryAutonoma.exe...** from a release zip, download folder, or USB drive
    - **Install location** (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`)
    - **Shortcuts** (Desktop, Start Menu, launch when finished)
 4. Click **Install**, then **Close** when setup completes.

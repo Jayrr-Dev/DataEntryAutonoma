@@ -36,6 +36,12 @@ $DEFAULT_INSTALL_DIR = Join-Path (Join-Path $env:LOCALAPPDATA "Programs") $APP_F
 $DIST_RELATIVE_PATH = "dist"
 $ASSETS_RELATIVE_PATH = "assets"
 
+$GITHUB_REPO_OWNER = "Jayrr-Dev"
+$GITHUB_REPO_NAME = "DataEntryAutonoma"
+$GITHUB_RELEASES_LATEST_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
+$RELEASE_ZIP_NAME_PATTERN = "DataEntryAutonoma-v*-win64.zip"
+$DOWNLOAD_USER_AGENT = "$APP_DISPLAY_NAME Install Wizard"
+
 $WIZARD_WIDTH = 520
 $WIZARD_HEIGHT = 440
 $CONTENT_WIDTH = 460
@@ -47,7 +53,6 @@ $COLOR_MUTED = [System.Drawing.Color]::FromArgb(107, 114, 128)
 $PROJECT_ROOT = $PSScriptRoot
 $DIST_EXE_PATH = Join-Path $PROJECT_ROOT (Join-Path $DIST_RELATIVE_PATH $EXE_FILE_NAME)
 $SOURCE_SCRIPT_PATH = Join-Path $PROJECT_ROOT $SCRIPT_FILE_NAME
-$SOURCE_ICON_PATH = Join-Path $PROJECT_ROOT (Join-Path $ASSETS_RELATIVE_PATH $ICON_FILE_NAME)
 $COMPILE_SCRIPT_PATH = Join-Path $PROJECT_ROOT "compile.ps1"
 
 # =============================================================================
@@ -66,6 +71,70 @@ function Get-StandaloneExeSourcePath {
 # Returns true when a standalone exe is ready to install.
 function Test-StandaloneExeAvailable {
     return [bool](Get-StandaloneExeSourcePath)
+}
+
+# Returns the root folder used for LICENSE, README, icons, and wizard scripts during install.
+function Get-ReleaseSourceRoot {
+    if ($script:ReleaseSourceRoot) {
+        return $script:ReleaseSourceRoot
+    }
+
+    return $PROJECT_ROOT
+}
+
+# Resolves a file path under the active release source root.
+function Get-ReleaseSourcePath {
+    param([string]$RelativePath)
+
+    return Join-Path (Get-ReleaseSourceRoot) $RelativePath
+}
+
+# Returns metadata for the latest GitHub release win64 zip asset.
+function Get-LatestReleaseZipAsset {
+    $headers = @{
+        "User-Agent" = $DOWNLOAD_USER_AGENT
+        "Accept"     = "application/vnd.github+json"
+    }
+
+    $release = Invoke-RestMethod -Uri $GITHUB_RELEASES_LATEST_URL -Headers $headers -UseBasicParsing
+    $asset = $release.assets | Where-Object { $_.name -like $RELEASE_ZIP_NAME_PATTERN } | Select-Object -First 1
+
+    if (-not $asset) {
+        throw "No win64 release zip found for $($release.tag_name)."
+    }
+
+    return @{
+        TagName     = $release.tag_name
+        Version     = ($release.tag_name -replace '^v', '')
+        DownloadUrl = $asset.browser_download_url
+        FileName    = $asset.name
+    }
+}
+
+# Downloads and extracts the latest GitHub release; sets exe and release source paths.
+function Invoke-DownloadLatestRelease {
+    $asset = Get-LatestReleaseZipAsset
+    $tempRoot = Join-Path $env:TEMP ("DataEntryAutonoma-Setup-" + [guid]::NewGuid().ToString("N"))
+    Ensure-Directory $tempRoot
+
+    $zipPath = Join-Path $tempRoot $asset.FileName
+    $extractPath = Join-Path $tempRoot "extracted"
+    Ensure-Directory $extractPath
+
+    $headers = @{ "User-Agent" = $DOWNLOAD_USER_AGENT }
+    Invoke-WebRequest -Uri $asset.DownloadUrl -OutFile $zipPath -Headers $headers -UseBasicParsing
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force
+
+    $exePath = Join-Path $extractPath $EXE_FILE_NAME
+    if (-not (Test-Path $exePath)) {
+        throw "$EXE_FILE_NAME not found in $($asset.FileName)."
+    }
+
+    $script:ReleaseSourceRoot = $extractPath
+    $script:StandaloneExeSourcePath = $exePath
+    $script:DownloadedReleaseVersion = $asset.Version
+
+    return $asset
 }
 
 # Returns true when this machine can build the exe from source (maintainers only).
@@ -177,22 +246,25 @@ function Install-ApplicationFiles {
     Ensure-Directory (Join-Path $InstallDir "recordings")
     Ensure-Directory (Join-Path $InstallDir "saved-inputs")
 
-    Copy-InstallFile (Join-Path $PROJECT_ROOT $LICENSE_FILE_NAME) (Join-Path $InstallDir $LICENSE_FILE_NAME)
-    Copy-InstallFile (Join-Path $PROJECT_ROOT $README_FILE_NAME) (Join-Path $InstallDir $README_FILE_NAME)
-    Copy-InstallFile (Join-Path $PROJECT_ROOT $CHANGELOG_FILE_NAME) (Join-Path $InstallDir $CHANGELOG_FILE_NAME)
-    Copy-InstallFile (Join-Path $PROJECT_ROOT $INSTALL_WIZARD_PS1) (Join-Path $InstallDir $INSTALL_WIZARD_PS1)
-    Copy-InstallFile (Join-Path $PROJECT_ROOT $INSTALL_WIZARD_BAT) (Join-Path $InstallDir $INSTALL_WIZARD_BAT)
-    Copy-InstallFile (Join-Path $PROJECT_ROOT $UNINSTALL_WIZARD_PS1) (Join-Path $InstallDir $UNINSTALL_WIZARD_PS1)
-    Copy-InstallFile (Join-Path $PROJECT_ROOT $UNINSTALL_WIZARD_BAT) (Join-Path $InstallDir $UNINSTALL_WIZARD_BAT)
+    $releaseRoot = Get-ReleaseSourceRoot
+
+    Copy-InstallFile (Join-Path $releaseRoot $LICENSE_FILE_NAME) (Join-Path $InstallDir $LICENSE_FILE_NAME)
+    Copy-InstallFile (Join-Path $releaseRoot $README_FILE_NAME) (Join-Path $InstallDir $README_FILE_NAME)
+    Copy-InstallFile (Join-Path $releaseRoot $CHANGELOG_FILE_NAME) (Join-Path $InstallDir $CHANGELOG_FILE_NAME)
+    Copy-InstallFile (Join-Path $releaseRoot $INSTALL_WIZARD_PS1) (Join-Path $InstallDir $INSTALL_WIZARD_PS1)
+    Copy-InstallFile (Join-Path $releaseRoot $INSTALL_WIZARD_BAT) (Join-Path $InstallDir $INSTALL_WIZARD_BAT)
+    Copy-InstallFile (Join-Path $releaseRoot $UNINSTALL_WIZARD_PS1) (Join-Path $InstallDir $UNINSTALL_WIZARD_PS1)
+    Copy-InstallFile (Join-Path $releaseRoot $UNINSTALL_WIZARD_BAT) (Join-Path $InstallDir $UNINSTALL_WIZARD_BAT)
 
     $destinationExe = Join-Path $InstallDir $EXE_FILE_NAME
     Copy-Item -Path $exeSource -Destination $destinationExe -Force
 
+    $sourceIconPath = Get-ReleaseSourcePath (Join-Path $ASSETS_RELATIVE_PATH $ICON_FILE_NAME)
     $iconPath = ""
-    if (Test-Path $SOURCE_ICON_PATH) {
+    if (Test-Path $sourceIconPath) {
         $iconPath = Join-Path $InstallDir (Join-Path $ASSETS_RELATIVE_PATH $ICON_FILE_NAME)
         Ensure-Directory (Split-Path $iconPath -Parent)
-        Copy-Item -Path $SOURCE_ICON_PATH -Destination $iconPath -Force
+        Copy-Item -Path $sourceIconPath -Destination $iconPath -Force
     }
 
     return @{
@@ -244,6 +316,8 @@ $form.BackColor = $COLOR_BG
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 
 $script:CurrentStep = 0
+$script:ReleaseSourceRoot = $PROJECT_ROOT
+$script:DownloadedReleaseVersion = ""
 $script:StandaloneExeSourcePath = if (Test-Path $DIST_EXE_PATH) { $DIST_EXE_PATH } else { "" }
 $script:InstallDir = $DEFAULT_INSTALL_DIR
 $script:CreateDesktopShortcut = $true
@@ -325,7 +399,7 @@ Thank you for installing $APP_DISPLAY_NAME.
 
 This wizard installs the standalone Windows app ($EXE_FILE_NAME). AutoHotkey is not required on your PC.
 
-Click Next to locate the application file, choose an install folder, and add shortcuts.
+Click Next to download the latest release, choose an install folder, and add shortcuts.
 "@ 200
             $body.Location = New-Object System.Drawing.Point(0, 44)
             $contentPanel.Controls.Add($body)
@@ -343,41 +417,74 @@ Click Next to locate the application file, choose an install folder, and add sho
             $exeAvailable = Test-StandaloneExeAvailable
             $canBuild = Test-CanBuildStandaloneExe
 
-            $intro = New-BodyLabel "Select $EXE_FILE_NAME to install. End users do not need AutoHotkey." 40
+            $intro = New-BodyLabel "Download the latest release or select $EXE_FILE_NAME manually. AutoHotkey is not required." 40
             $intro.Location = New-Object System.Drawing.Point(0, 40)
             $contentPanel.Controls.Add($intro)
 
             $statusText = if ($exeAvailable) {
-                "Ready to install:`r`n$script:StandaloneExeSourcePath"
+                if ($script:DownloadedReleaseVersion) {
+                    "Ready to install v$($script:DownloadedReleaseVersion):`r`n$script:StandaloneExeSourcePath"
+                } else {
+                    "Ready to install:`r`n$script:StandaloneExeSourcePath"
+                }
             } else {
-                "No exe selected yet. Browse for $EXE_FILE_NAME from a GitHub release, download folder, or USB drive."
+                "No exe selected yet. Click Download latest version, or browse for $EXE_FILE_NAME from a release zip, download folder, or USB drive."
             }
             $status = New-BodyLabel $statusText 72
             $status.Location = New-Object System.Drawing.Point(0, 84)
             $contentPanel.Controls.Add($status)
 
+            $btnDownloadLatest = New-Object System.Windows.Forms.Button
+            $btnDownloadLatest.Text = "Download latest version"
+            $btnDownloadLatest.Size = New-Object System.Drawing.Size(220, 30)
+            $btnDownloadLatest.Location = New-Object System.Drawing.Point(0, 164)
+            $contentPanel.Controls.Add($btnDownloadLatest)
+
             $btnBrowseExe = New-Object System.Windows.Forms.Button
             $btnBrowseExe.Text = "Browse for $EXE_FILE_NAME..."
             $btnBrowseExe.Size = New-Object System.Drawing.Size(220, 30)
-            $btnBrowseExe.Location = New-Object System.Drawing.Point(0, 164)
+            $btnBrowseExe.Location = New-Object System.Drawing.Point(230, 164)
             $contentPanel.Controls.Add($btnBrowseExe)
 
             $btnBuild = New-Object System.Windows.Forms.Button
             $btnBuild.Text = "Build exe (developers)"
             $btnBuild.Size = New-Object System.Drawing.Size(160, 30)
-            $btnBuild.Location = New-Object System.Drawing.Point(230, 164)
+            $btnBuild.Location = New-Object System.Drawing.Point(0, 204)
             $btnBuild.Enabled = $canBuild
             $contentPanel.Controls.Add($btnBuild)
 
             $buildStatus = New-Object System.Windows.Forms.Label
             $buildStatus.AutoSize = $false
             $buildStatus.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, 36)
-            $buildStatus.Location = New-Object System.Drawing.Point(0, 204)
+            $buildStatus.Location = New-Object System.Drawing.Point(0, 244)
             $buildStatus.ForeColor = $COLOR_MUTED
             if (-not $canBuild -and -not $exeAvailable) {
-                $buildStatus.Text = "Download $EXE_FILE_NAME from GitHub Releases, or build on a PC with AutoHotkey v2 and compiler."
+                $buildStatus.Text = "Recommended: click Download latest version. Requires internet access."
             }
             $contentPanel.Controls.Add($buildStatus)
+
+            $btnDownloadLatest.Add_Click({
+                try {
+                    $btnDownloadLatest.Enabled = $false
+                    $btnBrowseExe.Enabled = $false
+                    $btnBuild.Enabled = $false
+                    $buildStatus.ForeColor = $COLOR_MUTED
+                    $buildStatus.Text = "Checking for the latest release..."
+                    [System.Windows.Forms.Application]::DoEvents()
+
+                    $release = Invoke-DownloadLatestRelease
+                    $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
+                    $buildStatus.Text = "Downloaded v$($release.Version) ($($release.FileName))."
+                    $status.Text = "Ready to install v$($release.Version):`r`n$script:StandaloneExeSourcePath"
+                } catch {
+                    $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+                    $buildStatus.Text = $_.Exception.Message
+                } finally {
+                    $btnDownloadLatest.Enabled = $true
+                    $btnBrowseExe.Enabled = $true
+                    $btnBuild.Enabled = $canBuild
+                }
+            })
 
             $btnBrowseExe.Add_Click({
                 $dialog = New-Object System.Windows.Forms.OpenFileDialog
@@ -386,6 +493,8 @@ Click Next to locate the application file, choose an install folder, and add sho
                 $dialog.FileName = $EXE_FILE_NAME
                 if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     $script:StandaloneExeSourcePath = $dialog.FileName
+                    $script:ReleaseSourceRoot = Split-Path $dialog.FileName -Parent
+                    $script:DownloadedReleaseVersion = ""
                     $status.Text = "Ready to install:`r`n$script:StandaloneExeSourcePath"
                     $buildStatus.Text = ""
                 }
@@ -397,6 +506,8 @@ Click Next to locate the application file, choose an install folder, and add sho
                     $buildStatus.Text = "Building... this may take a moment."
                     [System.Windows.Forms.Application]::DoEvents()
                     Invoke-BuildStandaloneExe
+                    $script:ReleaseSourceRoot = $PROJECT_ROOT
+                    $script:DownloadedReleaseVersion = ""
                     $buildStatus.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
                     $buildStatus.Text = "Build complete."
                     $status.Text = "Ready to install:`r`n$script:StandaloneExeSourcePath"
@@ -494,7 +605,8 @@ Click Next to locate the application file, choose an install folder, and add sho
             Update-UpgradeDetection -InstallDir $script:InstallDir
             $installType = if ($script:IsUpgrade) { "Upgrade" } else { "Fresh install" }
 
-            $summary = New-BodyLabel "$installType`r`n`r`nInstall: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 100
+            $versionLine = if ($script:DownloadedReleaseVersion) { "Version: v$($script:DownloadedReleaseVersion)`r`n" } else { "" }
+            $summary = New-BodyLabel "$installType`r`n`r`n$versionLine Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 100
             $summary.Location = New-Object System.Drawing.Point(0, 150)
             $contentPanel.Controls.Add($summary)
 
@@ -598,8 +710,8 @@ function Test-CurrentStepValid {
                     @"
 Please select $EXE_FILE_NAME before continuing.
 
-  • Click Browse for $EXE_FILE_NAME
-  • Use a file from GitHub Releases or another PC
+  • Click Download latest version (recommended)
+  • Or browse for $EXE_FILE_NAME from a release zip or another PC
   • Developers: click Build exe if AutoHotkey v2 is installed on this machine
 "@,
                     $APP_DISPLAY_NAME,
