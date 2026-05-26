@@ -1,0 +1,11 @@
+# Build output
+dist/
+
+# Local runtime state and user data
+apply-state.ini
+recordings/*.log
+saved-inputs/*.txt
+
+# Keep folder structure
+!recordings/.gitkeep
+!saved-inputs/.gitkeep
