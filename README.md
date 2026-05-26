@@ -94,7 +94,33 @@ Typical uses:
 
 ## Installation
 
-Windows only. Use **Path 1** if you just want to run the app. Use **Path 2** if you are developing or running from source. Use **Path 3** only if you need to build the standalone `.exe` yourself.
+Windows only. The easiest way to install is the **setup wizard** (recommended). Manual steps are below if you prefer.
+
+### Easiest: Install wizard (recommended)
+
+1. Download or clone this repository from [github.com/Jayrr-Dev/DataEntryAutonoma](https://github.com/Jayrr-Dev/DataEntryAutonoma).
+2. Double-click **`runInstallWizard.bat`** in the project folder.
+   - Or from PowerShell in the project folder:
+     ```powershell
+     .\runInstallWizard.ps1
+     ```
+3. Follow the on-screen steps:
+   - **Welcome** → **Install type** (standalone `.exe` or script mode)
+   - **Install location** (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`)
+   - **Shortcuts** (Desktop, Start Menu, launch when finished)
+4. Click **Install**, then **Close** when setup completes.
+
+**Standalone mode (recommended):** Uses `DataEntryAutonoma.exe`. No AutoHotkey needed on your PC. If the exe is not built yet, the wizard offers **Build DataEntryAutonoma.exe now** (requires AutoHotkey v2 with compiler on your machine).
+
+**Script mode:** Copies `dataEntryAutonoma.ahk` and requires [AutoHotkey v2](https://www.autohotkey.com/) installed.
+
+The wizard creates `recordings\` and `saved-inputs\` folders and optional shortcuts for you.
+
+---
+
+### Manual installation
+
+Use **Path 1** if you just want to run the app. Use **Path 2** if you are developing or running from source. Use **Path 3** only if you need to build the standalone `.exe` yourself.
 
 ### Path 1: End user (standalone `.exe`, recommended)
 
@@ -334,6 +360,7 @@ You can inspect or edit a log with **Edit Log** on the Recordings tab.
 
 | Use case | Requirement |
 |----------|-------------|
+| Easiest install | Windows 10 or 11, run [Install wizard](#easiest-install-wizard-recommended) |
 | End users | Windows 10 or 11, `DataEntryAutonoma.exe` ([Installation Path 1](#path-1-end-user-standalone-exe-recommended)) |
 | Developers | Windows 10 or 11, [AutoHotkey v2](https://www.autohotkey.com/) ([Installation Path 2](#path-2-developer-run-the-ahk-script)) |
 | Building the exe | AutoHotkey v2 with Ahk2Exe ([Installation Path 3](#path-3-build-the-standalone-exe-optional)) |
@@ -345,6 +372,8 @@ See [Installation](#installation) for full step-by-step instructions.
 ```
 DataEntryAutonoma/
   dataEntryAutonoma.ahk   # Main application
+  runInstallWizard.ps1    # Graphical install wizard
+  runInstallWizard.bat    # Double-click to run the wizard
   LICENSE                 # MIT license (attribution required)
   compile.ps1             # Build standalone exe
   build.bat               # Build shortcut
