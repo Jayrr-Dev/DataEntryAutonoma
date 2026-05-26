@@ -458,10 +458,11 @@ CreateManageGui() {
     S.gui.Add("Text", "xs c" UI.textMuted, "CSV batch (optional)")
     S.csvBatchInfoButton := S.gui.Add(
         "Button",
-        "x+4 w" UI.infoBtnSize " h" UI.infoBtnSize " +Background" UI.secondaryBtnBg " c" UI.accent,
+        "x+2 w" UI.infoBtnSize " h" UI.infoBtnSize " -Theme +Background" UI.infoBtnBg " c" UI.accent,
         "i"
     )
     S.csvBatchInfoButton.OnEvent("Click", ShowCsvBatchHelp)
+    ApplyManageCircularInfoButton(S.csvBatchInfoButton)
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.csvEdit := S.gui.Add("Edit", "xs w" UI.csvEditWidth " +Background" UI.editBg, "")
     S.browseCsvButton := S.gui.Add(
