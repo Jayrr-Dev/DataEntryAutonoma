@@ -8,7 +8,11 @@
 
 Show the app what to do once. It remembers your mouse clicks, scrolls, and keypresses, then repeats those same actions for you automatically, including typing text into fields for you.
 
-Record mouse clicks, scrolls, and keyboard input once, then click **Run** to replay that exact sequence. The app can **automatically type text** into the fields you marked during recording, using values from a preset or CSV file so each run can enter different names, numbers, and notes without you typing them again. No scripting required. Built with AutoHotkey v2 for Windows.
+Record mouse clicks, scrolls, and keyboard input once, then click **Run** to replay that exact sequence. The app can **automatically type text** into the fields you marked during recording, using values from a preset or CSV file so each run can enter different names, numbers, and notes without you typing them again. No scripting required.
+
+**End users:** run `DataEntryAutonoma.exe`. **AutoHotkey does not need to be installed** on your PC. The exe is a standalone Windows app.
+
+**Developers:** the source is built with [AutoHotkey v2](https://www.autohotkey.com/) and compiled into that exe.
 
 ## What it does
 
@@ -94,16 +98,28 @@ Typical uses:
 
 ## Installation
 
-Windows only. The easiest way to install is the **setup wizard** (recommended). Manual steps are below if you prefer.
+Windows only. **AutoHotkey is not required** to run the app.
 
-### Easiest: Install wizard (recommended)
+### Download the release zip (recommended)
 
-1. Download or clone this repository from [github.com/Jayrr-Dev/DataEntryAutonoma](https://github.com/Jayrr-Dev/DataEntryAutonoma).
-2. Double-click **`runInstallWizard.bat`** in the project folder.
-   - Or from PowerShell in the project folder:
-     ```powershell
-     .\runInstallWizard.ps1
-     ```
+1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
+2. Download **`DataEntryAutonoma-v1.0.0-win64.zip`** (or the latest release asset for your version).
+3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
+4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
+
+The release zip includes the standalone exe, `assets\dataEntryAutonoma.ico`, empty `recordings\` and `saved-inputs\` folders, the install wizard scripts, `README.md`, and `LICENSE`. You do **not** need to install AutoHotkey or clone the repository.
+
+---
+
+### Install wizard (optional)
+
+If you already extracted the release zip (or cloned the repo for development), you can use the setup wizard instead of running the exe directly.
+
+1. Open the folder that contains **`runInstallWizard.bat`** (from the extracted release zip or a local clone).
+2. Double-click **`runInstallWizard.bat`**, or from PowerShell in that folder:
+   ```powershell
+   .\runInstallWizard.ps1
+   ```
 3. Follow the on-screen steps:
    - **Welcome** → **Application file** (select `DataEntryAutonoma.exe`)
    - On a **new PC**, click **Browse for DataEntryAutonoma.exe...** and pick the exe from a GitHub release, download folder, or USB drive
@@ -125,11 +141,11 @@ Use **Path 1** if you just want to run the app. Use **Path 2** if you are develo
 
 ### Path 1: End user (standalone `.exe`, recommended)
 
-No AutoHotkey install required on your PC.
+**AutoHotkey is not required.** The exe runs on its own.
 
 1. **Get the app files**
-   - Download or clone this repository from [github.com/Jayrr-Dev/DataEntryAutonoma](https://github.com/Jayrr-Dev/DataEntryAutonoma).
-   - You need `DataEntryAutonoma.exe`. It is produced by the build step (Path 3) or supplied in a release package from the project author.
+   - Download the release zip or `DataEntryAutonoma.exe` from [github.com/Jayrr-Dev/DataEntryAutonoma](https://github.com/Jayrr-Dev/DataEntryAutonoma), or copy the exe from another PC.
+   - You do **not** need to install AutoHotkey on this computer.
 
 2. **Create a folder** for the app, for example:
    ```
@@ -356,6 +372,19 @@ Rules:
 Recordings are UTF-8 log files in `recordings/` (default prefix `di-`). They store pipe-delimited events for clicks, scrolls, keys, metadata, and manual delays. Coordinates prefer window percentage positions so replay survives window resize when possible.
 
 You can inspect or edit a log with **Edit Log** on the Recordings tab.
+
+## Does the exe need AutoHotkey installed?
+
+**No.** If you use `DataEntryAutonoma.exe`, you do **not** need AutoHotkey installed on that computer.
+
+| What you run | AutoHotkey required? | Notes |
+|--------------|----------------------|-------|
+| **`DataEntryAutonoma.exe`** | **No** | Standalone app. The AutoHotkey runtime is bundled inside the exe when it is compiled. Works on a clean Windows PC. |
+| **`dataEntryAutonoma.ahk`** (source script) | **Yes** | For development only. Requires [AutoHotkey v2](https://www.autohotkey.com/) installed. |
+
+When you build the exe with `compile.ps1`, Ahk2Exe packages the script and interpreter into one file. End users only need Windows 10 or 11 and the exe (plus optional `assets\`, `recordings\`, and `saved-inputs\` folders).
+
+**Quick test on a PC without AutoHotkey:** copy `DataEntryAutonoma.exe` to the machine, double-click it, and the main window should open. No install step for AutoHotkey is involved.
 
 ## Requirements
 

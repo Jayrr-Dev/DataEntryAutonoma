@@ -2,7 +2,18 @@
 
 **Data Entry Autonoma** — record input once, replay with presets or CSV batches.
 
-End users do **not** need AutoHotkey installed. Ship `DataEntryAutonoma.exe` plus the data folders below.
+## Standalone exe (no AutoHotkey on target PCs)
+
+`DataEntryAutonoma.exe` is a **standalone** Windows application. **End users do not install AutoHotkey.**
+
+During compile, Ahk2Exe embeds the AutoHotkey v2 interpreter into the exe. The target PC only needs Windows and the files you ship (exe, optional icon asset, data folders).
+
+| Machine | AutoHotkey needed? |
+|---------|-------------------|
+| PC where you **build** the exe | Yes (v2 + Ahk2Exe) |
+| PC where you **run** `DataEntryAutonoma.exe` | **No** |
+
+Ship `DataEntryAutonoma.exe` plus the data folders below (and `assets\dataEntryAutonoma.ico` for tray/window icons).
 
 ## Prerequisites (build machine only)
 
@@ -42,9 +53,11 @@ Copy this layout (folders can start empty; the app creates them on first run if 
 ```
 DataEntryAutonoma/
   DataEntryAutonoma.exe
-  recordings/          ← recording logs (di-*.log)
-  saved-inputs/        ← input presets (*.txt)
-  apply-state.ini      ← optional; created automatically for last selections
+  assets/
+    dataEntryAutonoma.ico   ← optional but recommended for tray/taskbar icons
+  recordings/               ← recording logs (di-*.log)
+  saved-inputs/             ← input presets (*.txt)
+  apply-state.ini           ← optional; created automatically for last selections
 ```
 
 - Paths are relative to the **exe directory** (`A_ScriptDir` when compiled).
@@ -60,3 +73,27 @@ DataEntryAutonoma/
 | `apply-state.ini` | next to script | next to exe |
 
 No source changes are required for exe compatibility; `dataEntryAutonoma.ahk` already uses `A_ScriptDir` for all local data paths.
+## Release package (maintainers)
+
+After a successful build, create the distributable zip and folder mirror:
+
+```powershell
+.\packageRelease.ps1
+```
+
+Or double-click / run:
+
+```bat
+packageRelease.bat
+```
+
+**Requires:** `dist\DataEntryAutonoma.exe` (run `.\compile.ps1` first if missing).
+
+**Output:**
+
+- `release\DataEntryAutonoma-v1.0.0-win64.zip` (end-user download; contents at archive root)
+- `release\DataEntryAutonoma-v1.0.0-win64\` (same layout for inspection)
+
+The package includes `DataEntryAutonoma.exe`, `assets\dataEntryAutonoma.ico`, empty `recordings\` and `saved-inputs\`, `LICENSE`, `README.md`, and `runInstallWizard.bat` / `runInstallWizard.ps1`. Publish the zip to [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases).
+
+The `release\` folder is build output and is listed in `.gitignore`.

@@ -10,3 +10,4 @@ saved-inputs/*.txt
 # Keep folder structure
 !recordings/.gitkeep
 !saved-inputs/.gitkeep
+release/
