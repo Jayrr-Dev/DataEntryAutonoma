@@ -14,7 +14,7 @@ Record mouse clicks, scrolls, and keyboard input once, then click **Run** to rep
 
 **Developers:** the source is built with [AutoHotkey v2](https://www.autohotkey.com/) and compiled into that exe.
 
-**Current release:** v1.0.5
+**Current release:** v1.0.6
 
 ## What it does
 
@@ -26,6 +26,14 @@ Data Entry Autonoma works like showing someone how to fill out a form, then havi
 4. Store the text to type in a **preset** or **CSV file**. Each run or each CSV row can fill the form with new values while you watch or walk away.
 
 You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, four tabs, tab-specific **i** help buttons, and plain-language tooltips while you work.
+
+## What's new (v1.0.6)
+
+- **Optional note labels** in preset values (`name:Alice` types `Alice`; labels are for your notes only)
+- **CSV header row** for column labels (row 1); data rows start on row 2
+- **Tabbed Edit Preset:** Details (name and variables), Speed settings, and Advanced (pauses and between-steps timing)
+- **Run Options only** for mouse movement and typing style (removed from Edit Preset)
+- **Install wizard** shows version in the window title, welcome step, summary, and completion message
 
 ## What's new (v1.0.5)
 
@@ -79,7 +87,8 @@ Typical uses:
 ### Presets (Input Presets tab)
 
 - Choose **Use input preset for Run** as the run input source
-- Save named preset files with speeds, pauses, run options, and variable text values
+- Save named preset files with speeds, pauses, and variable text values (mouse/typing style on **Run Options**)
+- **Edit Preset** opens a tabbed editor: Details, Speed settings, Advanced
 - **Edit Preset**, **Delete Preset**, and **Refresh** list buttons
 - **i** button on the Input Presets tab opens in-app help for presets and run input source
 - Selecting a preset loads its mouse and typing options into the **Run Options** tab
@@ -92,8 +101,9 @@ Typical uses:
 - **Browse** can load an external CSV; optional import copies it into `csv-batches\`
 - **Config** (next to the run-source radio) sets **Ask to run next line** or **Run all rows automatically**
 - CSV file runs the same recording once per row with different values
-- Column 1 is a row label (status display only)
-- Columns 2 and onward map to `variable-1`, `variable-2`, etc.
+- Column 1 on data rows is a label shown in the status bar during batch run
+- Row 1 is a header row with column labels for your notes (shown in batch progress and prompts)
+- Columns 2+ on data rows map to `variable-1`, `variable-2`, etc.
 - **i** button on the CSV Bulk Inputs tab opens format and batch help
 - Blank lines and lines starting with `#` are ignored
 - Step-by-step batch mode shows a progress table (all variable columns) and per-row Run / Skip / Run all remaining prompts
@@ -102,7 +112,7 @@ Typical uses:
 
 - **Smooth** or **Instant** mouse movement and **Human-like** or **Instant** typing for the next run
 - **i** button opens in-app help for playback settings
-- Fine-grained delay and speed numbers are edited via **Edit Preset** on the Input Presets tab
+- Fine-grained delay and speed numbers are edited via **Edit Preset** (Speed settings and Advanced tabs)
 
 ### In-app help
 
@@ -119,7 +129,7 @@ There is no separate Help button; use the **i** on the tab you are working in.
 
 ### App behavior
 
-- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.0.5`)
+- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.0.6`)
 - **Single instance**: only one app window at a time
 - **Always on top** main window for quick access
 - Remembers last selected recording, preset, and CSV in `apply-state.ini`
@@ -146,7 +156,7 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.0.5-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.0.6-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
@@ -167,7 +177,7 @@ If you already extracted the release zip (or cloned the repo for development), y
    ```
 3. Follow the on-screen steps:
    - **Welcome** → **Install location** → **Shortcuts and launch**
-   - Shows install type (fresh or upgrade), version, and target folder before you click **Install**
+   - Shows install type (fresh or upgrade), version (including upgrade from/to), and target folder before you click **Install**
    - If the app files are not already in the folder, the wizard downloads them automatically when you click **Next**
    - Default install folder: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`
 4. Click **Install**, then **Close** when setup completes.
@@ -178,7 +188,7 @@ If you already extracted the release zip (or cloned the repo for development), y
 
 The wizard creates `recordings\`, `saved-inputs\`, and `csv-batches\` folders and optional shortcuts for you.
 
-**Reinstalling or upgrading:** If you point the wizard at a folder that already contains `DataEntryAutonoma.exe`, it upgrades in place. Your recordings, presets, and CSV files in `recordings\`, `saved-inputs\`, and `csv-batches\` are preserved; the exe, assets, LICENSE, README, and wizard scripts are overwritten. It also copies `runUninstallWizard.bat` and `runUninstallWizard.ps1` into the install folder.
+**Reinstalling or upgrading:** If you point the wizard at a folder that already contains `DataEntryAutonoma.exe`, it upgrades in place. Your recordings, presets, and CSV files in `recordings\`, `saved-inputs\`, and `csv-batches\` are preserved; the exe, assets, LICENSE, README, CHANGELOG, VERSION, and wizard scripts are overwritten. It also copies `runUninstallWizard.bat` and `runUninstallWizard.ps1` into the install folder.
 
 ---
 
@@ -187,8 +197,8 @@ The wizard creates `recordings\`, `saved-inputs\`, and `csv-batches\` folders an
 To remove the app, shortcuts, and optional user data:
 
 1. Run **`runUninstallWizard.bat`** from the install folder (or from an extracted release zip / repo clone).
-2. Choose the install folder (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`).
-3. Select what to remove (application files, recordings, presets, CSV bulk inputs, `apply-state.ini`, shortcuts).
+2. Choose the install folder (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`). The wizard title and confirm step show the installed version when `VERSION` is present.
+3. Select what to remove (application files including VERSION/CHANGELOG/wizards, recordings, presets, CSV bulk inputs, `apply-state.ini`, shortcuts).
 4. Confirm on the summary step, then click **Uninstall**.
 
 If you run the uninstaller from inside the install folder, remaining files (including the uninstaller itself) are deleted automatically after the wizard closes.
@@ -302,7 +312,7 @@ For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 w
 
 5. **Find the output**
    - Built file: `dist\DataEntryAutonoma.exe`
-   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.0.5-win64.zip`
+   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.0.6-win64.zip`
    - Copy the exe plus empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders when sharing with others (same layout as Path 1).
 
 6. **If PowerShell blocks the script**
@@ -411,24 +421,27 @@ East
 
 ## CSV batch format
 
-Each row runs one full pass through the selected recording:
+Each row runs one full pass through the selected recording. Row 1 is a header with column labels for your notes; data starts on row 2.
 
 ```csv
+row,name,qty,region
 1,Alice,100,East
 2,Bob,250,West
 ```
 
-Single-value row (maps to `variable-1` only):
+Single variable column:
 
 ```csv
+value
 hello
-another row
+world
 ```
 
 Rules:
 
-- Column 1 is a label shown in the status bar during batch run
-- Columns 2+ map to `variable-1`, `variable-2`, `variable-3`, ...
+- Row 1 is the header (not typed during Run); column 1 names the row label column, columns 2+ name variable-1, variable-2, ...
+- Data rows: column 1 is the row label (status display); columns 2+ are the values typed during Run
+- Escape a comma inside a value with backslash: `Smith\, Jones` types `Smith, Jones` (use `\\` for a literal `\`)
 - Lines starting with `#` and blank lines are ignored
 - **Config** (CSV Bulk Inputs tab) sets run mode: **Ask to run next line** shows a progress table with all variable columns; before each row you can Run, Skip, or Run all remaining. **Run all rows automatically** skips prompts.
 - **Esc** stops the whole batch; completed rows stay completed
@@ -469,6 +482,7 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
+| **1.0.6** | Preset note labels, tabbed Edit Preset, CSV header row, Run Options-only mouse/typing, install/uninstall wizard version display |
 | **1.0.5** | Tab layout fixes, **i** help on all tabs, install wizard fixes, `VERSION` in release zip, CSV/preset run-source layout |
 | **1.0.4** | Tab info (i) buttons on all tabs, updated CSV help text, layout fixes for recordings list and tab buttons |
 | **1.0.3** | CSV Bulk Inputs tab, preset vs CSV run source, mouse hold/drag + hotkey recording fixes, all CSV variables in batch UI |

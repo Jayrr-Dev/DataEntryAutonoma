@@ -6,7 +6,7 @@ SetMouseDelay -1
 SetKeyDelay -1
 
 ; dataEntryAutonoma.ahk
-; Data Entry Autonoma v1.0.5 — record clicks, scrolls, and keys; replay with presets or CSV batches.
+; Data Entry Autonoma v1.0.6 — record clicks, scrolls, and keys; replay with presets or CSV batches.
 ; Copyright (c) 2026 Jayrr Dev — https://github.com/Jayrr-Dev/DataEntryAutonoma
 ; SPDX-License-Identifier: MIT
 ; Unified Record and Run module with CSV batch support.
@@ -23,7 +23,7 @@ CoordMode "Mouse", "Screen"
 ; =============================================================================
 
 C := {
-    appVersion: "1.0.5", ; keep in sync with VERSION at project root
+    appVersion: "1.0.6", ; keep in sync with VERSION at project root
     recordingsDir: A_ScriptDir "\recordings",
     savesDir: A_ScriptDir "\saved-inputs",
     csvBatchesDir: A_ScriptDir "\csv-batches",
@@ -58,11 +58,27 @@ While recording:
     (
 Choose Use input preset for Run, then pick a preset from the list.
 
-Edit Preset: set speeds, pauses, run options, and variable values (one line per variable)
+Edit Preset opens a tabbed editor:
+- Details: preset name and variable values (one line per variable)
+- Speed settings: run, typing, move speed, and initial delay
+- Advanced: click/step pauses and between-steps timing
+Mouse movement and typing style are set on the Run Options tab, not in the preset.
 Delete Preset: remove the selected preset
 Refresh: reload recordings, presets, and CSV lists
 
 Variable lines map to variable-1, variable-2, and so on in your recording.
+Optional note labels before a colon are for your notes only and are stripped at run time.
+Labels can include spaces (Drawing Number:281435 types 281435).
+
+Examples (all type Alice then Bob):
+  name:Alice
+  Bob
+
+  Drawing Number:281435
+  role:Bob
+
+Plain lines without a colon still work as before.
+Escape a comma in a value with backslash: Developed_By:I\, LEE types I, LEE.
 Input preset and CSV bulk inputs cannot both be active for Run.
     )",
     csvBatchHelpMessage: "
@@ -79,18 +95,29 @@ Saved files:
 - Refresh: reload all lists
 
 CSV format:
-  label,value1,value2,value3
+  row,name,qty,region
 
 Examples:
+  row,name,qty,region
   1,Alice,100,East
   2,Bob,250,West
 
-  Single value (maps to variable-1 only):
+  Value with a comma:
+  row,name
+  1,Smith\, Jones
+
+  Single variable column:
+  value
   hello
+  world
 
 Rules:
-- Column 1 is a row label (display only)
-- Columns 2+ map to variable-1, variable-2, variable-3, ...
+- Row 1 is a header row (column labels for your notes; not typed during Run)
+- Column 1 header names the row label column; columns 2+ name variable-1, variable-2, ...
+- Data rows start on row 2; column 1 is the row label (display only)
+- Columns 2+ on data rows supply the values typed during Run
+- Escape a comma inside a value with backslash: Smith\, Jones types Smith, Jones
+- Escape a backslash as \\
 - Blank lines and lines starting with # are ignored
 
 Config (next to the run-source radio):
@@ -111,7 +138,9 @@ Typing:
 - Human-like: per-key delays
 - Instant: send text immediately
 
-For delay and speed numbers (initial delay, click pause, step pause, playback speed), use Edit Preset on the Input Presets tab.
+For delay and speed numbers, use Edit Preset on the Input Presets tab:
+- Speed settings tab: run, typing, move speed, initial delay
+- Advanced tab: click pause, step pause, between-steps timing
     )",
     recordingTipText: "Esc = Save · Click = click · Hold or drag = mouse hold",
     recordingTipOffsetX: 240,
@@ -278,7 +307,15 @@ UI := {
     csvBatchTableWidth: 560,
     csvBatchTableHeight: 240,
     csvBatchPromptWidth: 400,
-    csvBatchPromptBtnWidth: 118
+    csvBatchPromptBtnWidth: 118,
+    presetEditorWidth: 480,
+    presetEditorTabHeight: 430,
+    presetEditorFieldWidth: 430,
+    presetEditorLabelWidth: 180,
+    presetEditorValueWidth: 220,
+    presetEditorVariablesLines: 14,
+    presetEditorButtonRowHeight: 40,
+    presetEditorOuterPad: 28
 }
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
@@ -609,6 +646,16 @@ GetManageTabPanelHeight() {
 
     metrics := GetManageInputTabMetrics()
     return UI.tabStripHeight + UI.tabInnerPad + metrics.tabContentH + UI.tabPanelSafetyPad + 8
+}
+
+/**
+ * Returns Edit Preset dialog height (tab panel + button row + outer padding).
+ * @returns {Integer}
+ */
+GetPresetEditorWindowHeight() {
+    global UI
+
+    return UI.presetEditorTabHeight + UI.presetEditorButtonRowHeight + UI.presetEditorOuterPad
 }
 
 /**
@@ -1425,13 +1472,17 @@ GetCsvBatchMaxVariableCount(rows) {
 /**
  * Builds ListView column titles for the CSV batch progress table.
  * @param {Integer} variableCount Number of variable columns to include.
+ * @param {Array<String>} variableLabels Optional header labels from row 1 of the CSV.
+ * @param {String} rowLabelHeader Header text for column 1 from row 1 of the CSV.
  * @returns {Array<String>}
  */
-BuildCsvBatchProgressColumns(variableCount) {
-    columns := ["Row"]
+BuildCsvBatchProgressColumns(variableCount, variableLabels := [], rowLabelHeader := "Row") {
+    columns := [rowLabelHeader != "" ? rowLabelHeader : "Row"]
 
-    Loop variableCount
-        columns.Push("Var" A_Index)
+    Loop variableCount {
+        label := A_Index <= variableLabels.Length ? variableLabels[A_Index] : ""
+        columns.Push(label != "" ? label : "Var" A_Index)
+    }
 
     columns.Push("Status")
     return columns
@@ -1468,14 +1519,16 @@ GetCsvRowDisplayVars(row, variableCount) {
 /**
  * Creates the always-on-top CSV batch progress table listing all rows.
  * @param {Array<Object>} rows Parsed CSV rows.
+ * @param {Array<String>} variableLabels Header labels from row 1 of the CSV.
+ * @param {String} rowLabelHeader Header text for column 1 from row 1 of the CSV.
  */
-ShowCsvBatchProgressTable(rows) {
+ShowCsvBatchProgressTable(rows, variableLabels := [], rowLabelHeader := "Row") {
     global S, C, UI
 
     CloseCsvBatchProgressTable()
 
-    variableCount := GetCsvBatchMaxVariableCount(rows)
-    columns := BuildCsvBatchProgressColumns(variableCount)
+    variableCount := Max(GetCsvBatchMaxVariableCount(rows), variableLabels.Length)
+    columns := BuildCsvBatchProgressColumns(variableCount, variableLabels, rowLabelHeader)
     tableWidth := GetCsvBatchProgressTableWidth(variableCount)
     S.csvBatchStatusColumnIndex := columns.Length
     S.csvBatchProgressTableWidth := tableWidth
@@ -1569,9 +1622,10 @@ WaitForCsvBatchPromptChoice() {
  * @param {Integer} rowIndex One-based row index.
  * @param {Object} row Parsed CSV row.
  * @param {Integer} totalRows Total row count in the batch.
+ * @param {Array<String>} variableLabels Header labels from row 1 of the CSV.
  * @returns {String} Prompt choice constant from C.csvBatchPromptChoice*.
  */
-WaitCsvBatchRowPrompt(rowIndex, row, totalRows) {
+WaitCsvBatchRowPrompt(rowIndex, row, totalRows, variableLabels := []) {
     global S, C, UI
 
     CloseCsvBatchRowPrompt()
@@ -1598,10 +1652,13 @@ WaitCsvBatchRowPrompt(rowIndex, row, totalRows) {
     )
 
     Loop row.variables.Length {
+        label := A_Index <= variableLabels.Length && variableLabels[A_Index] != ""
+            ? variableLabels[A_Index]
+            : "Var" A_Index
         promptGui.Add(
             "Text",
             "xm w" dlgWidth " c" UI.textMuted,
-            Format("Var{1}: {2}", A_Index, row.variables[A_Index])
+            Format("{1}: {2}", label, row.variables[A_Index])
         )
     }
 
@@ -2359,7 +2416,11 @@ ShowCsvEditor(*) {
         "w430",
         selectedPath ? FormatCsvName(selectedPath) : "batch-1"
     )
-    editor.Add("Text", "xm w430 c555555", "Format: label,value1,value2,...  Blank lines and # comments are ignored.")
+    editor.Add(
+        "Text",
+        "xm w430 c555555",
+        "Row 1 = column labels (for your notes). Data rows start on row 2. Escape commas in values with \\, (for example Smith\\, Jones). Blank lines and # comments are ignored."
+    )
     contentEdit := editor.Add("Edit", "xm w430 r14 Multi", existingContent)
 
     saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
@@ -2549,7 +2610,7 @@ ShowRecordingLogEditor(*) {
 }
 
 ShowPresetEditor(*) {
-    global C, S
+    global C, S, UI
 
     selectedPreset := GetSelectedPresetPath()
     originalPresetPath := selectedPreset
@@ -2570,27 +2631,59 @@ ShowPresetEditor(*) {
     editor.SetFont("s10", "Segoe UI")
     editor.BackColor := "FFFFFF"
 
-    editor.Add("Text", "w430 c1A1A1A", "Preset name")
-    nameEdit := editor.Add("Edit", "w430", selectedPreset ? FormatPresetName(selectedPreset) : "default")
+    editorTab := editor.Add(
+        "Tab3",
+        "xm w" UI.presetEditorWidth " h" UI.presetEditorTabHeight,
+        ["Details", "Speed settings", "Advanced"]
+    )
 
-    editor.Add("Text", "w430 c1A1A1A", "Speed settings")
-    editor.Add("Text", "w180", "Run speed:")
-    playbackEdit := editor.Add("Edit", "x+0 w220", existingSettings.playback_speed)
-    editor.Add("Text", "xm w180", "Typing speed:")
-    typingEdit := editor.Add("Edit", "x+0 w220", existingSettings.typing_speed)
-    editor.Add("Text", "xm w180", "Move speed:")
-    moveEdit := editor.Add("Edit", "x+0 w220", existingSettings.move_speed)
-    editor.Add("Text", "xm w180", "Initial delay (ms):")
-    delayEdit := editor.Add("Edit", "x+0 w220", existingSettings.initial_delay)
-    editor.Add("Text", "xm w180", "Click pause (ms):")
-    clickPauseEdit := editor.Add("Edit", "x+0 w220", existingSettings.click_pause_ms)
-    editor.Add("Text", "xm w180", "Step pause (ms):")
-    segmentPauseEdit := editor.Add("Edit", "x+0 w220", existingSettings.segment_pause_ms)
-    editor.Add("Text", "xm w430 c555555", "Click pause: after move, before click. Step pause: after each target before the next.")
-    editor.Add("Text", "xm w430 c555555", "Between steps:")
+    editorTab.UseTab(1)
+    editor.Add("Text", "Section c1A1A1A", "Details")
+    editor.Add("Text", "xs w" UI.presetEditorFieldWidth " c1A1A1A", "Preset name")
+    nameEdit := editor.Add("Edit", "xs w" UI.presetEditorFieldWidth, selectedPreset ? FormatPresetName(selectedPreset) : "default")
+    editor.Add("Text", "xs w" UI.presetEditorFieldWidth " c1A1A1A", "Variable inputs")
+    editor.Add(
+        "Text",
+        "xs w" UI.presetEditorFieldWidth " c555555",
+        "One value per line. Line 1 = variable-1, line 2 = variable-2, etc. Optional note labels (Drawing Number:281435) are stripped at run time. Escape commas with \\, (Developed_By:I\\, LEE)."
+    )
+    variablesEdit := editor.Add(
+        "Edit",
+        "xs w" UI.presetEditorFieldWidth " r" UI.presetEditorVariablesLines " Multi",
+        Join(existingSettings.variables, "`n")
+    )
+
+    editorTab.UseTab(2)
+    editor.Add("Text", "Section c1A1A1A", "Speed settings")
+    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Run speed:")
+    playbackEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.playback_speed)
+    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Typing speed:")
+    typingEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.typing_speed)
+    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Move speed:")
+    moveEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.move_speed)
+    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Initial delay (ms):")
+    delayEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.initial_delay)
+    editor.Add(
+        "Text",
+        "xs w" UI.presetEditorFieldWidth " c555555",
+        "Higher speed values run faster. Initial delay waits before playback starts."
+    )
+
+    editorTab.UseTab(3)
+    editor.Add("Text", "Section c1A1A1A", "Advanced settings")
+    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Click pause (ms):")
+    clickPauseEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.click_pause_ms)
+    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Step pause (ms):")
+    segmentPauseEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.segment_pause_ms)
+    editor.Add(
+        "Text",
+        "xs w" UI.presetEditorFieldWidth " c555555",
+        "Click pause: after move, before click. Step pause: after each target before the next."
+    )
+    editor.Add("Text", "xs w" UI.presetEditorFieldWidth " c555555", "Between steps:")
     presetPausesRadio := editor.Add(
         "Radio",
-        "xm" (!existingSettings.use_recorded_timing ? " checked" : ""),
+        "xs" (!existingSettings.use_recorded_timing ? " checked" : ""),
         "Preset pauses only"
     )
     recordedGapsRadio := editor.Add(
@@ -2600,37 +2693,11 @@ ShowPresetEditor(*) {
     )
     editor.Add(
         "Text",
-        "xm w430 c555555",
+        "xs w" UI.presetEditorFieldWidth " c555555",
         "Recorded gaps replay seconds between steps from Record. Preset pauses only ignores those."
     )
 
-    editor.Add("Text", "xm w430 c1A1A1A", "Run options")
-    editor.Add("Text", "xm w430 c555555", "Mouse movement")
-    smoothMouseRadio := editor.Add(
-        "Radio",
-        "xm" (existingSettings.smooth_mouse ? " checked" : ""),
-        "Smooth"
-    )
-    instantMouseRadio := editor.Add(
-        "Radio",
-        "x+16" (!existingSettings.smooth_mouse ? " checked" : ""),
-        "Instant"
-    )
-    editor.Add("Text", "xm w430 c555555", "Typing")
-    humanTypingRadio := editor.Add(
-        "Radio",
-        "xm" (existingSettings.human_typing ? " checked" : ""),
-        "Human-like"
-    )
-    instantTypingRadio := editor.Add(
-        "Radio",
-        "x+16" (!existingSettings.human_typing ? " checked" : ""),
-        "Instant"
-    )
-
-    editor.Add("Text", "xm w430 c1A1A1A", "Variable inputs")
-    editor.Add("Text", "xm w430 c555555", "One value per line. Line 1 = variable-1, line 2 = variable-2, etc.")
-    variablesEdit := editor.Add("Edit", "xm w430 r10 Multi", Join(existingSettings.variables, "`n"))
+    editorTab.UseTab()
 
     saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
     closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
@@ -2642,6 +2709,7 @@ ShowPresetEditor(*) {
             return
         }
 
+        playbackOpts := ReadPlaybackOptionsFromGui()
         settings := {
             playback_speed: SafeFloat(playbackEdit.Value, C.defaultPlaybackSpeed),
             typing_speed: SafeFloat(typingEdit.Value, C.defaultTypingSpeed),
@@ -2650,8 +2718,8 @@ ShowPresetEditor(*) {
             click_pause_ms: SafeInteger(clickPauseEdit.Value, C.defaultClickPauseMs),
             segment_pause_ms: SafeInteger(segmentPauseEdit.Value, C.defaultSegmentPauseMs),
             use_recorded_timing: recordedGapsRadio.Value = 1,
-            smooth_mouse: smoothMouseRadio.Value = 1,
-            human_typing: humanTypingRadio.Value = 1,
+            smooth_mouse: playbackOpts.smooth_mouse,
+            human_typing: playbackOpts.human_typing,
             variables: []
         }
 
@@ -2671,7 +2739,7 @@ ShowPresetEditor(*) {
                 DeleteManagedFile(originalPresetPath)
 
             ApplySettings(settings)
-            SetPlaybackOptionRadios(settings.smooth_mouse, settings.human_typing)
+            SyncPlaybackOptionsFromGui()
             RefreshPresetList()
             SelectByBaseName(S.presetList, S.presetPaths, FileBaseName(presetPath))
             RememberSelections()
@@ -2696,7 +2764,7 @@ ShowPresetEditor(*) {
     editor.OnEvent("Close", CloseEditor)
     editor.OnEvent("Escape", CloseEditor)
 
-    editor.Show()
+    editor.Show("w" UI.presetEditorWidth " h" GetPresetEditorWindowHeight())
     nameEdit.Focus()
 }
 
@@ -3895,12 +3963,16 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
     }
 
     rows := ParseCsvFile(csvPath)
-    if rows.Length = 0 {
+    if rows.rows.Length = 0 {
         SetStatus("CSV has no data rows.")
-        ShowManageMsgBox "The CSV file has no usable data rows.`n`nExpected format:`n1,word,word2,word3`n2,word4,word5,word6",
+        ShowManageMsgBox "The CSV file has no usable data rows.`n`nExpected format:`nrow,name,qty`n1,Alice,100`n2,Bob,250",
             "Data Entry Autonoma", "Icon!"
         return false
     }
+
+    csvRows := rows.rows
+    csvVariableLabels := rows.variableLabels
+    csvRowLabelHeader := rows.rowLabelHeader
 
     settings := presetPath != "" && FileExist(presetPath)
         ? ParsePresetFile(presetPath)
@@ -3921,18 +3993,18 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
 
     completedRows := 0
     stopped := false
-    totalRows := rows.Length
+    totalRows := csvRows.Length
     askNextLine := S.csvAskNextLine
     S.csvBatchRunAllRemaining := false
     S.csvPromptChoice := C.csvBatchPromptChoiceNone
 
     if askNextLine
-        ShowCsvBatchProgressTable(rows)
+        ShowCsvBatchProgressTable(csvRows, csvVariableLabels, csvRowLabelHeader)
 
     try {
         Loop totalRows {
             rowIndex := A_Index
-            row := rows[rowIndex]
+            row := csvRows[rowIndex]
 
             if S.stopBatch {
                 stopped := true
@@ -3940,7 +4012,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
             }
 
             if askNextLine && !S.csvBatchRunAllRemaining {
-                choice := WaitCsvBatchRowPrompt(rowIndex, row, totalRows)
+                choice := WaitCsvBatchRowPrompt(rowIndex, row, totalRows, csvVariableLabels)
                 CloseCsvBatchRowPrompt()
 
                 if S.stopBatch {
@@ -4357,14 +4429,143 @@ Cleanup(*) {
 ; =============================================================================
 
 /**
- * Parses a CSV batch file into row objects.
- * First column is treated as a row label; remaining columns map to variable-1, variable-2, ...
- * Single-column rows map that value to variable-1.
+ * Removes an optional note prefix before the first colon (for example name:Alice -> Alice).
+ * Used for preset variable lines only.
+ * @param {String} rawValue Raw preset line text.
+ * @returns {String}
+ */
+StripManageVariableLabel(rawValue) {
+    rawValue := Trim(rawValue)
+    if rawValue = ""
+        return ""
+
+    if RegExMatch(rawValue, "i)^[A-Za-z]:\\")
+        return rawValue
+
+    if RegExMatch(rawValue, "i)^https?://")
+        return rawValue
+
+    if RegExMatch(rawValue, "^[A-Za-z_][A-Za-z0-9_ ]*\s*:\s*(.+)$", &match)
+        return Trim(match[1])
+
+    return rawValue
+}
+
+/**
+ * Escapes commas and backslashes for comma-joined preset and CSV field storage.
+ * @param {String} value Raw field text.
+ * @returns {String}
+ */
+EscapeManageDelimitedField(value) {
+    value := StrReplace(value, "\", "\\")
+    value := StrReplace(value, ",", "\,")
+    return value
+}
+
+/**
+ * Restores escaped commas and backslashes in a preset variable value.
+ * @param {String} value Stored or edited field text.
+ * @returns {String}
+ */
+UnescapeManageDelimitedField(value) {
+    result := ""
+    i := 1
+    valueLength := StrLen(value)
+
+    while i <= valueLength {
+        ch := SubStr(value, i, 1)
+
+        if ch = "\" {
+            if i < valueLength {
+                nextCh := SubStr(value, i + 1, 1)
+                if nextCh = "," || nextCh = "\" {
+                    result .= nextCh
+                    i += 2
+                    continue
+                }
+            }
+
+            result .= ch
+            i++
+            continue
+        }
+
+        result .= ch
+        i++
+    }
+
+    return result
+}
+
+/**
+ * Joins preset variable values into one comma-separated line with escaping.
+ * @param {Array<String>} fields Variable values in order.
+ * @returns {String}
+ */
+JoinManageDelimitedFields(fields) {
+    escaped := []
+
+    for field in fields
+        escaped.Push(EscapeManageDelimitedField(field))
+
+    return Join(escaped, ",")
+}
+
+/**
+ * Splits one CSV batch line into fields. Commas divide fields; use \, for a literal comma and \\ for a literal backslash.
+ * @param {String} line One CSV line without trailing newline.
+ * @returns {Array<String>}
+ */
+SplitManageCsvLine(line) {
+    fields := []
+    current := ""
+    i := 1
+    lineLength := StrLen(line)
+
+    while i <= lineLength {
+        ch := SubStr(line, i, 1)
+
+        if ch = "\" {
+            if i < lineLength {
+                nextCh := SubStr(line, i + 1, 1)
+                if nextCh = "," || nextCh = "\" {
+                    current .= nextCh
+                    i += 2
+                    continue
+                }
+            }
+
+            current .= ch
+            i++
+            continue
+        }
+
+        if ch = "," {
+            fields.Push(Trim(current))
+            current := ""
+            i++
+            continue
+        }
+
+        current .= ch
+        i++
+    }
+
+    fields.Push(Trim(current))
+    return fields
+}
+
+/**
+ * Parses a CSV batch file into header labels and row objects.
+ * Row 1 is the header (column labels for notes). Data rows start on row 2.
  * @param {String} filePath CSV file path.
- * @returns {Array<Object>}
+ * @returns {{rowLabelHeader: String, variableLabels: Array<String>, rows: Array<Object>}}
  */
 ParseCsvFile(filePath) {
+    rowLabelHeader := "Row"
+    variableLabels := []
     rows := []
+    headerParsed := false
 
     Loop Read filePath {
         line := Trim(A_LoopReadLine)
@@ -4372,15 +4573,26 @@ ParseCsvFile(filePath) {
         if line = "" || SubStr(line, 1, 1) = "#"
             continue
 
-        columns := []
-        for field in StrSplit(line, ",")
-            columns.Push(Trim(field))
+        columns := SplitManageCsvLine(line)
 
         if columns.Length = 0
             continue
 
+        if !headerParsed {
+            rowLabelHeader := columns[1]
+            if columns.Length = 1
+                variableLabels := [columns[1]]
+            else {
+                variableLabels := []
+                Loop columns.Length - 1
+                    variableLabels.Push(columns[A_Index + 1])
+            }
+            headerParsed := true
+            continue
+        }
+
         if columns.Length = 1 {
-            rows.Push({ label: "1", variables: [columns[1]] })
+            rows.Push({ label: String(rows.Length + 1), variables: [columns[1]] })
             continue
         }
 
@@ -4391,7 +4603,7 @@ ParseCsvFile(filePath) {
         rows.Push({ label: columns[1], variables: variables })
     }
 
-    return rows
+    return { rowLabelHeader: rowLabelHeader, variableLabels: variableLabels, rows: rows }
 }
 
 
@@ -5265,7 +5477,7 @@ ParsePresetFile(filePath) {
             continue
 
         settings.variables := []
-        for field in StrSplit(line, ",")
+        for field in SplitManageCsvLine(line)
             settings.variables.Push(Trim(field))
         break
     }
@@ -5285,7 +5497,9 @@ ApplySettings(settings) {
     S.useRecordedTiming := settings.use_recorded_timing
     S.smoothMouse := settings.smooth_mouse
     S.humanTyping := settings.human_typing
-    S.variables := settings.variables.Clone()
+    S.variables := []
+    for rawValue in settings.variables
+        S.variables.Push(UnescapeManageDelimitedField(StripManageVariableLabel(rawValue)))
 }
 
 WritePresetFile(settings, filePath) {
@@ -5312,8 +5526,8 @@ SerializePreset(settings) {
         . "smooth_mouse=" (settings.smooth_mouse ? 1 : 0) "`n"
         . "human_typing=" (settings.human_typing ? 1 : 0) "`n"
         . "`n"
-        . "# variable-1, variable-2, variable-3 ...`n"
-        . Join(settings.variables, ",") "`n"
+        . "# variable-1, variable-2, variable-3 ... (optional note labels; escape commas with \\,)`n"
+        . JoinManageDelimitedFields(settings.variables) "`n"
 }
 
 ResolveVariableText(variableName) {
@@ -5517,7 +5731,7 @@ ClearCsvStateIfMatches(deletedPath) {
  * @returns {String}
  */
 DefaultCsvTemplate() {
-    return "# label,value1,value2,value3`n1,example1,example2,example3`n2,example4,example5,example6"
+    return "# row,name,qty,region`nrow,name,qty,region`n1,Alice,100,East`n2,Bob,250,West"
 }
 
 /**

@@ -5,6 +5,28 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-05-26
+
+### Added
+
+- Optional note labels in preset variable lines (`name:Alice` types `Alice`; plain values unchanged)
+- Tabbed **Edit Preset** dialog: **Details** (name and variables), **Speed settings**, and **Advanced** (pauses and between-steps timing)
+- CSV batch files use row 1 as a header row for column labels (progress table and prompts); data rows start on row 2
+
+### Changed
+
+- Mouse movement and typing style removed from Edit Preset; use the **Run Options** tab instead
+- CSV `label:value` cell syntax removed; put column labels on row 1 instead
+- Commas inside CSV and preset values can be escaped with `\,` (use `\\` for a literal backslash); preset save/load no longer splits on escaped commas
+- Edit Preset help text and tab **i** buttons updated for note labels and the new preset editor layout
+- Install wizard window title and welcome step show the version from `VERSION`; upgrade path shows from/to versions
+- Uninstall wizard shows installed version, lists `csv-batches\` in user data, and removes docs/wizard files with app files
+- Taller Edit Preset window so tab content is not clipped
+
+### Fixed
+
+- Edit Preset tab pages empty until a `Section` anchor was added (same Tab3 layout rule as the main window)
+
 ## [1.0.5] - 2026-05-26
 
 ### Added
@@ -97,6 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.0.6]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.2...v1.0.3

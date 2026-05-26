@@ -35,6 +35,7 @@ $LICENSE_FILE_NAME = "LICENSE"
 $README_FILE_NAME = "README.md"
 $CHANGELOG_FILE_NAME = "CHANGELOG.md"
 $VERSION_FILE_NAME = "VERSION"
+$APP_VERSION_FALLBACK = "1.0.6"
 $INSTALL_WIZARD_PS1 = "runInstallWizard.ps1"
 $INSTALL_WIZARD_BAT = "runInstallWizard.bat"
 $UNINSTALL_WIZARD_PS1 = "runUninstallWizard.ps1"
@@ -166,7 +167,32 @@ function Get-LocalProjectVersion {
         return (Get-Content -LiteralPath $projectVersionPath -Raw).Trim()
     }
 
+    return $APP_VERSION_FALLBACK
+}
+
+# Returns the version installed in the target folder, when VERSION exists there.
+function Get-InstalledVersion {
+    param([string]$InstallDir)
+
+    if (-not $InstallDir) {
+        return ""
+    }
+
+    $versionPath = Join-Path $InstallDir $VERSION_FILE_NAME
+    if (Test-Path $versionPath) {
+        return (Get-Content -LiteralPath $versionPath -Raw).Trim()
+    }
+
     return ""
+}
+
+# Returns the version being installed from the download, release folder, or project root.
+function Get-TargetInstallVersion {
+    if ($script:DownloadedReleaseVersion) {
+        return $script:DownloadedReleaseVersion
+    }
+
+    return Get-LocalProjectVersion
 }
 
 # Returns a short label for the install source shown on the welcome screen.
@@ -309,7 +335,15 @@ function Update-Step2UpgradeNotice {
 
     Update-UpgradeDetection -InstallDir $PathText.Trim()
     if ($script:IsUpgrade) {
-        $NoticeLabel.Text = "Upgrading existing installation (your recordings, presets, and CSV files will be kept)."
+        $installedVersion = Get-InstalledVersion -InstallDir $PathText.Trim()
+        $targetVersion = Get-TargetInstallVersion
+        $versionNote = ""
+        if ($installedVersion -and $targetVersion -and $installedVersion -ne $targetVersion) {
+            $versionNote = " from v$installedVersion to v$targetVersion"
+        } elseif ($targetVersion) {
+            $versionNote = " to v$targetVersion"
+        }
+        $NoticeLabel.Text = "Upgrading existing installation$versionNote (your recordings, presets, and CSV files will be kept)."
     } else {
         $NoticeLabel.Text = ""
     }
@@ -470,7 +504,7 @@ function Show-WizardError {
 })
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "$APP_DISPLAY_NAME Setup"
+$form.Text = if ($script:WizardAppVersion) { "$APP_DISPLAY_NAME Setup v$($script:WizardAppVersion)" } else { "$APP_DISPLAY_NAME Setup" }
 $form.ClientSize = New-Object System.Drawing.Size($WIZARD_WIDTH, $WIZARD_HEIGHT)
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
@@ -482,6 +516,7 @@ $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $script:CurrentStep = 0
 Initialize-InstallSource
 $script:DownloadedReleaseVersion = ""
+$script:WizardAppVersion = Get-LocalProjectVersion
 $script:InstallDir = $DEFAULT_INSTALL_DIR
 $script:CreateDesktopShortcut = $true
 $script:CreateStartMenuShortcut = $true
@@ -565,13 +600,15 @@ Thank you for installing $APP_DISPLAY_NAME.
 
 This wizard copies the app to your chosen folder and can add Desktop and Start Menu shortcuts. AutoHotkey is not required on your PC.
 
+Version: v$($script:WizardAppVersion)
+
 Click Next to choose where to install.
-"@ 120
+"@ 132
             $body.Location = New-Object System.Drawing.Point(0, 44)
             $contentPanel.Controls.Add($body)
 
             $status = New-BodyLabel (Get-InstallSourceSummary) 48
-            $status.Location = New-Object System.Drawing.Point(0, 168)
+            $status.Location = New-Object System.Drawing.Point(0, 180)
             $status.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
             $contentPanel.Controls.Add($status)
             $script:Welcome_StatusLabel = $status
@@ -668,12 +705,15 @@ Click Next to choose where to install.
             Update-UpgradeDetection -InstallDir $script:InstallDir
             $installType = if ($script:IsUpgrade) { "Upgrade" } else { "Fresh install" }
 
-            $displayVersion = if ($script:DownloadedReleaseVersion) {
-                $script:DownloadedReleaseVersion
-            } else {
-                Get-LocalProjectVersion
-            }
-            $versionLine = if ($displayVersion) { "Version: v$displayVersion`r`n" } else { "" }
+            $installedVersion = if ($script:IsUpgrade) { Get-InstalledVersion -InstallDir $script:InstallDir } else { "" }
+            $displayVersion = Get-TargetInstallVersion
+            $versionLine = if ($displayVersion) {
+                if ($installedVersion -and $script:IsUpgrade -and $installedVersion -ne $displayVersion) {
+                    "Version: v$installedVersion -> v$displayVersion`r`n"
+                } else {
+                    "Version: v$displayVersion`r`n"
+                }
+            } else { "" }
             $summary = New-BodyLabel "$installType`r`n`r`n$versionLine Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 132
             $summary.Location = New-Object System.Drawing.Point(0, 148)
             $contentPanel.Controls.Add($summary)
@@ -710,6 +750,8 @@ Click Next to choose where to install.
 
             try {
                 [System.Windows.Forms.Application]::DoEvents()
+                $previousVersion = Get-InstalledVersion -InstallDir $script:InstallDir
+                $targetVersion = Get-TargetInstallVersion
                 $script:LastInstallResult = Install-ApplicationFiles -InstallDir $script:InstallDir
                 $script:IsUpgrade = $script:LastInstallResult.IsUpgrade
 
@@ -724,7 +766,18 @@ Click Next to choose where to install.
                 $progress.Value = 100
                 $status.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
                 $completionLabel = if ($script:IsUpgrade) { "Upgrade" } else { "Installation" }
-                $status.Text = "$completionLabel completed successfully.`r`n`r`nInstalled to:`r`n$script:InstallDir"
+                $installedVersion = Get-InstalledVersion -InstallDir $script:InstallDir
+                if (-not $installedVersion) {
+                    $installedVersion = $targetVersion
+                }
+                $versionSuffix = if ($installedVersion) {
+                    if ($script:IsUpgrade -and $previousVersion -and $previousVersion -ne $installedVersion) {
+                        " (v$previousVersion -> v$installedVersion)"
+                    } else {
+                        " (v$installedVersion)"
+                    }
+                } else { "" }
+                $status.Text = "$completionLabel completed successfully$versionSuffix.`r`n`r`nInstalled to:`r`n$script:InstallDir"
             } catch {
                 $progress.Style = "Continuous"
                 $progress.Value = 0
@@ -744,10 +797,12 @@ Click Next to choose where to install.
             $title.Location = New-Object System.Drawing.Point(0, 0)
             $contentPanel.Controls.Add($title)
 
+            $displayVersion = Get-TargetInstallVersion
+            $versionLine = if ($displayVersion) { "Installed version: v$displayVersion`r`n`r`n" } else { "" }
             $bodyText = @"
 $APP_DISPLAY_NAME is ready to use.
 
-Open the app from your Desktop or Start Menu shortcut, or run it from:
+${versionLine}Open the app from your Desktop or Start Menu shortcut, or run it from:
 $script:InstallDir
 "@
             $body = New-BodyLabel $bodyText 160

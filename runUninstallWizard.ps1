@@ -25,6 +25,10 @@ $EXE_FILE_NAME = "DataEntryAutonoma.exe"
 $SHORTCUT_FILE_NAME = "$APP_DISPLAY_NAME.lnk"
 $LICENSE_FILE_NAME = "LICENSE"
 $README_FILE_NAME = "README.md"
+$CHANGELOG_FILE_NAME = "CHANGELOG.md"
+$VERSION_FILE_NAME = "VERSION"
+$INSTALL_WIZARD_PS1 = "runInstallWizard.ps1"
+$INSTALL_WIZARD_BAT = "runInstallWizard.bat"
 $APPLY_STATE_FILE_NAME = "apply-state.ini"
 $RECORDINGS_FOLDER_NAME = "recordings"
 $SAVED_INPUTS_FOLDER_NAME = "saved-inputs"
@@ -76,6 +80,22 @@ function Test-RunningFromInstallDir {
     $scriptRoot = $SCRIPT_ROOT.TrimEnd('\')
     $installRoot = $InstallDir.TrimEnd('\')
     return ($scriptRoot -eq $installRoot)
+}
+
+# Returns the installed app version from VERSION in the install folder.
+function Get-InstalledVersion {
+    param([string]$InstallDir)
+
+    if (-not $InstallDir) {
+        return ""
+    }
+
+    $versionPath = Join-Path $InstallDir $VERSION_FILE_NAME
+    if (Test-Path $versionPath) {
+        return (Get-Content -LiteralPath $versionPath -Raw).Trim()
+    }
+
+    return ""
 }
 
 # Removes a file or folder when it exists.
@@ -195,6 +215,10 @@ function Invoke-UninstallApplication {
             (Join-Path $InstallDir $EXE_FILE_NAME),
             (Join-Path $InstallDir $LICENSE_FILE_NAME),
             (Join-Path $InstallDir $README_FILE_NAME),
+            (Join-Path $InstallDir $CHANGELOG_FILE_NAME),
+            (Join-Path $InstallDir $VERSION_FILE_NAME),
+            (Join-Path $InstallDir $INSTALL_WIZARD_PS1),
+            (Join-Path $InstallDir $INSTALL_WIZARD_BAT),
             (Join-Path $InstallDir $ASSETS_FOLDER_NAME)
         )
 
@@ -204,7 +228,7 @@ function Invoke-UninstallApplication {
             }
         }
 
-        $removedItems.Add("Application files ($EXE_FILE_NAME, $ASSETS_FOLDER_NAME\, $LICENSE_FILE_NAME, $README_FILE_NAME)") | Out-Null
+        $removedItems.Add("Application files ($EXE_FILE_NAME, docs, wizards, $ASSETS_FOLDER_NAME\)") | Out-Null
 
         if ($runningFromInstallDir) {
             $remainingItems = @(Get-ChildItem -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue | Where-Object {
@@ -244,17 +268,22 @@ function Get-UninstallSummaryText {
         [bool]$RemoveStartMenuShortcut
     )
 
+    $installedVersion = Get-InstalledVersion -InstallDir $InstallDir
     $lines = New-Object System.Collections.Generic.List[string]
+    if ($installedVersion) {
+        $lines.Add("Installed version: v$installedVersion") | Out-Null
+        $lines.Add("") | Out-Null
+    }
     $lines.Add("Install folder:") | Out-Null
     $lines.Add($InstallDir) | Out-Null
     $lines.Add("") | Out-Null
     $lines.Add("The following will be removed:") | Out-Null
 
     if ($RemoveAppFiles) {
-        $lines.Add("  - Application files ($EXE_FILE_NAME, $ASSETS_FOLDER_NAME\, $LICENSE_FILE_NAME, $README_FILE_NAME)") | Out-Null
+        $lines.Add("  - Application files ($EXE_FILE_NAME, $VERSION_FILE_NAME, $CHANGELOG_FILE_NAME, wizards, $ASSETS_FOLDER_NAME\)") | Out-Null
     }
     if ($RemoveUserData) {
-        $lines.Add("  - User data ($RECORDINGS_FOLDER_NAME\ and $SAVED_INPUTS_FOLDER_NAME\)") | Out-Null
+        $lines.Add("  - User data ($RECORDINGS_FOLDER_NAME\, $SAVED_INPUTS_FOLDER_NAME\, and $CSV_BATCHES_FOLDER_NAME\)") | Out-Null
     }
     if ($RemoveApplyState) {
         $lines.Add("  - $APPLY_STATE_FILE_NAME") | Out-Null
@@ -266,7 +295,14 @@ function Get-UninstallSummaryText {
         $lines.Add("  - Start Menu shortcut") | Out-Null
     }
 
-    if ($lines.Count -eq 4) {
+    $selectedCount = 0
+    if ($RemoveAppFiles) { $selectedCount++ }
+    if ($RemoveUserData) { $selectedCount++ }
+    if ($RemoveApplyState) { $selectedCount++ }
+    if ($RemoveDesktopShortcut) { $selectedCount++ }
+    if ($RemoveStartMenuShortcut) { $selectedCount++ }
+
+    if ($selectedCount -eq 0) {
         $lines.Add("  - Nothing selected") | Out-Null
     }
 
@@ -286,7 +322,7 @@ function Get-UninstallSummaryText {
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "$APP_DISPLAY_NAME Uninstall"
+$form.Text = if ($script:WizardAppVersion) { "$APP_DISPLAY_NAME Uninstall v$($script:WizardAppVersion)" } else { "$APP_DISPLAY_NAME Uninstall" }
 $form.ClientSize = New-Object System.Drawing.Size($WIZARD_WIDTH, $WIZARD_HEIGHT)
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
@@ -297,6 +333,7 @@ $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 
 $script:CurrentStep = 0
 $script:InstallDir = $DEFAULT_INSTALL_DIR
+$script:WizardAppVersion = Get-InstalledVersion -InstallDir $DEFAULT_INSTALL_DIR
 $script:RemoveAppFiles = $true
 $script:RemoveUserData = $true
 $script:RemoveApplyState = $true
@@ -372,13 +409,16 @@ function Show-WizardStep {
             $title.Location = New-Object System.Drawing.Point(0, 0)
             $contentPanel.Controls.Add($title)
 
-            $body = New-BodyLabel @"
+            $welcomeText = @"
 This wizard removes $APP_DISPLAY_NAME from your computer.
 
-You can choose which files, user data, and shortcuts to remove. Recordings and saved presets can be deleted permanently if you select that option.
-
-Click Next to choose the install folder and select what to remove.
-"@ 220
+You can choose which files, user data, and shortcuts to remove. Recordings, saved presets, and CSV bulk inputs can be deleted permanently if you select that option.
+"@
+            if ($script:WizardAppVersion) {
+                $welcomeText += "`r`n`r`nInstalled version: v$($script:WizardAppVersion)"
+            }
+            $welcomeText += "`r`n`r`nClick Next to choose the install folder and select what to remove."
+            $body = New-BodyLabel $welcomeText $(if ($script:WizardAppVersion) { 248 } else { 228 })
             $body.Location = New-Object System.Drawing.Point(0, 44)
             $contentPanel.Controls.Add($body)
         }
@@ -438,7 +478,7 @@ Click Next to choose the install folder and select what to remove.
             $contentPanel.Controls.Add($title)
 
             $chkAppFiles = New-Object System.Windows.Forms.CheckBox
-            $chkAppFiles.Text = "Remove application files ($EXE_FILE_NAME, $ASSETS_FOLDER_NAME\, $LICENSE_FILE_NAME, $README_FILE_NAME)"
+            $chkAppFiles.Text = "Remove application files ($EXE_FILE_NAME, $VERSION_FILE_NAME, $CHANGELOG_FILE_NAME, wizards, $ASSETS_FOLDER_NAME\)"
             $chkAppFiles.AutoSize = $true
             $chkAppFiles.Location = New-Object System.Drawing.Point(0, 44)
             $chkAppFiles.Checked = $script:RemoveAppFiles
@@ -596,6 +636,7 @@ function Save-CurrentStepState {
     switch ($script:CurrentStep) {
         1 {
             $script:InstallDir = $script:Step1_PathBox.Text.Trim()
+            $script:WizardAppVersion = Get-InstalledVersion -InstallDir $script:InstallDir
         }
         2 {
             $script:RemoveAppFiles = $script:Step2_AppFiles.Checked
