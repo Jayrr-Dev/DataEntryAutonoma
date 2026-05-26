@@ -195,6 +195,8 @@ S := {
     hasOrigin: false,
     originX: 0,
     originY: 0,
+    lastTargetX: 0,
+    lastTargetY: 0,
     waitingForKey: false,
     keyIndex: 0,
 
@@ -734,7 +736,7 @@ ShowTransientRecordingTip(message, screenX := "", screenY := "") {
 }
 
 /**
- * Shows a short tooltip when a variable slot is applied during playback.
+ * Shows a short tooltip when a variable slot is assigned during Detect or Apply.
  * @param {String} variableName Variable identifier such as variable-1.
  * @param {Integer} screenX Target screen X coordinate for tooltip placement.
  * @param {Integer} screenY Target screen Y coordinate for tooltip placement.
@@ -746,7 +748,10 @@ ShowVariableAssignmentTip(variableName, screenX, screenY) {
         return
 
     ToolTip Format("Assigned Var {1}", match[1]), screenX + 12, screenY + 12
-    SetTimer ClearTip, -C.variableTipMs
+    if IsRecording()
+        SetTimer RestoreRecordingTip, -C.variableTipMs
+    else
+        SetTimer ClearTip, -C.variableTipMs
 }
 
 /**
@@ -1847,10 +1852,12 @@ RecordClick(button, screenX, screenY) {
 
     SaveOriginMetadataIfNeeded(screenX, screenY)
     coords := BuildCoordinateSnapshot(screenX, screenY, ctx)
+    S.lastTargetX := screenX
+    S.lastTargetY := screenY
     ArmKeyCapture()
     WriteMouseLine("click", button, coords, ctx)
 
-    ShowTransientRecordingTip("Click saved. Press the trigger key for this target.", screenX, screenY)
+    ShowTransientRecordingTip("Click saved. Press any key after this click only if you want typed input here.", screenX, screenY)
 }
 
 RecordScroll(event) {
@@ -1871,6 +1878,8 @@ RecordScroll(event) {
 
     SaveOriginMetadataIfNeeded(event.x, event.y)
     coords := BuildCoordinateSnapshot(event.x, event.y, ctx)
+    S.lastTargetX := event.x
+    S.lastTargetY := event.y
     ArmKeyCapture()
     WriteScrollLine(direction, delta, notches, coords, ctx)
 }
@@ -1896,6 +1905,8 @@ RecordKey(vk, sc) {
         ctx.title,
         ctx.exe
     ))
+
+    ShowVariableAssignmentTip("variable-" S.keyIndex, S.lastTargetX, S.lastTargetY)
 }
 
 ArmKeyCapture() {
@@ -2219,9 +2230,9 @@ RunApply(logPath, presetPath) {
     if parsed = ""
         return false
 
-    if S.variables.Length = 0 {
+    if RecordingNeedsVariableValues(parsed) && S.variables.Length = 0 {
         SetStatus("No variables in selected preset.")
-        ShowManageMsgBox "The selected preset has no variable values.`n`nUse Edit Inputs to add them.", "Data Entry Autonoma", "Icon!"
+        ShowManageMsgBox "This recording expects typed variable values.`n`nUse Edit Inputs to add them.", "Data Entry Autonoma", "Icon!"
         return false
     }
 
@@ -2343,6 +2354,19 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
 }
 
 /**
+ * Returns true when playback needs preset or CSV variable values.
+ * @param {Object} parsed Parsed recording.
+ * @returns {Boolean}
+ */
+RecordingNeedsVariableValues(parsed) {
+    for action in parsed.actions {
+        if action.type = "apply" && action.variable != ""
+            return true
+    }
+    return false
+}
+
+/**
  * Parses and validates a recording for playback.
  * @param {String} logPath Recording path.
  * @returns {Object|String} Parsed log object, or empty string on failure.
@@ -2354,10 +2378,8 @@ PrepareApplyLog(logPath) {
 
     if parsed.actions.Length = 0 {
         if parsed.clickCount > 0 && parsed.keyCount = 0 {
-            SetStatus("Recording has clicks but no variable keys.")
-            ShowManageMsgBox "This recording has " parsed.clickCount " click(s) but no variable keys.`n`n"
-                . "Re-record with Detect: click a target, then press any key (except Esc) after each click.",
-                "Data Entry Autonoma", "Icon!"
+            SetStatus("Recording has clicks but no replayable actions.")
+            ShowManageMsgBox "This recording has " parsed.clickCount " click(s) but none could be replayed.", "Data Entry Autonoma", "Icon!"
         } else if parsed.keyCount > 0 && parsed.clickCount = 0 {
             SetStatus("Recording has keys but no click target before them.")
             ShowManageMsgBox "This recording has key events but no click targets before them.", "Data Entry Autonoma", "Icon!"
@@ -2371,12 +2393,6 @@ PrepareApplyLog(logPath) {
             ShowManageMsgBox "No apply or scroll actions were found in that recording.", "Data Entry Autonoma", "Icon!"
         }
         return ""
-    }
-
-    if parsed.usedClickOnlyFallback {
-        SetStatus("Replaying " parsed.actions.Length " click target(s)...")
-        ToolTip "Click-only recording: using variable-1, variable-2, ... in click order."
-        SetTimer ClearTip, -3500
     }
 
     S.originX := parsed.originX
@@ -2498,10 +2514,11 @@ ExecuteApplyPlayback(parsed) {
 ReplayApply(action) {
     global C, S
 
-    text := ResolveVariableText(action.variable)
+    text := action.variable != "" ? ResolveVariableText(action.variable) : ""
     point := ResolveTargetPoint(action.target)
 
-    ShowVariableAssignmentTip(action.variable, point.x, point.y)
+    if text != ""
+        ShowVariableAssignmentTip(action.variable, point.x, point.y)
 
     if S.smoothMouse
         NaturalMouseMove(point.x, point.y)
@@ -2684,27 +2701,27 @@ ParseDetectLog(filePath) {
             pendingClick := ProcessDetectLogEvent(eventLine, parsed, pendingClick)
     }
 
-    FinalizeDetectLogActions(parsed)
+    FinalizeDetectLogActions(parsed, pendingClick)
     return parsed
 }
 
-FinalizeDetectLogActions(parsed) {
-    if parsed.actions.Length > 0
-        return
+/**
+ * Queues a click-only replay when no variable key was recorded for that target.
+ * @param {Object} parsed Parsed recording accumulator.
+ * @param {Object} clickTarget Click target metadata.
+ */
+PushClickOnlyApplyAction(parsed, clickTarget) {
+    parsed.actions.Push({
+        type: "apply",
+        elapsed: clickTarget.elapsed,
+        variable: "",
+        target: clickTarget
+    })
+}
 
-    if parsed.clicks.Length = 0
-        return
-
-    parsed.usedClickOnlyFallback := true
-
-    for index, clickTarget in parsed.clicks {
-        parsed.actions.Push({
-            type: "apply",
-            elapsed: clickTarget.elapsed,
-            variable: "variable-" index,
-            target: clickTarget
-        })
-    }
+FinalizeDetectLogActions(parsed, pendingClick := "") {
+    if pendingClick != ""
+        PushClickOnlyApplyAction(parsed, pendingClick)
 }
 
 SplitMergedLogLines(line) {
@@ -2757,12 +2774,19 @@ ProcessDetectLogEvent(line, parsed, pendingClick) {
             clickTarget.elapsed := elapsedMs
             parsed.clickCount += 1
             parsed.clicks.Push(clickTarget)
+
+            if pendingClick != ""
+                PushClickOnlyApplyAction(parsed, pendingClick)
+
             return clickTarget
         }
         return pendingClick
     }
 
     if eventType = "scroll" {
+        if pendingClick != ""
+            PushClickOnlyApplyAction(parsed, pendingClick)
+
         scrollTarget := ParseScrollTarget(parts, parsed.coordinateMode)
         if scrollTarget != "" {
             parsed.actions.Push({
@@ -2953,14 +2977,12 @@ CountRecordingClickTargets(filePath) {
 }
 
 /**
- * Returns how many variable slots a recording will replay.
- * Uses recorded keys when present, otherwise click-only fallback count.
+ * Returns how many variable slots a recording uses (keyed targets only).
  * @param {String} filePath Recording path.
  * @returns {Integer}
  */
 CountRecordingVariableSlots(filePath) {
-    variableCount := CountVariablesInLog(filePath)
-    return variableCount > 0 ? variableCount : CountRecordingClickTargets(filePath)
+    return CountVariablesInLog(filePath)
 }
 
 
