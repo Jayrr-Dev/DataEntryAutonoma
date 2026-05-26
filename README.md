@@ -123,10 +123,9 @@ If you already extracted the release zip (or cloned the repo for development), y
    .\runInstallWizard.ps1
    ```
 3. Follow the on-screen steps:
-   - **Welcome** → **Application file**
-   - Click **Download latest version** to fetch the newest release from GitHub (recommended), or **Browse for DataEntryAutonoma.exe...** from a release zip, download folder, or USB drive
-   - **Install location** (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`)
-   - **Shortcuts** (Desktop, Start Menu, launch when finished)
+   - **Welcome** → **Install location** → **Shortcuts**
+   - If the app files are not already in the folder, the wizard downloads them automatically when you click **Next**
+   - Default install folder: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`
 4. Click **Install**, then **Close** when setup completes.
 
 **Standalone only:** The wizard installs `DataEntryAutonoma.exe`. **AutoHotkey is not required** on the PC where you install or run the app.
