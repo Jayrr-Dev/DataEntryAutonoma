@@ -158,7 +158,9 @@ UI := {
     btnHeightSecondary: 26,
     btnHeightTool: 28,
     btnHeightPrimary: 44,
-    infoBtnSize: 22,
+    infoBtnSize: 14,
+    infoBtnFontSize: 7,
+    infoBtnBg: "EEF2FF",
     listRecordingH: 148,
     listPresetH: 64,
     tabStripHeight: 36,
@@ -299,6 +301,25 @@ ApplyManageAppIcon(gui) {
     largeIcon := LoadPicture(C.appIconFile, "Icon1 w32 h32", &iconType)
     if largeIcon
         SendMessage(C.WM_SETICON, C.ICON_BIG, largeIcon, gui)
+}
+
+/**
+ * Styles a tiny circular info button beside inline labels.
+ * @param {Gui.Button} btn Info button control.
+ */
+ApplyManageCircularInfoButton(btn) {
+    global UI
+
+    if !btn
+        return
+
+    btn.SetFont("s" UI.infoBtnFontSize " bold", UI.fontFamily)
+    btn.Opt("+Background" UI.infoBtnBg " c" UI.accent)
+
+    size := UI.infoBtnSize
+    region := DllCall("CreateEllipticRgn", "Int", 0, "Int", 0, "Int", size, "Int", size, "Ptr")
+    if region
+        DllCall("SetWindowRgn", "Ptr", btn.Hwnd, "Ptr", region, "Int", true)
 }
 
 /**
