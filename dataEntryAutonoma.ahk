@@ -30,6 +30,28 @@ C := {
     wheelDelta: 120,
     flushIntervalMs: 1000,
     batchRowPauseMs: 750,
+    csvBatchHelpMessage: "
+    (
+CSV batch replays the selected recording once per row. Each row supplies variable values for that full pass.
+
+Expected format:
+  label,value1,value2,value3
+
+Examples:
+  1,Alice,100,East
+  2,Bob,250,West
+
+  Single value (maps to variable-1 only):
+  hello
+
+How it works:
+  • Apply runs the entire recording for row 1, then row 2, and so on
+  • Column 1 is a row label (status display only)
+  • Columns 2+ map to variable-1, variable-2, variable-3, ...
+  • Blank lines and lines starting with # are ignored
+  • Preset is optional — speeds and playback options only; row values are used instead of preset variables
+  • Esc stops the whole batch
+    )",
     recordingTipText: "Esc to save and exit",
     recordingTipOffsetX: 240,
     recordingTipOffsetY: 16,
@@ -127,21 +149,27 @@ UI := {
     fontSizeTitle: 11,
     fontSizeBody: 10,
     fontSizeSmall: 9,
-    contentWidth: 480,
-    tabContentWidth: 464,
+    contentWidth: 420,
+    tabContentWidth: 404,
+    tabListWidth: 388,
     marginX: 18,
     marginY: 16,
     btnGap: 6,
     btnHeightSecondary: 26,
     btnHeightTool: 28,
     btnHeightPrimary: 44,
-    listRecordingH: 140,
-    listPresetH: 88,
-    tabPanelHeight: 208,
+    infoBtnSize: 22,
+    listRecordingH: 148,
+    listPresetH: 64,
+    tabStripHeight: 36,
+    tabInnerPad: 52,
+    tabRowGap: 8,
+    tabLabelHeight: 16,
+    tabPanelSafetyPad: 12,
     recordingColName: "Name",
     recordingColVarCount: "Variable count",
     statusHeight: 30,
-    csvEditWidth: 374
+    csvEditWidth: 300
 }
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
@@ -197,6 +225,7 @@ S := {
     refreshButton: "",
     editButton: "",
     browseCsvButton: "",
+    csvBatchInfoButton: "",
     renameRecordingButton: "",
     editRecordingButton: "",
     deleteRecordingButton: "",
@@ -288,21 +317,36 @@ BuildManageSectionHeader(gui, title) {
 }
 
 /**
- * Width for three equal buttons in one row (content width minus gaps).
+ * Width for three equal buttons in one row (tab list width minus gaps).
  * @returns {Integer}
  */
 GetManageThreeButtonWidth() {
     global UI
-    return Floor((UI.contentWidth - UI.btnGap * 2) / 3)
+    return Floor((UI.tabListWidth - UI.btnGap * 2) / 3)
 }
 
 /**
- * Width for two equal primary action buttons.
+ * Width for two equal primary action buttons (tab list width minus gap).
  * @returns {Integer}
  */
 GetManagePrimaryButtonWidth() {
     global UI
-    return Floor((UI.contentWidth - UI.btnGap) / 2)
+    return Floor((UI.tabListWidth - UI.btnGap) / 2)
+}
+
+/**
+ * Returns Tab3 height (tab strip + tallest page content) so nothing is clipped.
+ * @returns {Integer}
+ */
+GetManageTabPanelHeight() {
+    global UI
+
+    recordingTab := UI.listRecordingH + UI.tabRowGap + UI.btnHeightSecondary
+    presetTab := UI.listPresetH + UI.tabRowGap + UI.tabLabelHeight + UI.tabRowGap + UI.btnHeightTool
+        + UI.tabRowGap + UI.btnHeightTool
+    playbackTab := (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap + 36
+
+    return UI.tabStripHeight + UI.tabInnerPad + Max(recordingTab, presetTab, playbackTab) + UI.tabPanelSafetyPad
 }
 
 /**
@@ -342,7 +386,7 @@ CreateManageGui() {
 
     S.mainTab := S.gui.Add(
         "Tab3",
-        "xm w" UI.contentWidth " h" UI.tabPanelHeight,
+        "xm w" UI.contentWidth " h" GetManageTabPanelHeight(),
         ["Recording", "Input Presets", "Playback Options"]
     )
 
@@ -350,7 +394,7 @@ CreateManageGui() {
     S.mainTab.UseTab(1)
     S.recordingList := S.gui.Add(
         "ListView",
-        "w" UI.tabContentWidth " h" UI.listRecordingH " -Multi +Background" UI.listBg,
+        "Section w" UI.tabListWidth " h" UI.listRecordingH " -Multi +Background" UI.listBg,
         [UI.recordingColName, UI.recordingColVarCount]
     )
     S.recordingList.OnEvent("ItemSelect", (*) => (RememberSelections(), UpdateSelectionStatus()))
@@ -358,7 +402,7 @@ CreateManageGui() {
 
     S.renameRecordingButton := S.gui.Add(
         "Button",
-        "xm w" threeBtnW " h" hSec " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "xs w" threeBtnW " h" hSec " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Rename"
     )
     S.renameRecordingButton.OnEvent("Click", RenameSelectedRecording)
@@ -377,19 +421,11 @@ CreateManageGui() {
     )
     S.deleteRecordingButton.OnEvent("Click", DeleteSelectedRecording)
 
-    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add(
-        "Text",
-        "xm w" UI.contentWidth " c" UI.textHint,
-        "Select a recording. Detect hides this window while you capture clicks, scrolls, and keys."
-    )
-    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-
     ; --- Input Presets tab ---
     S.mainTab.UseTab(2)
     S.presetList := S.gui.Add(
         "ListBox",
-        "w" UI.tabContentWidth " h" UI.listPresetH " +Background" UI.listBg
+        "Section w" UI.tabListWidth " h" UI.listPresetH " +Background" UI.listBg
     )
     S.presetList.OnEvent("Change", (*) => (
         RememberSelections(),
@@ -398,12 +434,18 @@ CreateManageGui() {
     ))
 
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textMuted, "CSV batch (optional)")
+    S.gui.Add("Text", "xs c" UI.textMuted, "CSV batch (optional)")
+    S.csvBatchInfoButton := S.gui.Add(
+        "Button",
+        "x+4 w" UI.infoBtnSize " h" UI.infoBtnSize " +Background" UI.secondaryBtnBg " c" UI.accent,
+        "i"
+    )
+    S.csvBatchInfoButton.OnEvent("Click", ShowCsvBatchHelp)
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-    S.csvEdit := S.gui.Add("Edit", "xm w" UI.csvEditWidth " +Background" UI.editBg, "")
+    S.csvEdit := S.gui.Add("Edit", "xs w" UI.csvEditWidth " +Background" UI.editBg, "")
     S.browseCsvButton := S.gui.Add(
         "Button",
-        "x+" btnGap " w" (UI.contentWidth - UI.csvEditWidth - btnGap) " h" hTool
+        "x+" btnGap " w" (UI.tabListWidth - UI.csvEditWidth - btnGap) " h" hTool
         " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Browse..."
     )
@@ -411,7 +453,7 @@ CreateManageGui() {
 
     S.refreshButton := S.gui.Add(
         "Button",
-        "xm w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Refresh"
     )
     S.refreshButton.OnEvent("Click", (*) => RefreshAllLists(true))
@@ -430,43 +472,30 @@ CreateManageGui() {
     )
     S.deletePresetButton.OnEvent("Click", DeleteSelectedPreset)
 
-    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add(
-        "Text",
-        "xm w" UI.contentWidth " c" UI.textHint,
-        "Choose a preset or CSV file. Apply uses these values with the selected recording."
-    )
-    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-
     ; --- Playback Options tab ---
     S.mainTab.UseTab(3)
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add("Text", "w" UI.tabContentWidth " c" UI.textMuted, "Mouse movement")
+    S.gui.Add("Text", "Section w" UI.tabListWidth " c" UI.textMuted, "Mouse movement")
     S.smoothMouseRadio := S.gui.Add(
         "Radio",
-        (C.defaultSmoothMouse ? "checked" : ""),
+        "xs" (C.defaultSmoothMouse ? " Checked" : ""),
         "Smooth"
     )
     S.instantMouseRadio := S.gui.Add(
         "Radio",
-        "x+16" (!C.defaultSmoothMouse ? " checked" : ""),
+        "x+16" (!C.defaultSmoothMouse ? " Checked" : ""),
         "Instant"
     )
-    S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textMuted, "Typing")
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Typing")
     S.humanTypingRadio := S.gui.Add(
         "Radio",
-        "xm" (C.defaultHumanTyping ? " checked" : ""),
+        "xs" (C.defaultHumanTyping ? " Checked" : ""),
         "Human-like"
     )
     S.instantTypingRadio := S.gui.Add(
         "Radio",
-        "x+16" (!C.defaultHumanTyping ? " checked" : ""),
+        "x+16" (!C.defaultHumanTyping ? " Checked" : ""),
         "Instant"
-    )
-    S.gui.Add(
-        "Text",
-        "xm w" UI.contentWidth " c" UI.textHint,
-        "Override preset defaults here before Apply. Saved presets keep their own playback options."
     )
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
 
@@ -492,7 +521,7 @@ CreateManageGui() {
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textHint,
-        "Esc stops recording, playback, or a CSV batch."
+        "Detect records clicks, scrolls, and keys. Apply replays with presets or CSV. Esc stops."
     )
 
     S.gui.Show()
@@ -521,7 +550,7 @@ SetInteractiveState(enabled) {
     for ctrl in [S.detectButton, S.applyButton, S.refreshButton, S.editButton,
         S.renameRecordingButton, S.editRecordingButton, S.deleteRecordingButton,
         S.deletePresetButton, S.recordingList, S.presetList, S.csvEdit, S.browseCsvButton,
-        S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
+        S.csvBatchInfoButton, S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
         S.mainTab] {
         if ctrl
             ctrl.Enabled := enabled
@@ -772,6 +801,15 @@ BrowseCsvFile(*) {
     S.csvEdit.Value := selected
     RememberSelections()
     UpdateSelectionStatus()
+}
+
+/**
+ * Shows CSV batch format and usage help.
+ */
+ShowCsvBatchHelp(*) {
+    global C
+
+    ShowManageMsgBox C.csvBatchHelpMessage, "CSV batch help", "Iconi"
 }
 
 RefreshAllLists(restore := false) {
