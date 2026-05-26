@@ -5,6 +5,30 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-05-26
+
+### Added
+
+- **CSV Bulk Inputs** tab: manage saved CSV files in `csv-batches\` with **Edit CSV**, **Rename**, **Delete**, **Browse**, and **Refresh**
+- Import prompt when browsing an external CSV (copy into `csv-batches\` for editing later)
+- Run input source radios: choose **Input preset** or **CSV bulk inputs** (mutually exclusive)
+- CSV batch **Config** run mode radios: **Ask to run next line before each row** or **Run all rows automatically**
+- Hotkey recording feedback beside the cursor (`Hotkey: Ctrl + c`) when a shortcut is saved
+- CSV batch progress table and row prompt show **all** variable columns (not capped at five)
+
+### Changed
+
+- Mouse hold/drag while recording passes through to apps (Excel selection works normally); quick clicks stay clicks, hold or drag saves on release (no 2-second wait)
+- Ctrl/Shift/Alt shortcuts work in target apps during recording and replay correctly
+- **Config** button moved next to **Use CSV bulk inputs for Run** on the CSV tab
+- Taller recordings list; CSV tab layout height fixes so bottom buttons are not clipped
+- Install wizard and release zip create `csv-batches\` alongside `recordings\` and `saved-inputs\`
+
+### Fixed
+
+- Mouse hold/drag replay used wrong end coordinates from the log parser (drag direction)
+- CSV batch variable display limited to five columns in progress table and row prompt
+
 ## [1.0.2] - 2026-05-26
 
 ### Added
@@ -41,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.0.3]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/releases/tag/v1.0.0

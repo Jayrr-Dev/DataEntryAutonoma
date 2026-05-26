@@ -28,6 +28,7 @@ $README_FILE_NAME = "README.md"
 $APPLY_STATE_FILE_NAME = "apply-state.ini"
 $RECORDINGS_FOLDER_NAME = "recordings"
 $SAVED_INPUTS_FOLDER_NAME = "saved-inputs"
+$CSV_BATCHES_FOLDER_NAME = "csv-batches"
 $ASSETS_FOLDER_NAME = "assets"
 
 $UNINSTALL_SCRIPT_NAME = "runUninstallWizard.ps1"
@@ -173,6 +174,7 @@ function Invoke-UninstallApplication {
     if ($RemoveUserData) {
         $recordingsPath = Join-Path $InstallDir $RECORDINGS_FOLDER_NAME
         $savedInputsPath = Join-Path $InstallDir $SAVED_INPUTS_FOLDER_NAME
+        $csvBatchesPath = Join-Path $InstallDir $CSV_BATCHES_FOLDER_NAME
 
         if (Test-Path $recordingsPath) {
             Remove-IfExists $recordingsPath
@@ -181,6 +183,10 @@ function Invoke-UninstallApplication {
         if (Test-Path $savedInputsPath) {
             Remove-IfExists $savedInputsPath
             $removedItems.Add("$SAVED_INPUTS_FOLDER_NAME\ folder") | Out-Null
+        }
+        if (Test-Path $csvBatchesPath) {
+            Remove-IfExists $csvBatchesPath
+            $removedItems.Add("$CSV_BATCHES_FOLDER_NAME\ folder") | Out-Null
         }
     }
 
@@ -439,7 +445,7 @@ Click Next to choose the install folder and select what to remove.
             $contentPanel.Controls.Add($chkAppFiles)
 
             $chkUserData = New-Object System.Windows.Forms.CheckBox
-            $chkUserData.Text = "Remove recordings folder and saved presets (deletes your user data permanently)"
+            $chkUserData.Text = "Remove recordings, saved presets, and CSV bulk inputs (deletes your user data permanently)"
             $chkUserData.AutoSize = $true
             $chkUserData.Location = New-Object System.Drawing.Point(0, 74)
             $chkUserData.Checked = $script:RemoveUserData
@@ -466,7 +472,7 @@ Click Next to choose the install folder and select what to remove.
             $chkStart.Checked = $script:RemoveStartMenuShortcut
             $contentPanel.Controls.Add($chkStart)
 
-            $warn = New-BodyLabel "Warning: Removing recordings and saved presets cannot be undone. You will be asked to confirm on the next step." 56
+            $warn = New-BodyLabel "Warning: Removing recordings, presets, and CSV files cannot be undone. You will be asked to confirm on the next step." 56
             $warn.ForeColor = $COLOR_WARNING
             $warn.Location = New-Object System.Drawing.Point(0, 200)
             $contentPanel.Controls.Add($warn)
@@ -668,7 +674,7 @@ This folder does not look like a $APP_DISPLAY_NAME installation. Choose the corr
             if ($script:RemoveUserData) {
                 $confirm = [System.Windows.Forms.MessageBox]::Show(
                     @"
-You selected removal of recordings and saved presets.
+You selected removal of recordings, saved presets, and CSV bulk inputs.
 
 This permanently deletes your user data and cannot be undone.
 

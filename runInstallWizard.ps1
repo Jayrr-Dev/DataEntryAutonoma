@@ -288,7 +288,7 @@ function Update-Step2UpgradeNotice {
 
     Update-UpgradeDetection -InstallDir $PathText.Trim()
     if ($script:IsUpgrade) {
-        $NoticeLabel.Text = "Upgrading existing installation (your recordings and presets will be kept)."
+        $NoticeLabel.Text = "Upgrading existing installation (your recordings, presets, and CSV files will be kept)."
     } else {
         $NoticeLabel.Text = ""
     }
@@ -343,6 +343,7 @@ function Install-ApplicationFiles {
     Ensure-Directory $InstallDir
     Ensure-Directory (Join-Path $InstallDir "recordings")
     Ensure-Directory (Join-Path $InstallDir "saved-inputs")
+    Ensure-Directory (Join-Path $InstallDir "csv-batches")
 
     $releaseRoot = Get-ReleaseSourceRoot
 
@@ -577,7 +578,7 @@ Click Next to choose where to install.
             $btnBrowse.Location = New-Object System.Drawing.Point(360, 90)
             $contentPanel.Controls.Add($btnBrowse)
 
-            $hintText = "Default location does not require administrator rights. The installer will create recordings and saved-inputs folders inside this directory."
+            $hintText = "Default location does not require administrator rights. The installer will create recordings, saved-inputs, and csv-batches folders inside this directory."
             $hint = New-BodyLabel $hintText 56
             $hint.Location = New-Object System.Drawing.Point(0, 130)
             $contentPanel.Controls.Add($hint)
@@ -675,7 +676,7 @@ Click Next to choose where to install.
 
             Update-UpgradeDetection -InstallDir $script:InstallDir
             if ($script:IsUpgrade) {
-                $status.Text = "Upgrading existing installation (your recordings and presets will be kept)..."
+                $status.Text = "Upgrading existing installation (your recordings, presets, and CSV files will be kept)..."
             }
 
             try {

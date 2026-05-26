@@ -17,7 +17,7 @@ $VERSION_FILE = Join-Path $PROJECT_ROOT "VERSION"
 if (Test-Path $VERSION_FILE) {
     $VERSION = (Get-Content -LiteralPath $VERSION_FILE -Raw).Trim()
 } else {
-    $VERSION = "1.0.1"
+    $VERSION = "1.0.3"
 }
 $DIST_EXE = Join-Path $PROJECT_ROOT "dist\DataEntryAutonoma.exe"
 $RELEASE_DIR = Join-Path $PROJECT_ROOT "release"
@@ -61,7 +61,7 @@ if (-not (Test-Path $iconSource)) {
 }
 Copy-Item -LiteralPath $iconSource -Destination (Join-Path $assetsDir "dataEntryAutonoma.ico")
 
-foreach ($folderName in @("recordings", "saved-inputs")) {
+foreach ($folderName in @("recordings", "saved-inputs", "csv-batches")) {
     $emptyDir = Join-Path $STAGING_DIR $folderName
     New-Item -ItemType Directory -Force -Path $emptyDir | Out-Null
     New-Item -ItemType File -Force -Path (Join-Path $emptyDir ".gitkeep") | Out-Null

@@ -52,7 +52,7 @@ Typical uses:
 
 ### Run (replay)
 
-- **Run** button replays the selected recording using a preset or CSV batch
+- **Run** button replays the selected recording using either an input preset **or** a CSV bulk batch (not both at once)
 - **Smooth** or **Instant** mouse movement
 - **Human-like** or **Instant** typing with configurable speeds
 - **Preset pauses only** or **Recorded gaps** for timing between steps
@@ -63,19 +63,22 @@ Typical uses:
 
 ### Presets (Input Presets tab)
 
+- Choose **Use input preset for Run** as the run input source
 - Save named preset files with speeds, pauses, run options, and variable text values
-- **Edit Preset** for full control over timing and variables
-- **Delete Preset** and **Refresh** list buttons
+- **Edit Preset**, **Delete Preset**, and **Refresh** list buttons
 - Selecting a preset loads its mouse and typing options into the **Run Options** tab
 - One value per line in the preset maps to `variable-1`, `variable-2`, and so on
 
-### CSV batch
+### CSV bulk inputs (CSV Bulk Inputs tab)
 
-- Optional CSV file runs the same recording once per row with different values
+- Choose **Use CSV bulk inputs for Run** as the run input source (mutually exclusive with presets)
+- Saved CSV files live in `csv-batches\`; **Edit CSV**, **Rename**, **Delete**, **Browse**, and **Refresh**
+- **Browse** can load an external CSV; optional import copies it into `csv-batches\`
+- **Config** (next to the run-source radio) sets **Ask to run next line** or **Run all rows automatically**
+- CSV file runs the same recording once per row with different values
 - Column 1 is a row label (status display only)
 - Columns 2 and onward map to `variable-1`, `variable-2`, etc.
-- Preset is optional during batch run: row values replace preset variables; preset still supplies speeds and run options if selected
-- **Browse** to pick a CSV path; **i** button opens in-app help; **Config** enables step-by-step **Ask to run next line** mode with a progress table and per-row Run / Skip / Run all remaining prompts
+- **i** button opens in-app help; step-by-step mode shows a progress table (all variable columns) and per-row Run / Skip / Run all remaining prompts
 - Blank lines and lines starting with `#` are ignored
 
 ### App behavior
@@ -92,7 +95,8 @@ Typical uses:
 |------|---------|
 | **Status bar** | Current action, selection summary, batch progress |
 | **Recordings** tab | Pick, rename, edit log, or delete recordings |
-| **Input Presets** tab | Pick presets, CSV batch path, edit/delete presets |
+| **Input Presets** tab | Pick presets; edit/delete presets; choose preset as run input source |
+| **CSV Bulk Inputs** tab | Manage CSV files in `csv-batches\`; choose CSV as run input source |
 | **Run Options** tab | Smooth/Instant mouse and Human-like/Instant typing for the next run |
 | **Record** | Start a new capture session |
 | **Run** | Replay the selected recording |
@@ -104,13 +108,13 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.0.2-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.0.3-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
-The release zip includes the standalone exe, `assets\dataEntryAutonoma.ico`, empty `recordings\` and `saved-inputs\` folders, the install and uninstall wizard scripts, `README.md`, `CHANGELOG.md`, and `LICENSE`. You do **not** need to install AutoHotkey or clone the repository.
+The release zip includes the standalone exe, `assets\dataEntryAutonoma.ico`, empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders, the install and uninstall wizard scripts, `README.md`, `CHANGELOG.md`, and `LICENSE`. You do **not** need to install AutoHotkey or clone the repository.
 
-**Upgrading:** Run the install wizard again and choose the same install folder. The wizard overwrites the app files but keeps your `recordings\` and `saved-inputs\` data.
+**Upgrading:** Run the install wizard again and choose the same install folder. The wizard overwrites the app files but keeps your `recordings\`, `saved-inputs\`, and `csv-batches\` data.
 
 ---
 
@@ -133,9 +137,9 @@ If you already extracted the release zip (or cloned the repo for development), y
 
 **Developers only:** If you cloned the repo and have AutoHotkey v2 with compiler, use **Build exe (developers)** on the Application file step. End users should browse for a downloaded exe instead.
 
-The wizard creates `recordings\` and `saved-inputs\` folders and optional shortcuts for you.
+The wizard creates `recordings\`, `saved-inputs\`, and `csv-batches\` folders and optional shortcuts for you.
 
-**Reinstalling or upgrading:** If you point the wizard at a folder that already contains `DataEntryAutonoma.exe`, it upgrades in place. Your recordings and presets in `recordings\` and `saved-inputs\` are preserved; the exe, assets, LICENSE, README, and wizard scripts are overwritten. It also copies `runUninstallWizard.bat` and `runUninstallWizard.ps1` into the install folder.
+**Reinstalling or upgrading:** If you point the wizard at a folder that already contains `DataEntryAutonoma.exe`, it upgrades in place. Your recordings, presets, and CSV files in `recordings\`, `saved-inputs\`, and `csv-batches\` are preserved; the exe, assets, LICENSE, README, and wizard scripts are overwritten. It also copies `runUninstallWizard.bat` and `runUninstallWizard.ps1` into the install folder.
 
 ---
 
@@ -145,7 +149,7 @@ To remove the app, shortcuts, and optional user data:
 
 1. Run **`runUninstallWizard.bat`** from the install folder (or from an extracted release zip / repo clone).
 2. Choose the install folder (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`).
-3. Select what to remove (application files, recordings, presets, `apply-state.ini`, shortcuts).
+3. Select what to remove (application files, recordings, presets, CSV bulk inputs, `apply-state.ini`, shortcuts).
 4. Confirm on the summary step, then click **Uninstall**.
 
 If you run the uninstaller from inside the install folder, remaining files (including the uninstaller itself) are deleted automatically after the wizard closes.
@@ -182,12 +186,12 @@ Use **Path 1** if you just want to run the app. Use **Path 2** if you are develo
    - The main window opens and stays on top. A tray icon also appears.
 
 5. **First launch check**
-   - You should see tabs: **Recordings**, **Input Presets**, **Run Options**.
+   - You should see tabs: **Recordings**, **Input Presets**, **CSV Bulk Inputs**, **Run Options**.
    - You should see **Record** and **Run** at the bottom.
    - Status bar should show **Ready**.
 
-6. **Optional: CSV files**
-   - CSV batch files can live anywhere on your PC. Use **Browse** on the Input Presets tab to select one.
+6. **Optional: CSV bulk inputs**
+   - Saved CSV files live in `csv-batches\` (created automatically). Use the **CSV Bulk Inputs** tab to edit, rename, delete, or browse for a file.
 
 **Windows SmartScreen:** If Windows warns about an unknown publisher, that is common for unsigned executables. Only continue if you trust the source (this repo or your own build).
 
@@ -277,8 +281,8 @@ All paths are relative to the app folder (next to the `.exe` or `.ahk`):
 |----------------|---------|
 | `recordings\` | Saved recording logs (`di-*.log`) |
 | `saved-inputs\` | Preset files with speeds, options, and variable text |
-| `apply-state.ini` | Last selected recording, preset, and CSV (auto-created) |
-| CSV file | Anywhere you choose; path stored in `apply-state.ini` |
+| `csv-batches\` | Saved CSV bulk input files (`*.csv`) |
+| `apply-state.ini` | Last selected recording, preset, CSV, and run input source (auto-created) |
 
 ---
 
@@ -302,10 +306,10 @@ After [installation](#installation):
 1. Run `dataEntryAutonoma.ahk` or `DataEntryAutonoma.exe`
 2. Click **Record**, perform your workflow (clicks, scrolls, keys where needed)
 3. Press **Esc** to save; enter a name or click **Cancel** to discard
-4. Open **Input Presets**, click **Edit Preset**, add your variable values and timing
-5. Select a recording and preset, then click **Run**
+4. Open **Input Presets**, click **Edit Preset**, add your variable values and timing — **or** use **CSV Bulk Inputs** for many rows
+5. Select a recording, choose **Input preset** or **CSV bulk inputs** as the run source, then click **Run**
 
-For many rows, prepare a CSV file instead of typing variables into a preset.
+For many rows, create or import a CSV on the **CSV Bulk Inputs** tab instead of typing variables into a preset.
 
 ## Recording workflow
 
@@ -322,12 +326,12 @@ Corner tooltip while recording: **Esc = Save · Click = click · Hold or drag = 
 ## Run workflow
 
 1. Select a recording on the **Recordings** tab.
-2. Select a preset on **Input Presets**, or set a CSV batch path, or both (CSV values override preset variables).
+2. On **Input Presets**, choose **Use input preset for Run** and pick a preset — **or** on **CSV Bulk Inputs**, choose **Use CSV bulk inputs for Run** and pick a CSV file.
 3. Adjust **Run Options** if needed (mouse and typing style).
-4. Click **Run**. The app moves the mouse, clicks, scrolls, and types according to the recording and preset.
+4. Click **Run**. The app moves the mouse, clicks, scrolls, and types according to the recording and your selected input source.
 5. Press **Esc** to stop.
 
-If the recording expects typed variables but none are provided, the app prompts you to use **Edit Preset** or a CSV file.
+If the recording expects typed variables but none are provided, the app prompts you to use **Edit Preset** or a CSV file on **CSV Bulk Inputs**.
 
 ## Preset settings reference
 
@@ -383,7 +387,7 @@ Rules:
 - Column 1 is a label shown in the status bar during batch run
 - Columns 2+ map to `variable-1`, `variable-2`, `variable-3`, ...
 - Lines starting with `#` and blank lines are ignored
-- **Config** (Input Presets tab) enables **Ask to run next line**: a progress table lists all rows; before each row you can Run, Skip, or Run all remaining
+- **Config** (CSV Bulk Inputs tab) sets run mode: **Ask to run next line** shows a progress table with all variable columns; before each row you can Run, Skip, or Run all remaining. **Run all rows automatically** skips prompts.
 - **Esc** stops the whole batch; completed rows stay completed
 
 ## Recording file format
@@ -422,6 +426,7 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
+| **1.0.3** | CSV Bulk Inputs tab, preset vs CSV run source, mouse hold/drag + hotkey recording fixes, all CSV variables in batch UI |
 | **1.0.2** | CSV Config with ask next line, batch progress table, uninstall wizard in release zip |
 | **1.0.1** | Install wizard upgrades existing installs in place; version shown in app title |
 | **1.0.0** | Initial release: Record/Run, presets, CSV batch, install wizard, standalone exe |
@@ -444,6 +449,7 @@ DataEntryAutonoma/
   assets/                 # App icon (SVG and ICO)
   recordings/             # Session logs (di-*.log)
   saved-inputs/           # Variable presets (*.txt)
+  csv-batches/            # Saved CSV bulk input files (*.csv)
   apply-state.ini         # Last selected recording, preset, CSV (auto-created)
   dist/                   # Compiled exe output (after build)
 ```
