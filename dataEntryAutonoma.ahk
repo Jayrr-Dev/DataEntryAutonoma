@@ -22,7 +22,7 @@ CoordMode "Mouse", "Screen"
 ; =============================================================================
 
 C := {
-    appVersion: "1.0.1", ; keep in sync with VERSION at project root
+    appVersion: "1.0.2", ; keep in sync with VERSION at project root
     recordingsDir: A_ScriptDir "\recordings",
     savesDir: A_ScriptDir "\saved-inputs",
     appIconFile: A_ScriptDir "\assets\dataEntryAutonoma.ico",
@@ -53,6 +53,8 @@ How it works:
   • Columns 2+ map to variable-1, variable-2, variable-3, ...
   • Blank lines and lines starting with # are ignored
   • Preset is optional — speeds and run options only; row values are used instead of preset variables
+  • Config (next to the info button) opens CSV batch options, including Ask to run next line
+  • Ask to run next line shows a progress table and a prompt before each row (Run, Skip, or Run all remaining)
   • Esc stops the whole batch
     )",
     recordingTipText: "Esc = Save · Hold Shift = delay",
@@ -71,6 +73,23 @@ How it works:
     statePresetKey: "preset",
     stateRecordingKey: "recording",
     stateCsvKey: "csv",
+    stateCsvAskNextLineKey: "csvAskNextLine",
+
+    csvBatchConfigTitle: "CSV batch settings",
+    csvAskNextLineLabel: "Ask to run next line before each row",
+    csvBatchProgressTitle: "CSV batch progress",
+    csvBatchStatusPending: "",
+    csvBatchStatusDone: "✓",
+    csvBatchStatusSkipped: "Skipped",
+    csvBatchPromptChoiceNone: "",
+    csvBatchPromptChoiceRun: "run",
+    csvBatchPromptChoiceSkip: "skip",
+    csvBatchPromptChoiceRunAll: "runAll",
+    csvBatchVarDisplayCount: 5,
+    csvBatchPromptPollMs: 50,
+    csvBatchPromptRun: "Run this row",
+    csvBatchPromptSkip: "Skip",
+    csvBatchPromptRunAll: "Run all remaining",
 
     defaultPlaybackSpeed: 1.0,
     defaultTypingSpeed: 1.0,
@@ -183,8 +202,15 @@ UI := {
     recordingColName: "Name",
     recordingColVarCount: "Variable count",
     statusHeight: 30,
-    csvEditWidth: 300
+    csvEditWidth: 300,
+    csvBatchConfigBtnWidth: 52,
+    csvBatchTableWidth: 560,
+    csvBatchTableHeight: 240,
+    csvBatchPromptWidth: 400,
+    csvBatchPromptBtnWidth: 118
 }
+
+CSV_BATCH_PROGRESS_COLUMNS := ["Row", "Var1", "Var2", "Var3", "Var4", "Var5", "Status"]
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
 APP_GUI_TITLE := "Data Entry Autonoma v" C.appVersion
@@ -198,6 +224,8 @@ S := {
     applying: false,
     batchRunning: false,
     stopBatch: false,
+    csvAskNextLine: false,
+    csvPromptChoice: "",
 
     filePath: "",
     logFile: "",
@@ -247,6 +275,11 @@ S := {
     editButton: "",
     browseCsvButton: "",
     csvBatchInfoButton: "",
+    csvBatchConfigButton: "",
+    csvBatchRunAllRemaining: false,
+    csvBatchTableGui: "",
+    csvBatchTableLv: "",
+    csvBatchPromptGui: "",
     renameRecordingButton: "",
     editRecordingButton: "",
     deleteRecordingButton: "",
@@ -482,6 +515,13 @@ CreateManageGui() {
     )
     S.csvBatchInfoButton.OnEvent("Click", ShowCsvBatchHelp)
     ApplyManageCircularInfoButton(S.csvBatchInfoButton)
+    S.csvBatchConfigButton := S.gui.Add(
+        "Button",
+        "x+" UI.btnGap " w" UI.csvBatchConfigBtnWidth " h" UI.infoBtnSize
+        " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Config"
+    )
+    S.csvBatchConfigButton.OnEvent("Click", ShowCsvBatchConfig)
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.csvEdit := S.gui.Add("Edit", "xs w" UI.csvEditWidth " +Background" UI.editBg, "")
     S.browseCsvButton := S.gui.Add(
@@ -591,7 +631,7 @@ SetInteractiveState(enabled) {
     for ctrl in [S.detectButton, S.applyButton, S.refreshButton, S.editButton,
         S.renameRecordingButton, S.editRecordingButton, S.deleteRecordingButton,
         S.deletePresetButton, S.recordingList, S.presetList, S.csvEdit, S.browseCsvButton,
-        S.csvBatchInfoButton, S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
+        S.csvBatchInfoButton, S.csvBatchConfigButton, S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
         S.mainTab] {
         if ctrl
             ctrl.Enabled := enabled
@@ -872,6 +912,267 @@ ShowCsvBatchHelp(*) {
     ShowManageMsgBox C.csvBatchHelpMessage, "CSV batch help", "Iconi"
 }
 
+/**
+ * Opens CSV batch settings (Ask to run next line).
+ */
+ShowCsvBatchConfig(*) {
+    global S, C, UI
+
+    dlgWidth := 360
+    btnW := Floor((dlgWidth - UI.btnGap) / 2)
+    btnH := UI.btnHeightSecondary
+    savedAsk := S.csvAskNextLine
+
+    dlg := Gui(
+        "+ToolWindow -MaximizeBox -MinimizeBox",
+        C.csvBatchConfigTitle
+    )
+    BindManageChildGui(dlg)
+    dlg.BackColor := UI.surface
+    dlg.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    dlg.MarginX := UI.marginX
+    dlg.MarginY := UI.marginY
+
+    askChk := dlg.Add(
+        "Checkbox",
+        "xm w" dlgWidth " c" UI.textPrimary,
+        C.csvAskNextLineLabel
+    )
+    askChk.Value := savedAsk ? 1 : 0
+
+    okBtn := dlg.Add(
+        "Button",
+        "xm w" btnW " h" btnH " Default +Background" UI.accent " c" UI.accentText,
+        "OK"
+    )
+    cancelBtn := dlg.Add(
+        "Button",
+        "x+" UI.btnGap " w" btnW " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Cancel"
+    )
+
+    SaveCsvConfig(*) {
+        S.csvAskNextLine := askChk.Value ? true : false
+        RememberSelections()
+        dlg.Destroy()
+    }
+
+    CancelCsvConfig(*) {
+        S.csvAskNextLine := savedAsk
+        dlg.Destroy()
+    }
+
+    okBtn.OnEvent("Click", SaveCsvConfig)
+    cancelBtn.OnEvent("Click", CancelCsvConfig)
+    dlg.OnEvent("Close", CancelCsvConfig)
+    dlg.OnEvent("Escape", CancelCsvConfig)
+
+    dlg.Show("Center")
+    WinWaitClose("ahk_id " dlg.Hwnd)
+}
+
+/**
+ * Returns up to five display strings for a CSV row's variables.
+ * @param {Object} row Parsed CSV row.
+ * @returns {Array<String>}
+ */
+GetCsvRowDisplayVars(row) {
+    global C
+
+    vars := []
+    Loop C.csvBatchVarDisplayCount {
+        idx := A_Index
+        vars.Push(idx <= row.variables.Length ? row.variables[idx] : "")
+    }
+    return vars
+}
+
+/**
+ * Creates the always-on-top CSV batch progress table listing all rows.
+ * @param {Array<Object>} rows Parsed CSV rows.
+ */
+ShowCsvBatchProgressTable(rows) {
+    global S, C, UI, CSV_BATCH_PROGRESS_COLUMNS
+
+    CloseCsvBatchProgressTable()
+
+    tableGui := Gui(
+        "+AlwaysOnTop +ToolWindow -MaximizeBox -MinimizeBox",
+        C.csvBatchProgressTitle
+    )
+    ApplyManageAppIcon(tableGui)
+    tableGui.BackColor := UI.bg
+    tableGui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    tableGui.MarginX := UI.marginX
+    tableGui.MarginY := UI.marginY
+
+    tableLv := tableGui.Add(
+        "ListView",
+        "xm w" UI.csvBatchTableWidth " h" UI.csvBatchTableHeight " -Multi +Background" UI.listBg,
+        CSV_BATCH_PROGRESS_COLUMNS
+    )
+
+    Loop rows.Length {
+        row := rows[A_Index]
+        displayVars := GetCsvRowDisplayVars(row)
+        tableLv.Add(
+            "",
+            A_Index,
+            displayVars[1],
+            displayVars[2],
+            displayVars[3],
+            displayVars[4],
+            displayVars[5],
+            C.csvBatchStatusPending
+        )
+    }
+
+    tableLv.ModifyCol(1, 40)
+    tableLv.ModifyCol(7, 64)
+
+    S.csvBatchTableGui := tableGui
+    S.csvBatchTableLv := tableLv
+    tableGui.Show("x24 y80 w" UI.csvBatchTableWidth)
+}
+
+/**
+ * Updates one row's Status column in the batch progress table.
+ * @param {Integer} rowIndex One-based row index in the table.
+ * @param {String} status Status text to display.
+ */
+SetCsvBatchProgressRowStatus(rowIndex, status) {
+    global S
+
+    if S.csvBatchTableLv
+        S.csvBatchTableLv.Modify(rowIndex, "Col7", status)
+}
+
+/**
+ * Destroys the CSV batch progress table window.
+ */
+CloseCsvBatchProgressTable() {
+    global S
+
+    if S.csvBatchTableGui {
+        try S.csvBatchTableGui.Destroy()
+        S.csvBatchTableGui := ""
+    }
+    S.csvBatchTableLv := ""
+}
+
+/**
+ * Sets the user's choice on the CSV batch row prompt.
+ * @param {String} choice One of the C.csvBatchPromptChoice* constants.
+ */
+SetCsvBatchPromptChoice(choice, *) {
+    global S
+
+    S.csvPromptChoice := choice
+}
+
+/**
+ * Polls until the user selects a row prompt action or stops the batch.
+ * @returns {String} Prompt choice, or C.csvBatchPromptChoiceNone when stopped.
+ */
+WaitForCsvBatchPromptChoice() {
+    global C, S
+
+    while S.csvPromptChoice = C.csvBatchPromptChoiceNone && !S.stopBatch
+        Sleep C.csvBatchPromptPollMs
+
+    return S.stopBatch ? C.csvBatchPromptChoiceNone : S.csvPromptChoice
+}
+
+/**
+ * Shows the per-row CSV batch prompt and waits for Run, Skip, or Run all remaining.
+ * @param {Integer} rowIndex One-based row index.
+ * @param {Object} row Parsed CSV row.
+ * @param {Integer} totalRows Total row count in the batch.
+ * @returns {String} Prompt choice constant from C.csvBatchPromptChoice*.
+ */
+WaitCsvBatchRowPrompt(rowIndex, row, totalRows) {
+    global S, C, UI
+
+    CloseCsvBatchRowPrompt()
+    S.csvPromptChoice := C.csvBatchPromptChoiceNone
+
+    dlgWidth := UI.csvBatchPromptWidth
+    btnW := UI.csvBatchPromptBtnWidth
+    btnH := UI.btnHeightSecondary
+    displayVars := GetCsvRowDisplayVars(row)
+
+    promptGui := Gui(
+        "+AlwaysOnTop +ToolWindow -MaximizeBox -MinimizeBox",
+        Format("CSV row {}/{}", rowIndex, totalRows)
+    )
+    ApplyManageAppIcon(promptGui)
+    promptGui.BackColor := UI.surface
+    promptGui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    promptGui.MarginX := UI.marginX
+    promptGui.MarginY := UI.marginY
+
+    promptGui.Add(
+        "Text",
+        "xm w" dlgWidth " c" UI.textPrimary,
+        Format("Row label: {1}", row.label)
+    )
+
+    Loop C.csvBatchVarDisplayCount {
+        idx := A_Index
+        if displayVars[idx] != ""
+            promptGui.Add(
+                "Text",
+                "xm w" dlgWidth " c" UI.textMuted,
+                Format("Var{1}: {2}", idx, displayVars[idx])
+            )
+    }
+
+    runBtn := promptGui.Add(
+        "Button",
+        "xm w" btnW " h" btnH " Default +Background" UI.accent " c" UI.accentText,
+        C.csvBatchPromptRun
+    )
+    skipBtn := promptGui.Add(
+        "Button",
+        "x+" UI.btnGap " w" btnW " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        C.csvBatchPromptSkip
+    )
+    runAllBtn := promptGui.Add(
+        "Button",
+        "xm w" dlgWidth " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        C.csvBatchPromptRunAll
+    )
+
+    runBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceRun))
+    skipBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceSkip))
+    runAllBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceRunAll))
+    promptGui.OnEvent("Close", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceSkip))
+    promptGui.OnEvent("Escape", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceSkip))
+
+    S.csvBatchPromptGui := promptGui
+
+    if S.csvBatchTableLv
+        S.csvBatchTableLv.Modify(rowIndex, "Select Focus")
+
+    promptX := 24 + UI.csvBatchTableWidth + 12
+    promptGui.Show("x" promptX " y80 w" UI.csvBatchPromptWidth)
+
+    return WaitForCsvBatchPromptChoice()
+}
+
+/**
+ * Destroys the CSV batch row prompt window.
+ */
+CloseCsvBatchRowPrompt() {
+    global S, C
+
+    if S.csvBatchPromptGui {
+        try S.csvBatchPromptGui.Destroy()
+        S.csvBatchPromptGui := ""
+    }
+    S.csvPromptChoice := C.csvBatchPromptChoiceNone
+}
+
 RefreshAllLists(restore := false) {
     RefreshRecordingList()
     RefreshPresetList()
@@ -944,6 +1245,8 @@ RestoreSelections() {
 
     if S.csvEdit
         S.csvEdit.Value := saved.csv
+
+    S.csvAskNextLine := saved.csvAskNextLine
 }
 
 UpdateSelectionStatus() {
@@ -980,7 +1283,8 @@ RememberSelections() {
     SaveManageState(
         GetSelectedPresetPath() ? FileBaseName(GetSelectedPresetPath()) : "",
         GetSelectedRecordingPath() ? FileBaseName(GetSelectedRecordingPath()) : "",
-        Trim(S.csvEdit ? S.csvEdit.Value : "")
+        Trim(S.csvEdit ? S.csvEdit.Value : ""),
+        S.csvAskNextLine
     )
 }
 
@@ -1143,9 +1447,9 @@ ClearManageStateKeyIfMatches(stateKey, deletedBaseName) {
 
     if StrLower(currentValue) = StrLower(deletedBaseName) {
         if stateKey = C.statePresetKey
-            SaveManageState("", saved.recording, saved.csv)
+            SaveManageState("", saved.recording, saved.csv, saved.csvAskNextLine)
         else
-            SaveManageState(saved.preset, "", saved.csv)
+            SaveManageState(saved.preset, "", saved.csv, saved.csvAskNextLine)
     }
 }
 
@@ -2522,6 +2826,12 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
     completedRows := 0
     stopped := false
     totalRows := rows.Length
+    askNextLine := S.csvAskNextLine
+    S.csvBatchRunAllRemaining := false
+    S.csvPromptChoice := C.csvBatchPromptChoiceNone
+
+    if askNextLine
+        ShowCsvBatchProgressTable(rows)
 
     try {
         Loop totalRows {
@@ -2531,6 +2841,24 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
             if S.stopBatch {
                 stopped := true
                 break
+            }
+
+            if askNextLine && !S.csvBatchRunAllRemaining {
+                choice := WaitCsvBatchRowPrompt(rowIndex, row, totalRows)
+                CloseCsvBatchRowPrompt()
+
+                if S.stopBatch {
+                    stopped := true
+                    break
+                }
+
+                if choice = C.csvBatchPromptChoiceSkip {
+                    SetCsvBatchProgressRowStatus(rowIndex, C.csvBatchStatusSkipped)
+                    continue
+                }
+
+                if choice = C.csvBatchPromptChoiceRunAll
+                    S.csvBatchRunAllRemaining := true
             }
 
             S.variables := row.variables.Clone()
@@ -2548,6 +2876,9 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
             if result.success
                 completedRows += 1
 
+            if askNextLine
+                SetCsvBatchProgressRowStatus(rowIndex, C.csvBatchStatusDone)
+
             if rowIndex < totalRows && !S.stopBatch {
                 ResetApplyRuntimeState()
                 Sleep C.batchRowPauseMs
@@ -2557,6 +2888,10 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
         stopped := true
         ShowManageMsgBox "Batch run failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
     } finally {
+        CloseCsvBatchProgressTable()
+        CloseCsvBatchRowPrompt()
+        S.csvBatchRunAllRemaining := false
+        S.csvPromptChoice := C.csvBatchPromptChoiceNone
         S.batchRunning := false
         S.stopBatch := false
         ResetApplyRuntimeState()
@@ -2843,6 +3178,9 @@ Cleanup(*) {
     S.applying := false
     S.batchRunning := false
     S.stopBatch := false
+
+    CloseCsvBatchProgressTable()
+    CloseCsvBatchRowPrompt()
 
     SetTimer FlushLog, 0
     UninstallRecordHooks()
@@ -3642,17 +3980,19 @@ LoadManageState() {
     return {
         preset: Trim(IniRead(C.stateFile, C.stateSection, C.statePresetKey, "")),
         recording: Trim(IniRead(C.stateFile, C.stateSection, C.stateRecordingKey, "")),
-        csv: Trim(IniRead(C.stateFile, C.stateSection, C.stateCsvKey, ""))
+        csv: Trim(IniRead(C.stateFile, C.stateSection, C.stateCsvKey, "")),
+        csvAskNextLine: IniRead(C.stateFile, C.stateSection, C.stateCsvAskNextLineKey, "0") = "1"
     }
 }
 
-SaveManageState(presetName, recordingName, csvPath := "") {
+SaveManageState(presetName, recordingName, csvPath := "", csvAskNextLine := false) {
     global C
 
     EnsureParentDir(C.stateFile)
     IniWrite presetName, C.stateFile, C.stateSection, C.statePresetKey
     IniWrite recordingName, C.stateFile, C.stateSection, C.stateRecordingKey
     IniWrite csvPath, C.stateFile, C.stateSection, C.stateCsvKey
+    IniWrite csvAskNextLine ? "1" : "0", C.stateFile, C.stateSection, C.stateCsvAskNextLineKey
 }
 
 

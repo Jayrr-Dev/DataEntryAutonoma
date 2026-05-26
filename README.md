@@ -74,7 +74,7 @@ Typical uses:
 - Column 1 is a row label (status display only)
 - Columns 2 and onward map to `variable-1`, `variable-2`, etc.
 - Preset is optional during batch run: row values replace preset variables; preset still supplies speeds and run options if selected
-- **Browse** to pick a CSV path; **i** button opens in-app help
+- **Browse** to pick a CSV path; **i** button opens in-app help; **Config** enables step-by-step **Ask to run next line** mode with a progress table and per-row Run / Skip / Run all remaining prompts
 - Blank lines and lines starting with `#` are ignored
 
 ### App behavior
@@ -382,6 +382,7 @@ Rules:
 - Column 1 is a label shown in the status bar during batch run
 - Columns 2+ map to `variable-1`, `variable-2`, `variable-3`, ...
 - Lines starting with `#` and blank lines are ignored
+- **Config** (Input Presets tab) enables **Ask to run next line**: a progress table lists all rows; before each row you can Run, Skip, or Run all remaining
 - **Esc** stops the whole batch; completed rows stay completed
 
 ## Recording file format
@@ -420,6 +421,7 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
+| **1.0.2** | CSV Config with ask next line, batch progress table, uninstall wizard in release zip |
 | **1.0.1** | Install wizard upgrades existing installs in place; version shown in app title |
 | **1.0.0** | Initial release: Record/Run, presets, CSV batch, install wizard, standalone exe |
 

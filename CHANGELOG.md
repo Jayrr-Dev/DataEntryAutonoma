@@ -5,6 +5,18 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-05-26
+
+### Added
+
+- CSV batch **Config** button on the Input Presets tab with **Ask to run next line** option (persisted in `apply-state.ini`)
+- Step-by-step CSV batch mode: always-on-top progress table (Row, Var1–Var5, Status) and non-modal per-row prompt (Run this row, Skip, Run all remaining)
+- Graphical uninstall wizard (`runUninstallWizard.ps1` / `.bat`) included in release packages when present
+
+### Changed
+
+- CSV batch help text mentions Config and ask-next-line mode
+
 ## [1.0.1] - 2026-05-26
 
 ### Added
@@ -29,5 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.0.2]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/releases/tag/v1.0.0
