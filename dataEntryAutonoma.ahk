@@ -10,7 +10,7 @@ SetKeyDelay -1
 ; Unified Detect (record) and Apply (replay) module with CSV batch support.
 ; Recordings: recordings\di-*.log
 ; Presets: saved-inputs\*.txt
-; Esc stops recording, playback, or an entire CSV batch.
+; Esc saves recording (Cancel on the save dialog discards). Esc stops playback or a CSV batch.
 
 EnableDpiAwareness()
 CoordMode "Mouse", "Screen"
@@ -52,11 +52,13 @@ How it works:
   • Preset is optional — speeds and playback options only; row values are used instead of preset variables
   • Esc stops the whole batch
     )",
-    recordingTipText: "Esc to save and exit",
+    recordingTipText: "Esc = Save · Hold Shift = delay",
     recordingTipOffsetX: 240,
     recordingTipOffsetY: 16,
     recordingTipRefreshMs: 1000,
     recordingTransientTipMs: 3000,
+    minShiftDelayMs: 200,
+    shiftDelayTipRefreshMs: 100,
     fileDeleteAttempts: 5,
     fileDeleteRetryMs: 250,
 
@@ -69,6 +71,9 @@ How it works:
     defaultTypingSpeed: 1.0,
     defaultMoveSpeed: 1.5,
     defaultInitialDelayMs: 1000,
+    defaultClickPauseMs: 150,
+    defaultSegmentPauseMs: 200,
+    defaultUseRecordedTiming: false,
     defaultSmoothMouse: true,
     defaultHumanTyping: true,
 
@@ -87,8 +92,6 @@ How it works:
     moveStepsPerPx: 0.65,
     moveStepMinSleepMs: 1,
 
-    clickPauseMs: 150,
-    segmentPauseMs: 200,
     variableTipMs: 2500,
     blockUserMouse: true,
 
@@ -113,11 +116,15 @@ How it works:
     WM_MOUSEHWHEEL: 0x20E,
 
     WM_KEYDOWN: 0x100,
+    WM_KEYUP: 0x101,
     WM_SYSKEYDOWN: 0x104,
+    WM_SYSKEYUP: 0x105,
 
     VK_ESCAPE: 0x1B,
     VK_F9: 0x78,
     VK_F10: 0x79,
+    VK_LSHIFT: 0xA0,
+    VK_RSHIFT: 0xA1,
 
     ignoredExes: [
         "AutoHotkey64.exe",
@@ -197,6 +204,8 @@ S := {
     originY: 0,
     lastTargetX: 0,
     lastTargetY: 0,
+    shiftDelayHeld: false,
+    shiftDelayStartedAt: 0,
     waitingForKey: false,
     keyIndex: 0,
 
@@ -205,6 +214,9 @@ S := {
     typingSpeed: C.defaultTypingSpeed,
     moveSpeed: C.defaultMoveSpeed,
     initialDelayMs: C.defaultInitialDelayMs,
+    clickPauseMs: C.defaultClickPauseMs,
+    segmentPauseMs: C.defaultSegmentPauseMs,
+    useRecordedTiming: C.defaultUseRecordedTiming,
     smoothMouse: C.defaultSmoothMouse,
     humanTyping: C.defaultHumanTyping,
     virtualBounds: "",
@@ -250,7 +262,7 @@ EnsureDir(C.recordingsDir)
 OnExit (*) => Cleanup()
 
 #HotIf IsRecording()
-Esc::StopRecording()
+Esc::SaveRecording()
 #HotIf
 
 #HotIf IsApplying() || IsBatchRunning()
@@ -545,7 +557,7 @@ CreateManageGui() {
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textHint,
-        "Detect records clicks, scrolls, and keys. Apply replays with presets or CSV. Esc stops."
+        "Detect records clicks, scrolls, and keys. Esc saves a recording (Cancel on the dialog discards). Esc stops Apply."
     )
 
     S.gui.Show()
@@ -557,7 +569,7 @@ GuiClosed(*) {
     global S
 
     if S.recording
-        StopRecording()
+        CancelRecording()
     else if S.applying || S.batchRunning
         RequestStop()
     else
@@ -697,6 +709,7 @@ ShowRecordingTip() {
 HideRecordingTip() {
     SetTimer MaintainRecordingTip, 0
     SetTimer RestoreRecordingTip, 0
+    SetTimer RefreshRecordingShiftDelayTip, 0
     ToolTip
 }
 
@@ -786,7 +799,11 @@ ShowManageMsgBox(message, title := APP_GUI_TITLE, options := "Icon!") {
  * @returns {Object} InputBox result object.
  */
 ShowManageInputBox(prompt, title, options := "", defaultText := "") {
+    global S
+
     EnsureManageOwnDialogs()
+    if S.gui && !S.gui.Visible
+        S.gui.Show()
     return InputBox(prompt, title, options, defaultText)
 }
 
@@ -1484,6 +1501,27 @@ ShowPresetEditor(*) {
     moveEdit := editor.Add("Edit", "x+0 w220", existingSettings.move_speed)
     editor.Add("Text", "xm w180", "Initial delay (ms):")
     delayEdit := editor.Add("Edit", "x+0 w220", existingSettings.initial_delay)
+    editor.Add("Text", "xm w180", "Click pause (ms):")
+    clickPauseEdit := editor.Add("Edit", "x+0 w220", existingSettings.click_pause_ms)
+    editor.Add("Text", "xm w180", "Step pause (ms):")
+    segmentPauseEdit := editor.Add("Edit", "x+0 w220", existingSettings.segment_pause_ms)
+    editor.Add("Text", "xm w430 c555555", "Click pause: after move, before click. Step pause: after each target before the next.")
+    editor.Add("Text", "xm w430 c555555", "Between steps:")
+    presetPausesRadio := editor.Add(
+        "Radio",
+        "xm" (!existingSettings.use_recorded_timing ? " checked" : ""),
+        "Preset pauses only"
+    )
+    recordedGapsRadio := editor.Add(
+        "Radio",
+        "x+12" (existingSettings.use_recorded_timing ? " checked" : ""),
+        "Recorded gaps"
+    )
+    editor.Add(
+        "Text",
+        "xm w430 c555555",
+        "Recorded gaps replay seconds between clicks from Detect. Preset pauses only ignores those."
+    )
 
     editor.Add("Text", "xm w430 c1A1A1A", "Playback options")
     editor.Add("Text", "xm w430 c555555", "Mouse movement")
@@ -1528,6 +1566,9 @@ ShowPresetEditor(*) {
             typing_speed: SafeFloat(typingEdit.Value, C.defaultTypingSpeed),
             move_speed: SafeFloat(moveEdit.Value, C.defaultMoveSpeed),
             initial_delay: SafeInteger(delayEdit.Value, C.defaultInitialDelayMs),
+            click_pause_ms: SafeInteger(clickPauseEdit.Value, C.defaultClickPauseMs),
+            segment_pause_ms: SafeInteger(segmentPauseEdit.Value, C.defaultSegmentPauseMs),
+            use_recorded_timing: recordedGapsRadio.Value = 1,
             smooth_mouse: smoothMouseRadio.Value = 1,
             human_typing: humanTypingRadio.Value = 1,
             variables: []
@@ -1557,6 +1598,7 @@ ShowPresetEditor(*) {
             SetStatus(originalPresetPath != "" && StrLower(originalPresetPath) = StrLower(presetPath)
                 ? "Updated preset — " presetName
                 : "Saved preset — " presetName)
+            CloseEditor()
         } catch as err {
             ShowManageMsgBox "Could not save inputs:`n" err.Message, "Edit Apply Inputs", "Icon!"
         }
@@ -1616,35 +1658,76 @@ StartRecording() {
     SetTimer FlushLog, C.flushIntervalMs
 
     ShowRecordingTip()
+    ShowTransientRecordingTip("Recording... Esc to save · Hold Shift for delay.")
     SetTimer MaintainRecordingTip, C.recordingTipRefreshMs
 }
 
-StopRecording(*) {
-    global C, S
+/**
+ * Cancels the active recording and deletes the temp log file.
+ */
+CancelRecording(*) {
+    EndRecordingSession(false)
+}
+
+/**
+ * Saves the active recording and prompts for a final name.
+ */
+SaveRecording(*) {
+    EndRecordingSession(true)
+}
+
+/**
+ * Ends Detect mode, optionally saving the recording file.
+ * @param {Boolean} shouldSave When true, prompts to rename and keep the log.
+ */
+EndRecordingSession(shouldSave) {
+    global S
 
     if !S.recording
         return
 
-    WriteLine(Format("{}|meta|recording_stopped`n", Elapsed()))
-    S.recording := false
+    path := S.filePath
 
+    if S.shiftDelayHeld {
+        if shouldSave
+            CommitRecordingShiftDelay()
+        else
+            CancelRecordingShiftDelayState()
+    }
+
+    if shouldSave
+        WriteLine(Format("{}|meta|recording_stopped`n", Elapsed()))
+
+    S.recording := false
     SetTimer FlushLog, 0
+    SetTimer MaintainRecordingTip, 0
     UninstallRecordHooks()
     CloseLogFile()
     HideRecordingTip()
-
     SetRecordingGuiState(false)
-    RenameRecording(S.filePath)
-    RefreshRecordingList()
-
-    if S.recordingList && S.filePath != ""
-        SelectByBaseName(S.recordingList, S.recordingPaths, FileBaseName(S.filePath))
-
-    RememberSelections()
-    UpdateSelectionStatus()
 
     if S.gui
         S.gui.Show()
+
+    if shouldSave {
+        RenameRecording(path)
+        RefreshRecordingList()
+
+        if S.recordingList && S.filePath != "" && FileExist(S.filePath)
+            SelectByBaseName(S.recordingList, S.recordingPaths, FileBaseName(S.filePath))
+
+        RememberSelections()
+        UpdateSelectionStatus()
+    } else {
+        DiscardRecordingFile(path)
+        S.filePath := ""
+        RefreshRecordingList()
+        SetStatus("Recording cancelled.")
+    }
+}
+
+StopRecording(*) {
+    SaveRecording()
 }
 
 ResetRecordingState() {
@@ -1658,6 +1741,94 @@ ResetRecordingState() {
     S.originY := 0
     S.waitingForKey := false
     S.keyIndex := 0
+    S.shiftDelayHeld := false
+    S.shiftDelayStartedAt := 0
+}
+
+/**
+ * Returns true for left/right Shift virtual-key codes.
+ * @param {Integer} vk Virtual-key code.
+ * @returns {Boolean}
+ */
+IsShiftVirtualKey(vk) {
+    global C
+
+    return vk = C.VK_LSHIFT || vk = C.VK_RSHIFT || vk = 0x10
+}
+
+/**
+ * Starts timing a manual delay while Shift is held during Detect.
+ */
+BeginRecordingShiftDelay(*) {
+    global S, C
+
+    if !S.recording || S.shiftDelayHeld
+        return
+
+    S.shiftDelayHeld := true
+    S.shiftDelayStartedAt := A_TickCount
+    SetTimer RefreshRecordingShiftDelayTip, C.shiftDelayTipRefreshMs
+    RefreshRecordingShiftDelayTip()
+}
+
+/**
+ * Updates the live Shift-hold delay tooltip in seconds.
+ */
+RefreshRecordingShiftDelayTip(*) {
+    global S, C
+
+    if !S.recording || !S.shiftDelayHeld {
+        SetTimer RefreshRecordingShiftDelayTip, 0
+        return
+    }
+
+    seconds := Round((A_TickCount - S.shiftDelayStartedAt) / 1000, 1)
+    ToolTip Format("Recording delay: {1} s", seconds), A_ScreenWidth - C.recordingTipOffsetX, C.recordingTipOffsetY - 28
+}
+
+/**
+ * Clears Shift-delay tracking without writing to the log.
+ */
+CancelRecordingShiftDelayState() {
+    global S
+
+    SetTimer RefreshRecordingShiftDelayTip, 0
+    S.shiftDelayHeld := false
+    S.shiftDelayStartedAt := 0
+
+    if IsRecording()
+        ShowRecordingTip()
+    else
+        ToolTip
+}
+
+/**
+ * Writes a recorded Shift-hold delay to the log and shows a confirmation tooltip.
+ */
+CommitRecordingShiftDelay(*) {
+    global S, C
+
+    if !S.shiftDelayHeld
+        return
+
+    SetTimer RefreshRecordingShiftDelayTip, 0
+    durationMs := Max(0, A_TickCount - S.shiftDelayStartedAt)
+    S.shiftDelayHeld := false
+    S.shiftDelayStartedAt := 0
+
+    if !S.recording {
+        ToolTip
+        return
+    }
+
+    if durationMs < C.minShiftDelayMs {
+        ShowRecordingTip()
+        return
+    }
+
+    WriteLine(Format("{}|meta|delay|{}`n", Elapsed(), durationMs))
+    seconds := Round(durationMs / 1000, 1)
+    ShowTransientRecordingTip(Format("Added delay: {1} s", seconds))
 }
 
 IsRecording() {
@@ -1786,17 +1957,29 @@ MouseHookProc(nCode, wParam, lParam) {
 KeyboardHookProc(nCode, wParam, lParam) {
     global C, S
 
-    if nCode >= 0 && S.recording && (wParam = C.WM_KEYDOWN || wParam = C.WM_SYSKEYDOWN) {
+    if nCode >= 0 && S.recording {
         vk := NumGet(lParam, 0, "UInt")
         sc := NumGet(lParam, 4, "UInt")
+        isKeyDown := (wParam = C.WM_KEYDOWN || wParam = C.WM_SYSKEYDOWN)
+        isKeyUp := (wParam = C.WM_KEYUP || wParam = C.WM_SYSKEYUP)
 
-        if vk = C.VK_ESCAPE {
-            SetTimer StopRecording, -1
+        if IsShiftVirtualKey(vk) && (isKeyDown || isKeyUp) {
+            if isKeyDown
+                SetTimer BeginRecordingShiftDelay, -1
+            else if !GetKeyState("Shift", "P")
+                SetTimer CommitRecordingShiftDelay, -1
             return 1
         }
 
-        if vk != C.VK_F9 && vk != C.VK_F10
-            QueueKeyEvent({ vk: vk, sc: sc })
+        if isKeyDown {
+            if vk = C.VK_ESCAPE {
+                SetTimer SaveRecording, -1
+                return 1
+            }
+
+            if vk != C.VK_F10
+                QueueKeyEvent({ vk: vk, sc: sc })
+        }
     }
 
     return DllCall(
@@ -2088,6 +2271,8 @@ WriteHeader(sessionName) {
     WriteLine("# elapsed_ms|scroll|direction|delta|notches|screenX|screenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe`n")
     WriteLine("# key fields:`n")
     WriteLine("# elapsed_ms|key|variable-N|vk|sc|hwnd|class|title|exe`n")
+    WriteLine("# delay fields:`n")
+    WriteLine("# elapsed_ms|meta|delay|duration_ms`n")
     WriteLine("# playback tip: prefer pctX/pctY against the target window's current client size, then fallback to clientX/clientY, then screenX/screenY.`n")
 }
 
@@ -2146,14 +2331,18 @@ RenameRecording(savedPath) {
     result := ShowManageInputBox("Recording name:", "Save Recording", "w360 h130", DisplayName(savedPath))
 
     if result.Result != "OK" {
-        SetStatus("Ready")
+        DiscardRecordingFile(savedPath)
+        S.filePath := ""
+        SetStatus("Recording cancelled.")
         return
     }
 
     fileName := SafeRecordingFileName(result.Value)
 
     if fileName = "" {
-        SetStatus("Ready")
+        DiscardRecordingFile(savedPath)
+        S.filePath := ""
+        SetStatus("Recording cancelled.")
         return
     }
 
@@ -2168,6 +2357,23 @@ RenameRecording(savedPath) {
     } catch as err {
         ShowManageMsgBox "Could not rename file:`n" err.Message, "Save Recording", "Icon!"
         SetStatus("Ready")
+    }
+}
+
+/**
+ * Deletes a discarded recording log after cancel or a rejected save prompt.
+ * @param {String} path Recording file path.
+ */
+DiscardRecordingFile(path) {
+    if path = "" || !FileExist(path)
+        return
+
+    try {
+        if InStr(FileGetAttrib(path), "R")
+            FileSetAttrib("-R", path)
+        FileDelete path
+    } catch {
+        try FileRecycle path
     }
 }
 
@@ -2478,9 +2684,12 @@ ExecuteApplyPlayback(parsed) {
             }
 
             relativeElapsed := action.elapsed - firstElapsed
-            delay := Max(0, (relativeElapsed - previousRelativeElapsed) / S.playbackSpeed)
-            previousRelativeElapsed := relativeElapsed
-            SleepWhileApplying(delay)
+
+            if S.useRecordedTiming {
+                delay := Max(0, (relativeElapsed - previousRelativeElapsed) / S.playbackSpeed)
+                previousRelativeElapsed := relativeElapsed
+                SleepWhileApplying(delay)
+            }
 
             if !S.applying || S.stopBatch {
                 stopped := true
@@ -2493,6 +2702,8 @@ ExecuteApplyPlayback(parsed) {
             } else if action.type = "scroll" {
                 ReplayScroll(action)
                 scrolled += 1
+            } else if action.type = "delay" && !S.useRecordedTiming {
+                SleepWhileApplying(action.delayMs)
             }
         }
     } catch as err {
@@ -2528,7 +2739,7 @@ ReplayApply(action) {
     if !S.applying || S.stopBatch
         return
 
-    SleepWhileApplying(C.clickPauseMs)
+    SleepWhileApplying(S.clickPauseMs)
 
     if !S.applying || S.stopBatch
         return
@@ -2545,7 +2756,7 @@ ReplayApply(action) {
             SendText text
     }
 
-    SleepWhileApplying(C.segmentPauseMs)
+    SleepWhileApplying(S.segmentPauseMs)
 }
 
 ReplayScroll(action) {
@@ -2765,6 +2976,16 @@ ProcessDetectLogEvent(line, parsed, pendingClick) {
     if eventType = "meta" {
         if parts.Length >= 3 && parts[3] = "recording_started"
             parsed.recordingStartedAt := elapsedMs
+        else if parts.Length >= 4 && parts[3] = "delay" {
+            delayMs := SafeInteger(parts[4], 0)
+            if delayMs > 0 {
+                parsed.actions.Push({
+                    type: "delay",
+                    elapsed: elapsedMs,
+                    delayMs: delayMs
+                })
+            }
+        }
         return pendingClick
     }
 
@@ -3284,6 +3505,9 @@ DefaultSettings() {
         typing_speed: C.defaultTypingSpeed,
         move_speed: C.defaultMoveSpeed,
         initial_delay: C.defaultInitialDelayMs,
+        click_pause_ms: C.defaultClickPauseMs,
+        segment_pause_ms: C.defaultSegmentPauseMs,
+        use_recorded_timing: C.defaultUseRecordedTiming,
         smooth_mouse: C.defaultSmoothMouse,
         human_typing: C.defaultHumanTyping,
         variables: []
@@ -3315,6 +3539,12 @@ ParsePresetFile(filePath) {
                     settings.move_speed := SafeFloat(value, settings.move_speed)
                 case "initial_delay":
                     settings.initial_delay := SafeInteger(value, settings.initial_delay)
+                case "click_pause_ms":
+                    settings.click_pause_ms := SafeInteger(value, settings.click_pause_ms)
+                case "segment_pause_ms":
+                    settings.segment_pause_ms := SafeInteger(value, settings.segment_pause_ms)
+                case "use_recorded_timing":
+                    settings.use_recorded_timing := SafeBool(value, settings.use_recorded_timing)
                 case "smooth_mouse":
                     settings.smooth_mouse := SafeBool(value, settings.smooth_mouse)
                 case "human_typing":
@@ -3343,6 +3573,9 @@ ApplySettings(settings) {
     S.typingSpeed := Max(0.05, settings.typing_speed)
     S.moveSpeed := Max(0.05, settings.move_speed)
     S.initialDelayMs := Max(0, settings.initial_delay)
+    S.clickPauseMs := Max(0, settings.click_pause_ms)
+    S.segmentPauseMs := Max(0, settings.segment_pause_ms)
+    S.useRecordedTiming := settings.use_recorded_timing
     S.smoothMouse := settings.smooth_mouse
     S.humanTyping := settings.human_typing
     S.variables := settings.variables.Clone()
@@ -3361,11 +3594,14 @@ WritePresetFile(settings, filePath) {
 
 SerializePreset(settings) {
     return ""
-        . "# speed — higher = faster, except initial_delay which is milliseconds`n"
+        . "# timing — ms pauses; speeds: higher = faster`n"
         . "playback_speed=" settings.playback_speed "`n"
         . "typing_speed=" settings.typing_speed "`n"
         . "move_speed=" settings.move_speed "`n"
         . "initial_delay=" settings.initial_delay "`n"
+        . "click_pause_ms=" settings.click_pause_ms "`n"
+        . "segment_pause_ms=" settings.segment_pause_ms "`n"
+        . "use_recorded_timing=" (settings.use_recorded_timing ? 1 : 0) "`n"
         . "smooth_mouse=" (settings.smooth_mouse ? 1 : 0) "`n"
         . "human_typing=" (settings.human_typing ? 1 : 0) "`n"
         . "`n"
