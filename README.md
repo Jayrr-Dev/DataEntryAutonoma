@@ -43,7 +43,8 @@ Typical uses:
 - **Window matching** uses hwnd, class, title, and exe so replay can find the right window again
 - **Scroll capture** records wheel direction, delta, and notch count at the cursor position
 - **Variable keys** are created only when you press a key after a click; click-only steps replay as clicks with no typing
-- **Shift-hold delays** let you insert manual pauses during recording; a live tooltip at the cursor shows seconds held
+- **Left-click hold and drag** records mouse button down, optional drag, and release (useful for Excel range selection); hold left-click for 2 seconds to start, release to save
+- **Keyboard shortcuts** with Ctrl, Shift, or Alt are recorded and replayed (for example Ctrl+C, Shift+F10)
 - **Esc saves** the recording and opens a rename dialog; **Cancel** on that dialog discards the file
 - **Edit Log** opens the raw recording file for advanced edits
 - **Rename** and **Delete** for recordings from the Recordings tab
@@ -311,11 +312,12 @@ For many rows, prepare a CSV file instead of typing variables into a preset.
 1. Click **Record**. The main window hides so you can work in other apps.
 2. Click targets in your app. After each click you may press a key to mark typed input for that field, or skip the key for click-only navigation.
 3. Scroll when needed; wheel actions are captured at the cursor.
-4. Hold **Shift** to add a delay. Release Shift to confirm (minimum 0.2 seconds). The delay tooltip follows your cursor.
-5. Press **Esc** when finished. Name the recording in the dialog or click **Cancel** to throw it away.
-6. Close the app window while recording to cancel without saving.
+4. Hold **left-click** for 2 seconds to start a mouse hold or drag, move if needed (for example to select cells in Excel), then release to save it.
+5. Press **Ctrl**, **Shift**, or **Alt** with another key to record keyboard shortcuts (for example Ctrl+C).
+6. Press **Esc** when finished. Name the recording in the dialog or click **Cancel** to throw it away.
+7. Close the app window while recording to cancel without saving.
 
-Corner tooltip while recording: **Esc = Save · Hold Shift = delay**
+Corner tooltip while recording: **Esc = Save · Hold left-click 2s = drag/hold**
 
 ## Run workflow
 
@@ -338,7 +340,7 @@ If the recording expects typed variables but none are provided, the app prompts 
 | Click pause (ms) | Pause after moving to a target, before the click |
 | Step pause (ms) | Pause after each target before the next step |
 | Preset pauses only | Uses your pause values; ignores elapsed time between recorded steps |
-| Recorded gaps | Replays time gaps captured during recording (including Shift delays) |
+| Recorded gaps | Replays time gaps captured during recording (including right-click hold delays) |
 | Smooth / Instant mouse | Curved movement vs teleport |
 | Human-like / Instant typing | Randomized key timing vs immediate send |
 | Variable inputs | One line per variable slot |
@@ -463,7 +465,8 @@ See [BUILD.md](BUILD.md) for distribution layout and advanced compile options.
 | Key | While recording | While running / CSV batch |
 |-----|-----------------|---------------------------|
 | **Esc** | Save (opens name dialog) | Stop run or batch |
-| **Shift** (hold) | Add timed delay | (no effect) |
+| **Left-click** (hold 2s) | Start mouse hold/drag, release to save | Replays button down, drag or wait, button up |
+| **Ctrl/Shift/Alt + key** | Record shortcut | Replays shortcut |
 
 Cancel on the save dialog discards the recording. Closing the app window while recording also cancels without saving.
 

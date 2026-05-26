@@ -57,15 +57,16 @@ How it works:
   • Ask to run next line shows a progress table and a prompt before each row (Run, Skip, or Run all remaining)
   • Esc stops the whole batch
     )",
-    recordingTipText: "Esc = Save · Hold Shift = delay",
+    recordingTipText: "Esc = Save · Hold left-click 2s = drag/hold",
     recordingTipOffsetX: 240,
     recordingTipOffsetY: 16,
     cursorTipOffsetX: 12,
     cursorTipOffsetY: 12,
     recordingTipRefreshMs: 1000,
     recordingTransientTipMs: 3000,
-    minShiftDelayMs: 200,
-    shiftDelayTipRefreshMs: 100,
+    minMouseHoldActivationMs: 2000,
+    minRecordedDelayMs: 200,
+    mouseHoldTipRefreshMs: 100,
     fileDeleteAttempts: 5,
     fileDeleteRetryMs: 250,
 
@@ -133,7 +134,10 @@ How it works:
     LLMHF_INJECTED: 0x1,
 
     WM_LBUTTONDOWN: 0x201,
+    WM_LBUTTONUP: 0x202,
+    WM_MOUSEMOVE: 0x200,
     WM_RBUTTONDOWN: 0x204,
+    WM_RBUTTONUP: 0x205,
     WM_MBUTTONDOWN: 0x207,
     WM_XBUTTONDOWN: 0x20B,
     WM_MOUSEWHEEL: 0x20A,
@@ -149,6 +153,10 @@ How it works:
     VK_F10: 0x79,
     VK_LSHIFT: 0xA0,
     VK_RSHIFT: 0xA1,
+    VK_LCONTROL: 0xA2,
+    VK_RCONTROL: 0xA3,
+    VK_LMENU: 0xA4,
+    VK_RMENU: 0xA5,
 
     ignoredExes: [
         "AutoHotkey64.exe",
@@ -237,8 +245,14 @@ S := {
     originY: 0,
     lastTargetX: 0,
     lastTargetY: 0,
-    shiftDelayHeld: false,
-    shiftDelayStartedAt: 0,
+    leftHoldPending: false,
+    leftHoldActive: false,
+    leftHoldDownAt: 0,
+    leftHoldActiveStartedAt: 0,
+    leftHoldDownX: 0,
+    leftHoldDownY: 0,
+    leftHoldEndX: 0,
+    leftHoldEndY: 0,
     waitingForKey: false,
     keyIndex: 0,
 
@@ -765,7 +779,8 @@ ShowRecordingTip() {
 HideRecordingTip() {
     SetTimer MaintainRecordingTip, 0
     SetTimer RestoreRecordingTip, 0
-    SetTimer RefreshRecordingShiftDelayTip, 0
+    SetTimer RefreshRecordingLeftMouseHoldTip, 0
+    SetTimer CheckLeftMouseHoldActivation, 0
     ToolTip
 }
 
@@ -1978,7 +1993,7 @@ StartRecording() {
     SetTimer FlushLog, C.flushIntervalMs
 
     ShowRecordingTip()
-    ShowTransientRecordingTip("Recording... Esc to save · Hold Shift for delay.")
+    ShowTransientRecordingTip("Recording... Esc to save · Hold left-click 2 seconds for drag/hold · Ctrl/Shift/Alt shortcuts supported.")
     SetTimer MaintainRecordingTip, C.recordingTipRefreshMs
 }
 
@@ -2008,11 +2023,11 @@ EndRecordingSession(shouldSave) {
 
     path := S.filePath
 
-    if S.shiftDelayHeld {
-        if shouldSave
-            CommitRecordingShiftDelay()
+    if S.leftHoldPending || S.leftHoldActive {
+        if shouldSave && S.leftHoldActive
+            CommitRecordingLeftMouseHold()
         else
-            CancelRecordingShiftDelayState()
+            CancelRecordingLeftMouseHoldState()
     }
 
     if shouldSave
@@ -2061,60 +2076,69 @@ ResetRecordingState() {
     S.originY := 0
     S.waitingForKey := false
     S.keyIndex := 0
-    S.shiftDelayHeld := false
-    S.shiftDelayStartedAt := 0
+    S.leftHoldPending := false
+    S.leftHoldActive := false
+    S.leftHoldDownAt := 0
+    S.leftHoldActiveStartedAt := 0
+    S.leftHoldDownX := 0
+    S.leftHoldDownY := 0
+    S.leftHoldEndX := 0
+    S.leftHoldEndY := 0
 }
 
 /**
- * Returns true for left/right Shift virtual-key codes.
- * @param {Integer} vk Virtual-key code.
- * @returns {Boolean}
+ * Activates mouse-hold recording after the left button stays down long enough.
  */
-IsShiftVirtualKey(vk) {
-    global C
-
-    return vk = C.VK_LSHIFT || vk = C.VK_RSHIFT || vk = 0x10
-}
-
-/**
- * Starts timing a manual delay while Shift is held during Detect.
- */
-BeginRecordingShiftDelay(*) {
+CheckLeftMouseHoldActivation(*) {
     global S, C
 
-    if !S.recording || S.shiftDelayHeld
+    if !S.recording || !S.leftHoldPending || S.leftHoldActive
         return
 
-    S.shiftDelayHeld := true
-    S.shiftDelayStartedAt := A_TickCount
-    SetTimer RefreshRecordingShiftDelayTip, C.shiftDelayTipRefreshMs
-    RefreshRecordingShiftDelayTip()
-}
-
-/**
- * Updates the live Shift-hold delay tooltip in seconds.
- */
-RefreshRecordingShiftDelayTip(*) {
-    global S
-
-    if !S.recording || !S.shiftDelayHeld {
-        SetTimer RefreshRecordingShiftDelayTip, 0
+    if !GetKeyState("LButton", "P") {
+        CancelRecordingLeftMouseHoldState()
         return
     }
 
-    seconds := Round((A_TickCount - S.shiftDelayStartedAt) / 1000, 1)
-    ShowCursorToolTip(Format("Recording delay: {1} s", seconds))
+    S.leftHoldActive := true
+    S.leftHoldActiveStartedAt := A_TickCount
+    S.leftHoldEndX := S.leftHoldDownX
+    S.leftHoldEndY := S.leftHoldDownY
+    SetTimer RefreshRecordingLeftMouseHoldTip, C.mouseHoldTipRefreshMs
+    RefreshRecordingLeftMouseHoldTip()
 }
 
 /**
- * Clears Shift-delay tracking without writing to the log.
+ * Updates the live left-hold tooltip in seconds.
  */
-CancelRecordingShiftDelayState() {
+RefreshRecordingLeftMouseHoldTip(*) {
     global S
 
-    SetTimer RefreshRecordingShiftDelayTip, 0
-    S.shiftDelayHeld := false
-    S.shiftDelayStartedAt := 0
+    if !S.recording || !S.leftHoldActive {
+        SetTimer RefreshRecordingLeftMouseHoldTip, 0
+        return
+    }
+
+    seconds := Round((A_TickCount - S.leftHoldActiveStartedAt) / 1000, 1)
+    ShowCursorToolTip(Format("Recording mouse hold: {1} s", seconds))
+}
+
+/**
+ * Clears left-hold tracking without writing to the log.
+ */
+CancelRecordingLeftMouseHoldState() {
+    global S
+
+    SetTimer CheckLeftMouseHoldActivation, 0
+    SetTimer RefreshRecordingLeftMouseHoldTip, 0
+    S.leftHoldPending := false
+    S.leftHoldActive := false
+    S.leftHoldDownAt := 0
+    S.leftHoldActiveStartedAt := 0
+    S.leftHoldDownX := 0
+    S.leftHoldDownY := 0
+    S.leftHoldEndX := 0
+    S.leftHoldEndY := 0
 
     if IsRecording()
         ShowRecordingTip()
@@ -2123,33 +2147,132 @@ CancelRecordingShiftDelayState() {
 }
 
 /**
- * Writes a recorded Shift-hold delay to the log and shows a confirmation tooltip.
+ * Writes a recorded left-button hold/drag to the log.
  */
-CommitRecordingShiftDelay(*) {
+CommitRecordingLeftMouseHold(*) {
     global S, C
 
-    if !S.shiftDelayHeld
+    if !S.leftHoldActive
         return
 
-    SetTimer RefreshRecordingShiftDelayTip, 0
-    durationMs := Max(0, A_TickCount - S.shiftDelayStartedAt)
-    S.shiftDelayHeld := false
-    S.shiftDelayStartedAt := 0
+    SetTimer RefreshRecordingLeftMouseHoldTip, 0
+    durationMs := Max(0, A_TickCount - S.leftHoldActiveStartedAt)
+    startX := S.leftHoldDownX
+    startY := S.leftHoldDownY
+    endX := S.leftHoldEndX
+    endY := S.leftHoldEndY
+
+    S.leftHoldPending := false
+    S.leftHoldActive := false
+    S.leftHoldDownAt := 0
+    S.leftHoldActiveStartedAt := 0
+    S.leftHoldDownX := 0
+    S.leftHoldDownY := 0
+    S.leftHoldEndX := 0
+    S.leftHoldEndY := 0
 
     if !S.recording {
         ToolTip
         return
     }
 
-    if durationMs < C.minShiftDelayMs {
+    if durationMs < C.minRecordedDelayMs
+        && Abs(endX - startX) < 3
+        && Abs(endY - startY) < 3 {
         ShowRecordingTip()
         return
     }
 
-    WriteLine(Format("{}|meta|delay|{}`n", Elapsed(), durationMs))
+    ctx := GetActiveWindowContext()
+    SaveOriginMetadataIfNeeded(startX, startY)
+    startCoords := BuildCoordinateSnapshot(startX, startY, ctx)
+    S.lastTargetX := endX
+    S.lastTargetY := endY
+    ArmKeyCapture()
+    WriteMouseHoldLine("LButton", durationMs, startCoords, endX, endY, ctx)
+
     seconds := Round(durationMs / 1000, 1)
-    MouseGetPos(&cursorX, &cursorY)
-    ShowTransientRecordingTip(Format("Added delay: {1} s", seconds), cursorX, cursorY)
+    ShowTransientRecordingTip(Format("Mouse hold saved: {1} s", seconds), endX, endY)
+}
+
+/**
+ * Returns true for left/right Shift, Ctrl, or Alt virtual-key codes.
+ * @param {Integer} vk Virtual-key code.
+ * @returns {Boolean}
+ */
+IsModifierVirtualKey(vk) {
+    global C
+
+    return vk = C.VK_LSHIFT || vk = C.VK_RSHIFT || vk = 0x10
+        || vk = C.VK_LCONTROL || vk = C.VK_RCONTROL || vk = 0x11
+        || vk = C.VK_LMENU || vk = C.VK_RMENU || vk = 0x12
+}
+
+/**
+ * Returns true when Ctrl, Shift, or Alt is currently held.
+ * @returns {Boolean}
+ */
+HasModifierKeyPressed() {
+    return GetKeyState("Ctrl", "P") || GetKeyState("Shift", "P") || GetKeyState("Alt", "P")
+}
+
+/**
+ * Returns true when a key press should be stored as a shortcut instead of a variable key.
+ * @param {Integer} vk Virtual-key code.
+ * @returns {Boolean}
+ */
+ShouldRecordAsShortcut(vk) {
+    if IsModifierVirtualKey(vk)
+        return false
+
+    return HasModifierKeyPressed()
+}
+
+/**
+ * Builds an AutoHotkey Send string and display label for a shortcut.
+ * @param {Integer} vk Virtual-key code.
+ * @returns {Object}
+ */
+BuildShortcutPayload(vk) {
+    sendPrefix := ""
+    displayParts := []
+
+    if GetKeyState("Ctrl", "P") {
+        sendPrefix .= "^"
+        displayParts.Push("Ctrl")
+    }
+    if GetKeyState("Shift", "P") {
+        sendPrefix .= "+"
+        displayParts.Push("Shift")
+    }
+    if GetKeyState("Alt", "P") {
+        sendPrefix .= "!"
+        displayParts.Push("Alt")
+    }
+
+    keyName := GetKeyName(Format("vk{:02X}", vk))
+    if keyName = ""
+        keyName := Format("vk{:02X}", vk)
+
+    displayParts.Push(keyName)
+
+    return {
+        sendText: sendPrefix . "{" . keyName . "}",
+        displayLabel: JoinShortcutLabel(displayParts)
+    }
+}
+
+/**
+ * Joins shortcut label parts with plus signs.
+ * @param {Array} parts Label segments.
+ * @returns {String}
+ */
+JoinShortcutLabel(parts) {
+    label := ""
+    for part in parts {
+        label := label = "" ? part : label . "+" . part
+    }
+    return label
 }
 
 IsRecording() {
@@ -2232,7 +2355,44 @@ MouseHookProc(nCode, wParam, lParam) {
 
         switch wParam {
             case C.WM_LBUTTONDOWN:
-                QueueMouseEvent({ type: "click", button: "LButton", x: x, y: y })
+                if S.leftHoldPending || S.leftHoldActive
+                    return 1
+
+                S.leftHoldPending := true
+                S.leftHoldDownAt := A_TickCount
+                S.leftHoldDownX := x
+                S.leftHoldDownY := y
+                S.leftHoldEndX := x
+                S.leftHoldEndY := y
+                SetTimer CheckLeftMouseHoldActivation, -C.minMouseHoldActivationMs
+                return 1
+
+            case C.WM_LBUTTONUP:
+                if S.leftHoldPending || S.leftHoldActive {
+                    SetTimer CheckLeftMouseHoldActivation, 0
+
+                    if S.leftHoldActive {
+                        S.leftHoldEndX := x
+                        S.leftHoldEndY := y
+                        CommitRecordingLeftMouseHold()
+                    } else {
+                        QueueMouseEvent({
+                            type: "click",
+                            button: "LButton",
+                            x: S.leftHoldDownX,
+                            y: S.leftHoldDownY
+                        })
+                        CancelRecordingLeftMouseHoldState()
+                    }
+
+                    return 1
+                }
+
+            case C.WM_MOUSEMOVE:
+                if S.leftHoldActive {
+                    S.leftHoldEndX := x
+                    S.leftHoldEndY := y
+                }
 
             case C.WM_RBUTTONDOWN:
                 QueueMouseEvent({ type: "click", button: "RButton", x: x, y: y })
@@ -2284,13 +2444,8 @@ KeyboardHookProc(nCode, wParam, lParam) {
         isKeyDown := (wParam = C.WM_KEYDOWN || wParam = C.WM_SYSKEYDOWN)
         isKeyUp := (wParam = C.WM_KEYUP || wParam = C.WM_SYSKEYUP)
 
-        if IsShiftVirtualKey(vk) && (isKeyDown || isKeyUp) {
-            if isKeyDown
-                SetTimer BeginRecordingShiftDelay, -1
-            else if !GetKeyState("Shift", "P")
-                SetTimer CommitRecordingShiftDelay, -1
+        if IsModifierVirtualKey(vk) && (isKeyDown || isKeyUp)
             return 1
-        }
 
         if isKeyDown {
             if vk = C.VK_ESCAPE {
@@ -2335,7 +2490,10 @@ ProcessKeyEvent(event, *) {
     if !IsRecording()
         return
 
-    RecordKey(event.vk, event.sc)
+    if ShouldRecordAsShortcut(event.vk)
+        RecordShortcut(event.vk, event.sc)
+    else
+        RecordKey(event.vk, event.sc)
 }
 
 
@@ -2419,6 +2577,34 @@ RecordKey(vk, sc) {
     ShowVariableAssignmentTip("variable-" S.keyIndex, S.lastTargetX, S.lastTargetY)
 }
 
+/**
+ * Records a Ctrl/Shift/Alt keyboard shortcut during Detect.
+ * @param {Integer} vk Virtual-key code.
+ * @param {Integer} sc Scan code.
+ */
+RecordShortcut(vk, sc) {
+    global S
+
+    S.waitingForKey := false
+    ctx := GetActiveWindowContext()
+    payload := BuildShortcutPayload(vk)
+
+    WriteLine(Format(
+        "{}|shortcut|{}|{}|{}|{}|{}|{}|{}|{}`n",
+        Elapsed(),
+        payload.sendText,
+        payload.displayLabel,
+        vk,
+        sc,
+        ctx.hwndText,
+        ctx.class,
+        ctx.title,
+        ctx.exe
+    ))
+
+    ShowTransientRecordingTip("Shortcut saved: " payload.displayLabel)
+}
+
 ArmKeyCapture() {
     global S
     S.waitingForKey := true
@@ -2485,6 +2671,42 @@ WriteMouseLine(eventName, button, coords, ctx) {
         ctx.class,
         ctx.title,
         ctx.exe
+    ))
+}
+
+/**
+ * Writes a mouse-hold/drag event to the recording log.
+ * @param {String} button Mouse button name.
+ * @param {Integer} durationMs Hold duration after activation.
+ * @param {Object} startCoords Start coordinate snapshot.
+ * @param {Number} endScreenX End screen X coordinate.
+ * @param {Number} endScreenY End screen Y coordinate.
+ * @param {Object} ctx Active window context.
+ */
+WriteMouseHoldLine(button, durationMs, startCoords, endScreenX, endScreenY, ctx) {
+    WriteLine(Format(
+        "{}|mouse_hold|{}|{}|{}|{}|{}|{}|{:.6f}|{:.6f}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}`n",
+        Elapsed(),
+        button,
+        durationMs,
+        startCoords.screenX,
+        startCoords.screenY,
+        startCoords.clientX,
+        startCoords.clientY,
+        startCoords.pctX,
+        startCoords.pctY,
+        startCoords.clientW,
+        startCoords.clientH,
+        startCoords.winX,
+        startCoords.winY,
+        startCoords.winW,
+        startCoords.winH,
+        ctx.hwndText,
+        ctx.class,
+        ctx.title,
+        ctx.exe,
+        endScreenX,
+        endScreenY
     ))
 }
 
@@ -2598,6 +2820,10 @@ WriteHeader(sessionName) {
     WriteLine("# elapsed_ms|scroll|direction|delta|notches|screenX|screenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe`n")
     WriteLine("# key fields:`n")
     WriteLine("# elapsed_ms|key|variable-N|vk|sc|hwnd|class|title|exe`n")
+    WriteLine("# shortcut fields:`n")
+    WriteLine("# elapsed_ms|shortcut|sendText|displayLabel|vk|sc|hwnd|class|title|exe`n")
+    WriteLine("# mouse_hold fields:`n")
+    WriteLine("# elapsed_ms|mouse_hold|button|duration_ms|startScreenX|startScreenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe|endScreenX|endScreenY`n")
     WriteLine("# delay fields:`n")
     WriteLine("# elapsed_ms|meta|delay|duration_ms`n")
     WriteLine("# playback tip: prefer pctX/pctY against the target window's current client size, then fallback to clientX/clientY, then screenX/screenY.`n")
@@ -3060,6 +3286,11 @@ ExecuteApplyPlayback(parsed) {
             } else if action.type = "scroll" {
                 ReplayScroll(action)
                 scrolled += 1
+            } else if action.type = "mouse_hold" {
+                ReplayMouseHold(action)
+                applied += 1
+            } else if action.type = "shortcut" {
+                ReplayShortcut(action)
             } else if action.type = "delay" && !S.useRecordedTiming {
                 SleepWhileApplying(action.delayMs)
             }
@@ -3143,6 +3374,64 @@ ReplayScroll(action) {
             return
         Send wheelCommand
     }
+}
+
+/**
+ * Replays a recorded mouse hold or drag (button down, move or wait, button up).
+ * @param {Object} action Parsed mouse_hold action.
+ */
+ReplayMouseHold(action) {
+    global S
+
+    startPoint := ResolveTargetPoint(action.startTarget)
+    endPoint := ResolveTargetPoint(action.endTarget)
+
+    if S.smoothMouse
+        NaturalMouseMove(startPoint.x, startPoint.y)
+    else
+        MoveMouseInstant(startPoint.x, startPoint.y)
+
+    if !S.applying || S.stopBatch
+        return
+
+    SleepWhileApplying(S.clickPauseMs)
+
+    if !S.applying || S.stopBatch
+        return
+
+    MouseButtonDown(action.button)
+
+    if !S.applying || S.stopBatch
+        return
+
+    if startPoint.x != endPoint.x || startPoint.y != endPoint.y {
+        if S.smoothMouse
+            NaturalMouseMove(endPoint.x, endPoint.y)
+        else
+            MoveMouseInstant(endPoint.x, endPoint.y)
+    } else if action.durationMs > 0 {
+        SleepWhileApplying(action.durationMs)
+    }
+
+    if !S.applying || S.stopBatch
+        return
+
+    MouseButtonUp(action.button)
+    SleepWhileApplying(S.segmentPauseMs)
+}
+
+/**
+ * Replays a recorded keyboard shortcut.
+ * @param {Object} action Parsed shortcut action.
+ */
+ReplayShortcut(action) {
+    global S
+
+    if !S.applying || S.stopBatch
+        return
+
+    Send action.sendText
+    SleepWhileApplying(S.segmentPauseMs)
 }
 
 RequestStop(*) {
@@ -3297,12 +3586,12 @@ FinalizeDetectLogActions(parsed, pendingClick := "") {
 }
 
 SplitMergedLogLines(line) {
-    repairedLine := RegExReplace(line, "i)\.exe(\d+\|(click|scroll|key|meta)\|)", ".exe`n$1")
+    repairedLine := RegExReplace(line, "i)\.exe(\d+\|(click|scroll|key|meta|shortcut|mouse_hold)\|)", ".exe`n$1")
     lines := []
     remainder := repairedLine
 
     while remainder != "" {
-        if !RegExMatch(remainder, "(\d+)\|(click|scroll|key|meta)\|", &match) {
+        if !RegExMatch(remainder, "(\d+)\|(click|scroll|key|meta|shortcut|mouse_hold)\|", &match) {
             if Trim(remainder) != ""
                 lines.Push(Trim(remainder))
             break
@@ -3312,7 +3601,7 @@ SplitMergedLogLines(line) {
         searchFrom := startPos + match.Len
         nextPos := 0
 
-        if RegExMatch(SubStr(remainder, searchFrom), "(\d+)\|(click|scroll|key|meta)\|", &nextMatch, 1)
+        if RegExMatch(SubStr(remainder, searchFrom), "(\d+)\|(click|scroll|key|meta|shortcut|mouse_hold)\|", &nextMatch, 1)
             nextPos := searchFrom + nextMatch.Pos - 1
 
         eventLine := nextPos
@@ -3383,6 +3672,37 @@ ProcessDetectLogEvent(line, parsed, pendingClick) {
         return ""
     }
 
+    if eventType = "mouse_hold" {
+        if pendingClick != ""
+            PushClickOnlyApplyAction(parsed, pendingClick)
+
+        holdAction := ParseMouseHoldAction(parts, parsed.coordinateMode)
+        if holdAction != "" {
+            parsed.actions.Push({
+                type: "mouse_hold",
+                elapsed: elapsedMs,
+                button: holdAction.button,
+                durationMs: holdAction.durationMs,
+                startTarget: holdAction.startTarget,
+                endTarget: holdAction.endTarget
+            })
+        }
+        return ""
+    }
+
+    if eventType = "shortcut" && parts.Length >= 5 {
+        if pendingClick != ""
+            PushClickOnlyApplyAction(parsed, pendingClick)
+
+        parsed.actions.Push({
+            type: "shortcut",
+            elapsed: elapsedMs,
+            sendText: parts[3],
+            displayLabel: parts[4]
+        })
+        return ""
+    }
+
     if eventType = "key" && parts.Length >= 3 && RegExMatch(parts[3], "i)^variable-\d+$") {
         parsed.keyCount += 1
 
@@ -3398,6 +3718,50 @@ ProcessDetectLogEvent(line, parsed, pendingClick) {
     }
 
     return pendingClick
+}
+
+/**
+ * Parses a mouse_hold log line into replay metadata.
+ * @param {Array} parts Pipe-delimited log fields.
+ * @param {String} coordinateMode Relative or absolute coordinate mode.
+ * @returns {Object|String}
+ */
+ParseMouseHoldAction(parts, coordinateMode) {
+    if parts.Length < 21 || !IsNumericText(parts[5]) || !IsNumericText(parts[6])
+        return ""
+
+    startTarget := MakeTarget(
+        "rich",
+        SafeInteger(parts[5], 0),
+        SafeInteger(parts[6], 0),
+        SafeInteger(parts[7], ""),
+        SafeInteger(parts[8], ""),
+        SafeFloat(parts[9], ""),
+        SafeFloat(parts[10], ""),
+        SafeInteger(parts[11], ""),
+        SafeInteger(parts[12], ""),
+        SafeInteger(parts[13], ""),
+        SafeInteger(parts[14], ""),
+        SafeInteger(parts[15], ""),
+        SafeInteger(parts[16], ""),
+        parts[17],
+        parts[18],
+        parts[19],
+        NormalizeRecordedButton(parts[3])
+    )
+
+    endTarget := MakeTarget(
+        coordinateMode,
+        SafeInteger(parts[20], 0),
+        SafeInteger(parts[21], 0)
+    )
+
+    return {
+        button: NormalizeRecordedButton(parts[3]),
+        durationMs: SafeInteger(parts[4], 0),
+        startTarget: startTarget,
+        endTarget: endTarget
+    }
 }
 
 ParseCommentLine(line, parsed) {
@@ -3713,6 +4077,56 @@ ClampPoint(x, y) {
 ; =============================================================================
 
 /**
+ * Presses a mouse button down at the current cursor position.
+ * @param {String} button Recorded button name.
+ */
+MouseButtonDown(button := "LButton") {
+    normalized := NormalizeRecordedButton(button)
+    downFlag := 0x0002
+    xData := 0
+
+    switch normalized {
+        case "RButton":
+            downFlag := 0x0008
+        case "MButton":
+            downFlag := 0x0020
+        case "XButton1":
+            downFlag := 0x0080
+            xData := 0x0001
+        case "XButton2":
+            downFlag := 0x0080
+            xData := 0x0002
+    }
+
+    DllCall("mouse_event", "UInt", downFlag, "UInt", 0, "UInt", 0, "UInt", xData, "UPtr", 0)
+}
+
+/**
+ * Releases a mouse button at the current cursor position.
+ * @param {String} button Recorded button name.
+ */
+MouseButtonUp(button := "LButton") {
+    normalized := NormalizeRecordedButton(button)
+    upFlag := 0x0004
+    xData := 0
+
+    switch normalized {
+        case "RButton":
+            upFlag := 0x0010
+        case "MButton":
+            upFlag := 0x0040
+        case "XButton1":
+            upFlag := 0x0100
+            xData := 0x0001
+        case "XButton2":
+            upFlag := 0x0100
+            xData := 0x0002
+    }
+
+    DllCall("mouse_event", "UInt", upFlag, "UInt", 0, "UInt", 0, "UInt", xData, "UPtr", 0)
+}
+
+/**
  * Moves to a screen point and performs the requested mouse button click.
  * @param {Number} x Screen X coordinate.
  * @param {Number} y Screen Y coordinate.
@@ -3728,34 +4142,12 @@ ClickPoint(x, y, button := "LButton") {
     if !S.applying || S.stopBatch
         return
 
-    normalized := NormalizeRecordedButton(button)
-    downFlag := 0x0002
-    upFlag := 0x0004
-    xData := 0
-
-    switch normalized {
-        case "RButton":
-            downFlag := 0x0008
-            upFlag := 0x0010
-        case "MButton":
-            downFlag := 0x0020
-            upFlag := 0x0040
-        case "XButton1":
-            downFlag := 0x0080
-            upFlag := 0x0100
-            xData := 0x0001
-        case "XButton2":
-            downFlag := 0x0080
-            upFlag := 0x0100
-            xData := 0x0002
-    }
-
-    DllCall("mouse_event", "UInt", downFlag, "UInt", 0, "UInt", 0, "UInt", xData, "UPtr", 0)
+    MouseButtonDown(button)
 
     if !S.applying || S.stopBatch
         return
 
-    DllCall("mouse_event", "UInt", upFlag, "UInt", 0, "UInt", 0, "UInt", xData, "UPtr", 0)
+    MouseButtonUp(button)
 }
 
 /**
