@@ -55,6 +55,8 @@ How it works:
     recordingTipText: "Esc = Save · Hold Shift = delay",
     recordingTipOffsetX: 240,
     recordingTipOffsetY: 16,
+    cursorTipOffsetX: 12,
+    cursorTipOffsetY: 12,
     recordingTipRefreshMs: 1000,
     recordingTransientTipMs: 3000,
     minShiftDelayMs: 200,
@@ -497,7 +499,7 @@ CreateManageGui() {
     S.editButton := S.gui.Add(
         "Button",
         "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Edit Inputs"
+        "Edit Preset"
     )
     S.editButton.OnEvent("Click", ShowPresetEditor)
 
@@ -695,6 +697,17 @@ ClearTip(*) {
 }
 
 /**
+ * Shows a tooltip beside the current cursor position.
+ * @param {String} message Tooltip text.
+ */
+ShowCursorToolTip(message) {
+    global C
+
+    MouseGetPos(&cursorX, &cursorY)
+    ToolTip message, cursorX + C.cursorTipOffsetX, cursorY + C.cursorTipOffsetY
+}
+
+/**
  * Shows the persistent recording tooltip in a fixed screen corner.
  */
 ShowRecordingTip() {
@@ -741,7 +754,7 @@ ShowTransientRecordingTip(message, screenX := "", screenY := "") {
     global C
 
     if screenX != "" && screenY != ""
-        ToolTip message, screenX + 12, screenY + 12
+        ToolTip message, screenX + C.cursorTipOffsetX, screenY + C.cursorTipOffsetY
     else
         ToolTip message
 
@@ -760,7 +773,7 @@ ShowVariableAssignmentTip(variableName, screenX, screenY) {
     if !RegExMatch(variableName, "i)^variable-?(\d+)$", &match)
         return
 
-    ToolTip Format("Assigned Var {1}", match[1]), screenX + 12, screenY + 12
+    ToolTip Format("Assigned Var {1}", match[1]), screenX + C.cursorTipOffsetX, screenY + C.cursorTipOffsetY
     if IsRecording()
         SetTimer RestoreRecordingTip, -C.variableTipMs
     else
@@ -802,7 +815,7 @@ ShowManageInputBox(prompt, title, options := "", defaultText := "") {
     global S
 
     EnsureManageOwnDialogs()
-    if S.gui && !S.gui.Visible
+    if S.gui
         S.gui.Show()
     return InputBox(prompt, title, options, defaultText)
 }
@@ -1006,7 +1019,7 @@ ApplyFromGui(*) {
             return
         }
 
-        SetStatus("Starting CSV batch...")
+        SetStatus("Running CSV batch...")
         SetTimer (ApplyBatchTimer).Bind(logPath, csvPath, presetPath), -1
         return
     }
@@ -1029,8 +1042,8 @@ ApplySingleTimer(logPath, presetPath, *) {
     try {
         RunApply(logPath, presetPath)
     } catch as err {
-        SetStatus("Playback error.")
-        ShowManageMsgBox "Playback failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
+        SetStatus("Run error.")
+        ShowManageMsgBox "Run failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
     }
 }
 
@@ -1044,8 +1057,8 @@ ApplyBatchTimer(logPath, csvPath, presetPath, *) {
     try {
         RunApplyBatch(logPath, csvPath, presetPath)
     } catch as err {
-        SetStatus("Batch playback error.")
-        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
+        SetStatus("Batch run error.")
+        ShowManageMsgBox "Batch run failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
     }
 }
 
@@ -1484,7 +1497,7 @@ ShowPresetEditor(*) {
     if S.gui
         S.gui.Hide()
 
-    editor := Gui("+ToolWindow", "Edit Apply Inputs")
+    editor := Gui("+ToolWindow", "Edit Preset")
     BindManageChildGui(editor)
     editor.SetFont("s10", "Segoe UI")
     editor.BackColor := "FFFFFF"
@@ -1493,7 +1506,7 @@ ShowPresetEditor(*) {
     nameEdit := editor.Add("Edit", "w430", selectedPreset ? FormatPresetName(selectedPreset) : "default")
 
     editor.Add("Text", "w430 c1A1A1A", "Speed settings")
-    editor.Add("Text", "w180", "Playback speed:")
+    editor.Add("Text", "w180", "Run speed:")
     playbackEdit := editor.Add("Edit", "x+0 w220", existingSettings.playback_speed)
     editor.Add("Text", "xm w180", "Typing speed:")
     typingEdit := editor.Add("Edit", "x+0 w220", existingSettings.typing_speed)
@@ -1520,10 +1533,10 @@ ShowPresetEditor(*) {
     editor.Add(
         "Text",
         "xm w430 c555555",
-        "Recorded gaps replay seconds between clicks from Detect. Preset pauses only ignores those."
+        "Recorded gaps replay seconds between steps from Record. Preset pauses only ignores those."
     )
 
-    editor.Add("Text", "xm w430 c1A1A1A", "Playback options")
+    editor.Add("Text", "xm w430 c1A1A1A", "Run options")
     editor.Add("Text", "xm w430 c555555", "Mouse movement")
     smoothMouseRadio := editor.Add(
         "Radio",
@@ -1557,7 +1570,7 @@ ShowPresetEditor(*) {
     SaveEditor(*) {
         presetName := SafePresetName(nameEdit.Value)
         if presetName = "" {
-            ShowManageMsgBox "Enter a preset name.", "Edit Apply Inputs", "Icon!"
+            ShowManageMsgBox "Enter a preset name.", "Edit Preset", "Icon!"
             return
         }
 
@@ -1600,7 +1613,7 @@ ShowPresetEditor(*) {
                 : "Saved preset — " presetName)
             CloseEditor()
         } catch as err {
-            ShowManageMsgBox "Could not save inputs:`n" err.Message, "Edit Apply Inputs", "Icon!"
+            ShowManageMsgBox "Could not save inputs:`n" err.Message, "Edit Preset", "Icon!"
         }
     }
 
@@ -1775,7 +1788,7 @@ BeginRecordingShiftDelay(*) {
  * Updates the live Shift-hold delay tooltip in seconds.
  */
 RefreshRecordingShiftDelayTip(*) {
-    global S, C
+    global S
 
     if !S.recording || !S.shiftDelayHeld {
         SetTimer RefreshRecordingShiftDelayTip, 0
@@ -1783,7 +1796,7 @@ RefreshRecordingShiftDelayTip(*) {
     }
 
     seconds := Round((A_TickCount - S.shiftDelayStartedAt) / 1000, 1)
-    ToolTip Format("Recording delay: {1} s", seconds), A_ScreenWidth - C.recordingTipOffsetX, C.recordingTipOffsetY - 28
+    ShowCursorToolTip(Format("Recording delay: {1} s", seconds))
 }
 
 /**
@@ -1828,7 +1841,8 @@ CommitRecordingShiftDelay(*) {
 
     WriteLine(Format("{}|meta|delay|{}`n", Elapsed(), durationMs))
     seconds := Round(durationMs / 1000, 1)
-    ShowTransientRecordingTip(Format("Added delay: {1} s", seconds))
+    MouseGetPos(&cursorX, &cursorY)
+    ShowTransientRecordingTip(Format("Added delay: {1} s", seconds), cursorX, cursorY)
 }
 
 IsRecording() {
@@ -2412,7 +2426,7 @@ RunApply(logPath, presetPath) {
     global S
 
     if S.applying || S.batchRunning {
-        SetStatus("Playback already running.")
+        SetStatus("Already running.")
         return false
     }
 
@@ -2438,7 +2452,7 @@ RunApply(logPath, presetPath) {
 
     if RecordingNeedsVariableValues(parsed) && S.variables.Length = 0 {
         SetStatus("No variables in selected preset.")
-        ShowManageMsgBox "This recording expects typed variable values.`n`nUse Edit Inputs to add them.", "Data Entry Autonoma", "Icon!"
+        ShowManageMsgBox "This recording expects typed variable values.`n`nUse Edit Preset to add them.", "Data Entry Autonoma", "Icon!"
         return false
     }
 
@@ -2467,7 +2481,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
     global C, S
 
     if S.applying || S.batchRunning {
-        SetStatus("Playback already running.")
+        SetStatus("Already running.")
         return false
     }
 
@@ -2538,7 +2552,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
         }
     } catch as err {
         stopped := true
-        ShowManageMsgBox "Batch playback failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
+        ShowManageMsgBox "Batch run failed:`n" err.Message, "Data Entry Autonoma", "Icon!"
     } finally {
         S.batchRunning := false
         S.stopBatch := false
@@ -2590,13 +2604,13 @@ PrepareApplyLog(logPath) {
             SetStatus("Recording has keys but no click target before them.")
             ShowManageMsgBox "This recording has key events but no click targets before them.", "Data Entry Autonoma", "Icon!"
         } else if parsed.keyCount > 0 && parsed.clickCount > 0 {
-            SetStatus("Recording has clicks and keys but no matched apply pairs.")
+            SetStatus("Recording has clicks and keys but no matched steps.")
             ShowManageMsgBox "This recording has clicks and keys, but they are not paired.`n`n"
                 . "Each key needs a click immediately before it in the log.",
                 "Data Entry Autonoma", "Icon!"
         } else {
-            SetStatus("No apply/scroll actions in that recording.")
-            ShowManageMsgBox "No apply or scroll actions were found in that recording.", "Data Entry Autonoma", "Icon!"
+            SetStatus("No runnable actions in that recording.")
+            ShowManageMsgBox "No click, type, or scroll actions were found in that recording.", "Data Entry Autonoma", "Icon!"
         }
         return ""
     }
@@ -2623,7 +2637,7 @@ BeginApplySession(parsed, batchMode := false) {
             S.gui.Hide()
     }
 
-    ToolTip "Replaying " parsed.actions.Length " action(s)... Press Esc to stop."
+    ToolTip "Running " parsed.actions.Length " action(s)... Press Esc to stop."
     SetTimer ClearTip, -3500
 }
 
