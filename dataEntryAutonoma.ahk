@@ -22,6 +22,7 @@ CoordMode "Mouse", "Screen"
 C := {
     recordingsDir: A_ScriptDir "\recordings",
     savesDir: A_ScriptDir "\saved-inputs",
+    appIconFile: A_ScriptDir "\assets\dataEntryAutonoma.ico",
     stateFile: A_ScriptDir "\apply-state.ini",
     saveExt: ".txt",
     prefix: "di-",
@@ -46,6 +47,8 @@ C := {
     defaultTypingSpeed: 1.0,
     defaultMoveSpeed: 1.5,
     defaultInitialDelayMs: 1000,
+    defaultSmoothMouse: true,
+    defaultHumanTyping: true,
 
     minKeyDelayMs: 8,
     maxKeyDelayMs: 186,
@@ -60,6 +63,7 @@ C := {
     curveOffsetRatio: 0.28,
     moveStepsMin: 28,
     moveStepsPerPx: 0.65,
+    moveStepMinSleepMs: 1,
 
     clickPauseMs: 150,
     segmentPauseMs: 200,
@@ -70,6 +74,10 @@ C := {
     SM_YVIRTUALSCREEN: 77,
     SM_CXVIRTUALSCREEN: 78,
     SM_CYVIRTUALSCREEN: 79,
+
+    WM_SETICON: 0x0080,
+    ICON_SMALL: 0,
+    ICON_BIG: 1,
 
     WH_MOUSE_LL: 14,
     WH_KEYBOARD_LL: 13,
@@ -120,14 +128,16 @@ UI := {
     fontSizeBody: 10,
     fontSizeSmall: 9,
     contentWidth: 480,
+    tabContentWidth: 464,
     marginX: 18,
     marginY: 16,
     btnGap: 6,
     btnHeightSecondary: 26,
     btnHeightTool: 28,
     btnHeightPrimary: 44,
-    listRecordingH: 112,
-    listPresetH: 72,
+    listRecordingH: 140,
+    listPresetH: 88,
+    tabPanelHeight: 208,
     recordingColName: "Name",
     recordingColVarCount: "Variable count",
     statusHeight: 30,
@@ -163,6 +173,8 @@ S := {
     typingSpeed: C.defaultTypingSpeed,
     moveSpeed: C.defaultMoveSpeed,
     initialDelayMs: C.defaultInitialDelayMs,
+    smoothMouse: C.defaultSmoothMouse,
+    humanTyping: C.defaultHumanTyping,
     virtualBounds: "",
 
     mouseHook: 0,
@@ -188,10 +200,16 @@ S := {
     renameRecordingButton: "",
     editRecordingButton: "",
     deleteRecordingButton: "",
-    deletePresetButton: ""
+    deletePresetButton: "",
+    smoothMouseRadio: "",
+    instantMouseRadio: "",
+    humanTypingRadio: "",
+    instantTypingRadio: "",
+    mainTab: ""
 }
 
 ActivateExistingManageInstance()
+ApplyManageStartupIcon()
 
 CreateManageGui()
 EnsureDir(C.savesDir)
@@ -222,6 +240,36 @@ ApplyManageGuiTheme(gui) {
     gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     gui.MarginX := UI.marginX
     gui.MarginY := UI.marginY
+    ApplyManageAppIcon(gui)
+}
+
+/**
+ * Sets the script tray icon before any GUI windows are created.
+ */
+ApplyManageStartupIcon() {
+    global C
+
+    if FileExist(C.appIconFile)
+        TraySetIcon(C.appIconFile, , true)
+}
+
+/**
+ * Sets the window/taskbar icon when the bundled ICO is present.
+ * @param {Gui} gui Target window.
+ */
+ApplyManageAppIcon(gui) {
+    global C
+
+    if !gui || !FileExist(C.appIconFile)
+        return
+
+    smallIcon := LoadPicture(C.appIconFile, "Icon1 w16 h16", &iconType)
+    if smallIcon
+        SendMessage(C.WM_SETICON, C.ICON_SMALL, smallIcon, gui)
+
+    largeIcon := LoadPicture(C.appIconFile, "Icon1 w32 h32", &iconType)
+    if largeIcon
+        SendMessage(C.WM_SETICON, C.ICON_BIG, largeIcon, gui)
 }
 
 /**
@@ -261,7 +309,7 @@ GetManagePrimaryButtonWidth() {
  * Builds the unified Detect + Apply window.
  */
 CreateManageGui() {
-    global S, UI
+    global C, S, UI
 
     threeBtnW := GetManageThreeButtonWidth()
     primaryBtnW := GetManagePrimaryButtonWidth()
@@ -292,10 +340,17 @@ CreateManageGui() {
     S.sessionCtrl := S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.sessionText, "Recording: —")
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
 
-    BuildManageSectionHeader(S.gui, "RECORDINGS")
+    S.mainTab := S.gui.Add(
+        "Tab3",
+        "xm w" UI.contentWidth " h" UI.tabPanelHeight,
+        ["Recording", "Input Presets", "Playback Options"]
+    )
+
+    ; --- Recording tab ---
+    S.mainTab.UseTab(1)
     S.recordingList := S.gui.Add(
         "ListView",
-        "xm w" UI.contentWidth " h" UI.listRecordingH " -Multi +Background" UI.listBg,
+        "w" UI.tabContentWidth " h" UI.listRecordingH " -Multi +Background" UI.listBg,
         [UI.recordingColName, UI.recordingColVarCount]
     )
     S.recordingList.OnEvent("ItemSelect", (*) => (RememberSelections(), UpdateSelectionStatus()))
@@ -322,12 +377,25 @@ CreateManageGui() {
     )
     S.deleteRecordingButton.OnEvent("Click", DeleteSelectedRecording)
 
-    BuildManageSectionHeader(S.gui, "INPUT PRESETS")
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add(
+        "Text",
+        "xm w" UI.contentWidth " c" UI.textHint,
+        "Select a recording. Detect hides this window while you capture clicks, scrolls, and keys."
+    )
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+
+    ; --- Input Presets tab ---
+    S.mainTab.UseTab(2)
     S.presetList := S.gui.Add(
         "ListBox",
-        "xm w" UI.contentWidth " h" UI.listPresetH " +Background" UI.listBg
+        "w" UI.tabContentWidth " h" UI.listPresetH " +Background" UI.listBg
     )
-    S.presetList.OnEvent("Change", (*) => (RememberSelections(), UpdateSelectionStatus()))
+    S.presetList.OnEvent("Change", (*) => (
+        RememberSelections(),
+        LoadSelectedPresetPlaybackOptions(),
+        UpdateSelectionStatus()
+    ))
 
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
     S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textMuted, "CSV batch (optional)")
@@ -362,6 +430,48 @@ CreateManageGui() {
     )
     S.deletePresetButton.OnEvent("Click", DeleteSelectedPreset)
 
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add(
+        "Text",
+        "xm w" UI.contentWidth " c" UI.textHint,
+        "Choose a preset or CSV file. Apply uses these values with the selected recording."
+    )
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+
+    ; --- Playback Options tab ---
+    S.mainTab.UseTab(3)
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add("Text", "w" UI.tabContentWidth " c" UI.textMuted, "Mouse movement")
+    S.smoothMouseRadio := S.gui.Add(
+        "Radio",
+        (C.defaultSmoothMouse ? "checked" : ""),
+        "Smooth"
+    )
+    S.instantMouseRadio := S.gui.Add(
+        "Radio",
+        "x+16" (!C.defaultSmoothMouse ? " checked" : ""),
+        "Instant"
+    )
+    S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textMuted, "Typing")
+    S.humanTypingRadio := S.gui.Add(
+        "Radio",
+        "xm" (C.defaultHumanTyping ? " checked" : ""),
+        "Human-like"
+    )
+    S.instantTypingRadio := S.gui.Add(
+        "Radio",
+        "x+16" (!C.defaultHumanTyping ? " checked" : ""),
+        "Instant"
+    )
+    S.gui.Add(
+        "Text",
+        "xm w" UI.contentWidth " c" UI.textHint,
+        "Override preset defaults here before Apply. Saved presets keep their own playback options."
+    )
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+
+    S.mainTab.UseTab()
+
     S.gui.Add("Text", "xm w" UI.contentWidth " h8", "")
 
     S.detectButton := S.gui.Add(
@@ -382,11 +492,11 @@ CreateManageGui() {
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textHint,
-        "Detect hides this window while recording. Apply replays the selection. "
-        . "CSV runs one full pass per row. Esc stops recording, playback, or batch."
+        "Esc stops recording, playback, or a CSV batch."
     )
 
     S.gui.Show()
+    ApplyManageAppIcon(S.gui)
     RefreshAllLists(true)
 }
 
@@ -410,10 +520,76 @@ SetInteractiveState(enabled) {
 
     for ctrl in [S.detectButton, S.applyButton, S.refreshButton, S.editButton,
         S.renameRecordingButton, S.editRecordingButton, S.deleteRecordingButton,
-        S.deletePresetButton, S.recordingList, S.presetList, S.csvEdit, S.browseCsvButton] {
+        S.deletePresetButton, S.recordingList, S.presetList, S.csvEdit, S.browseCsvButton,
+        S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
+        S.mainTab] {
         if ctrl
             ctrl.Enabled := enabled
     }
+}
+
+/**
+ * Sets playback option radio buttons on the main window.
+ * @param {Boolean} smoothMouse Whether smooth mouse movement is selected.
+ * @param {Boolean} humanTyping Whether human-like typing is selected.
+ */
+SetPlaybackOptionRadios(smoothMouse, humanTyping) {
+    global S
+
+    if S.smoothMouseRadio {
+        S.smoothMouseRadio.Value := smoothMouse ? 1 : 0
+        S.instantMouseRadio.Value := smoothMouse ? 0 : 1
+    }
+
+    if S.humanTypingRadio {
+        S.humanTypingRadio.Value := humanTyping ? 1 : 0
+        S.instantTypingRadio.Value := humanTyping ? 0 : 1
+    }
+}
+
+/**
+ * Reads playback option radio buttons from the main window.
+ * @returns {{smooth_mouse: Boolean, human_typing: Boolean}}
+ */
+ReadPlaybackOptionsFromGui() {
+    global C, S
+
+    return {
+        smooth_mouse: S.smoothMouseRadio ? S.smoothMouseRadio.Value = 1 : C.defaultSmoothMouse,
+        human_typing: S.humanTypingRadio ? S.humanTypingRadio.Value = 1 : C.defaultHumanTyping
+    }
+}
+
+/**
+ * Copies main-window playback option radios into session state.
+ */
+SyncPlaybackOptionsFromGui() {
+    global S
+
+    opts := ReadPlaybackOptionsFromGui()
+    S.smoothMouse := opts.smooth_mouse
+    S.humanTyping := opts.human_typing
+}
+
+/**
+ * Loads playback options from the selected preset into radios and session state.
+ */
+LoadSelectedPresetPlaybackOptions() {
+    global C, S
+
+    presetPath := GetSelectedPresetPath()
+
+    if presetPath != "" && FileExist(presetPath) {
+        settings := ParsePresetFile(presetPath)
+        SetPlaybackOptionRadios(settings.smooth_mouse, settings.human_typing)
+        S.smoothMouse := settings.smooth_mouse
+        S.humanTyping := settings.human_typing
+        return
+    }
+
+    SetPlaybackOptionRadios(C.defaultSmoothMouse, C.defaultHumanTyping)
+    S.smoothMouse := C.defaultSmoothMouse
+    S.humanTyping := C.defaultHumanTyping
 }
 
 SetRecordingGuiState(recording) {
@@ -580,6 +756,7 @@ BindManageChildGui(childGui) {
     global S
 
     childGui.Opt("+AlwaysOnTop")
+    ApplyManageAppIcon(childGui)
     if S.gui
         childGui.Opt("+Owner" S.gui.Hwnd)
 }
@@ -664,6 +841,8 @@ RestoreSelections() {
         if !S.presetList.Value
             S.presetList.Value := 1
     }
+
+    LoadSelectedPresetPlaybackOptions()
 
     if S.csvEdit
         S.csvEdit.Value := saved.csv
@@ -1241,6 +1420,30 @@ ShowPresetEditor(*) {
     editor.Add("Text", "xm w180", "Initial delay (ms):")
     delayEdit := editor.Add("Edit", "x+0 w220", existingSettings.initial_delay)
 
+    editor.Add("Text", "xm w430 c1A1A1A", "Playback options")
+    editor.Add("Text", "xm w430 c555555", "Mouse movement")
+    smoothMouseRadio := editor.Add(
+        "Radio",
+        "xm" (existingSettings.smooth_mouse ? " checked" : ""),
+        "Smooth"
+    )
+    instantMouseRadio := editor.Add(
+        "Radio",
+        "x+16" (!existingSettings.smooth_mouse ? " checked" : ""),
+        "Instant"
+    )
+    editor.Add("Text", "xm w430 c555555", "Typing")
+    humanTypingRadio := editor.Add(
+        "Radio",
+        "xm" (existingSettings.human_typing ? " checked" : ""),
+        "Human-like"
+    )
+    instantTypingRadio := editor.Add(
+        "Radio",
+        "x+16" (!existingSettings.human_typing ? " checked" : ""),
+        "Instant"
+    )
+
     editor.Add("Text", "xm w430 c1A1A1A", "Variable inputs")
     editor.Add("Text", "xm w430 c555555", "One value per line. Line 1 = variable-1, line 2 = variable-2, etc.")
     variablesEdit := editor.Add("Edit", "xm w430 r10 Multi", Join(existingSettings.variables, "`n"))
@@ -1260,6 +1463,8 @@ ShowPresetEditor(*) {
             typing_speed: SafeFloat(typingEdit.Value, C.defaultTypingSpeed),
             move_speed: SafeFloat(moveEdit.Value, C.defaultMoveSpeed),
             initial_delay: SafeInteger(delayEdit.Value, C.defaultInitialDelayMs),
+            smooth_mouse: smoothMouseRadio.Value = 1,
+            human_typing: humanTypingRadio.Value = 1,
             variables: []
         }
 
@@ -1279,6 +1484,7 @@ ShowPresetEditor(*) {
                 DeleteManagedFile(originalPresetPath)
 
             ApplySettings(settings)
+            SetPlaybackOptionRadios(settings.smooth_mouse, settings.human_typing)
             RefreshPresetList()
             SelectByBaseName(S.presetList, S.presetPaths, FileBaseName(presetPath))
             RememberSelections()
@@ -1947,6 +2153,7 @@ RunApply(logPath, presetPath) {
 
     settings := ParsePresetFile(presetPath)
     ApplySettings(settings)
+    SyncPlaybackOptionsFromGui()
 
     parsed := PrepareApplyLog(logPath)
     if parsed = ""
@@ -2005,6 +2212,7 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
         ? ParsePresetFile(presetPath)
         : DefaultSettings()
     ApplySettings(settings)
+    SyncPlaybackOptionsFromGui()
 
     parsed := PrepareApplyLog(logPath)
     if parsed = ""
@@ -2235,7 +2443,10 @@ ReplayApply(action) {
 
     ShowVariableAssignmentTip(action.variable, point.x, point.y)
 
-    NaturalMouseMove(point.x, point.y)
+    if S.smoothMouse
+        NaturalMouseMove(point.x, point.y)
+    else
+        MoveMouseInstant(point.x, point.y)
 
     if !S.applying || S.stopBatch
         return
@@ -2250,8 +2461,12 @@ ReplayApply(action) {
     if !S.applying || S.stopBatch
         return
 
-    if text != ""
-        TypeTextHuman(text)
+    if text != "" {
+        if S.humanTyping
+            TypeTextHuman(text)
+        else
+            SendText text
+    }
 
     SleepWhileApplying(C.segmentPauseMs)
 }
@@ -2260,7 +2475,11 @@ ReplayScroll(action) {
     global C, S
 
     point := ResolveTargetPoint(action.target)
-    NaturalMouseMove(point.x, point.y)
+
+    if S.smoothMouse
+        NaturalMouseMove(point.x, point.y)
+    else
+        MoveMouseInstant(point.x, point.y)
 
     if !S.applying || S.stopBatch
         return
@@ -2789,6 +3008,16 @@ ClickPoint(x, y) {
     DllCall("mouse_event", "UInt", 0x0004, "UInt", 0, "UInt", 0, "UInt", 0, "UPtr", 0)
 }
 
+/**
+ * Moves the cursor directly to a target point without animation.
+ * @param {Number} targetX Screen X coordinate.
+ * @param {Number} targetY Screen Y coordinate.
+ */
+MoveMouseInstant(targetX, targetY) {
+    target := ClampPoint(targetX, targetY)
+    DllCall("SetCursorPos", "Int", target.x, "Int", target.y)
+}
+
 NaturalMouseMove(targetX, targetY) {
     global C, S
 
@@ -2822,6 +3051,12 @@ NaturalMouseMove(targetX, targetY) {
 
     steps := Max(C.moveStepsMin, Ceil(distance * C.moveStepsPerPx))
     sleepMs := durationMs / steps
+
+    ; Too many steps makes per-step sleep round to 0 ms, which teleports the cursor.
+    if sleepMs < C.moveStepMinSleepMs {
+        steps := Max(C.moveStepsMin, Ceil(durationMs / C.moveStepMinSleepMs))
+        sleepMs := Max(C.moveStepMinSleepMs, durationMs / steps)
+    }
 
     Loop steps {
         if !S.applying || S.stopBatch
@@ -2967,6 +3202,8 @@ DefaultSettings() {
         typing_speed: C.defaultTypingSpeed,
         move_speed: C.defaultMoveSpeed,
         initial_delay: C.defaultInitialDelayMs,
+        smooth_mouse: C.defaultSmoothMouse,
+        human_typing: C.defaultHumanTyping,
         variables: []
     }
 }
@@ -2996,6 +3233,10 @@ ParsePresetFile(filePath) {
                     settings.move_speed := SafeFloat(value, settings.move_speed)
                 case "initial_delay":
                     settings.initial_delay := SafeInteger(value, settings.initial_delay)
+                case "smooth_mouse":
+                    settings.smooth_mouse := SafeBool(value, settings.smooth_mouse)
+                case "human_typing":
+                    settings.human_typing := SafeBool(value, settings.human_typing)
             }
 
             continue
@@ -3020,6 +3261,8 @@ ApplySettings(settings) {
     S.typingSpeed := Max(0.05, settings.typing_speed)
     S.moveSpeed := Max(0.05, settings.move_speed)
     S.initialDelayMs := Max(0, settings.initial_delay)
+    S.smoothMouse := settings.smooth_mouse
+    S.humanTyping := settings.human_typing
     S.variables := settings.variables.Clone()
 }
 
@@ -3041,6 +3284,8 @@ SerializePreset(settings) {
         . "typing_speed=" settings.typing_speed "`n"
         . "move_speed=" settings.move_speed "`n"
         . "initial_delay=" settings.initial_delay "`n"
+        . "smooth_mouse=" (settings.smooth_mouse ? 1 : 0) "`n"
+        . "human_typing=" (settings.human_typing ? 1 : 0) "`n"
         . "`n"
         . "# variable-1, variable-2, variable-3 ...`n"
         . Join(settings.variables, ",") "`n"
@@ -3221,6 +3466,24 @@ SafeFloat(value, fallback := 0.0) {
     } catch {
         return fallback
     }
+}
+
+/**
+ * Parses a boolean preset value.
+ * @param {String} value Raw text from a preset file.
+ * @param {Boolean} fallback Value when parsing fails.
+ * @returns {Boolean}
+ */
+SafeBool(value, fallback := false) {
+    value := StrLower(Trim(value))
+
+    if value = "1" || value = "true" || value = "yes" || value = "on"
+        return true
+
+    if value = "0" || value = "false" || value = "no" || value = "off"
+        return false
+
+    return fallback
 }
 
 IsNumericText(value) {

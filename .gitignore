@@ -1,5 +1,6 @@
 # Build output
 dist/
+assets/dataEntryAutonoma-*.png
 
 # Local runtime state and user data
 apply-state.ini

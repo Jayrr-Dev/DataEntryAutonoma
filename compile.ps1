@@ -14,6 +14,7 @@ $PROJECT_ROOT = $PSScriptRoot
 $INPUT_SCRIPT = Join-Path $PROJECT_ROOT "dataEntryAutonoma.ahk"
 $OUTPUT_DIR = Join-Path $PROJECT_ROOT "dist"
 $OUTPUT_EXE = Join-Path $OUTPUT_DIR "DataEntryAutonoma.exe"
+$APP_ICON = Join-Path $PROJECT_ROOT "assets\dataEntryAutonoma.ico"
 
 $AHK2EXE = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
 $AHK_BASE = "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
@@ -41,7 +42,14 @@ New-Item -ItemType Directory -Force -Path $OUTPUT_DIR | Out-Null
 Write-Host "Compiling $INPUT_SCRIPT"
 Write-Host "  -> $OUTPUT_EXE"
 
-& $AHK2EXE /in $INPUT_SCRIPT /out $OUTPUT_EXE /base $AHK_BASE
+if (Test-Path $APP_ICON) {
+    Write-Host "  icon: $APP_ICON"
+    & $AHK2EXE /in $INPUT_SCRIPT /out $OUTPUT_EXE /base $AHK_BASE /icon $APP_ICON
+}
+else {
+    Write-Warning "App icon not found ($APP_ICON). Run .\buildAppIcon.ps1 first."
+    & $AHK2EXE /in $INPUT_SCRIPT /out $OUTPUT_EXE /base $AHK_BASE
+}
 
 if (-not (Test-Path $OUTPUT_EXE)) {
     Write-Error "Compilation failed - output file was not created."
