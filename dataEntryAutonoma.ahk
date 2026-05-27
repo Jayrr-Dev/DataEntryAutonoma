@@ -18,6 +18,7 @@ SetKeyDelay -1
 
 EnableDpiAwareness()
 CoordMode "Mouse", "Screen"
+CoordMode "ToolTip", "Screen"
 
 ; =============================================================================
 ; Constants
@@ -84,20 +85,41 @@ Use Description (below the recording name) for free-form notes stored in the log
     )",
     recordingsTabHelpMessage: "
     (
-Select a recording, then click Run.
+Recordings tab (top to bottom)
 
-Rename: change the recording file name
-Edit Log: timing, descriptions, optional row labels, events in a table, or preview the raw log
-Delete: remove the selected recording
+(i) next to Saved recordings
+Opens this help.
 
-Optional description is saved in the log header and appears as a tooltip when you hover that recording's row.
+Saved recordings list
+Select a recording here before Run.
+- Name: file name
+- Variable count: how many typed values the recording expects
+Hover a row to preview its description (set in Edit Log).
 
-While recording:
+Rename
+Change the selected recording's file name.
+
+Edit Log
+Adjust timing, description, optional row labels, and events in a table, or preview the raw log.
+
+Delete
+Remove the selected recording.
+
+Record (bottom)
+Start capturing clicks, keys, and delays for a new recording.
+
+Run (bottom)
+Replay the selected recording. Supply variable values on the Data Inputs or Bulk Inputs tab first.
+
+While recording
 - Esc saves (Cancel on the save dialog discards)
 - Normal clicks stay clicks
 - Hold Caps Lock to record a delay (Caps Lock is suppressed while recording)
 - Hold or drag left-click for Excel-style selection
 - Ctrl, Shift, or Alt shortcuts are recorded and replayed
+- Type any character (a, b, c) to add a variable placeholder
+
+Run: press Esc to stop playback.
     )",
     presetsTabHelpMessage: "
     (
@@ -216,6 +238,13 @@ Higher speed values run faster.
     ; Main window list hover tooltips for recording / data input descriptions (Edit dialogs).
     manageListTooltipPollMs: 350,
     manageListTooltipMaxLen: 420,
+    manageListTooltipMaxWidth: 360,
+    manageListTooltipGapAbove: 8,
+    manageListTooltipPadX: 10,
+    manageListTooltipPadY: 8,
+    manageListTooltipMissHide: 3,
+    manageListTooltipMouseMoveMinMs: 50,
+    manageListTooltipShowDelayMs: 500,
     minRecordedDelayMs: 200,
     mouseHoldDragThresholdPx: 5,
     mouseHoldTipRefreshMs: 100,
@@ -337,6 +366,8 @@ UI := {
     sessionText: "4B5563",
     listBg: "FFFFFF",
     editBg: "FFFFFF",
+    listTooltipBg: "FFFFFF",
+    listTooltipText: "6B7280",
     secondaryBtnBg: "FFFFFF",
     secondaryBtnText: "374151",
     fontFamily: "Segoe UI",
@@ -390,12 +421,14 @@ UI := {
     presetEditorFieldWidth: 690,
     presetEditorLabelWidth: 180,
     presetEditorValueWidth: 220,
+    presetEditorInlineLabelMaxWidth: 160,
+    presetEditorInlineValueMaxWidth: 220,
     presetEditorListHeight: 270,
     ; Variable-inputs block height (header → Save/Close). 0 = auto from parts; >0 scales ListView too.
     presetEditorTabHeight: 300,
     presetEditorApplyRowHeight: 32,
-    presetEditorDetailLabelWidth: 108,
-    presetEditorDetailValueWidth: 600,
+    presetEditorDetailLabelWidth: 80,
+    presetEditorDetailValueWidth: 400,
     presetEditorHelpHeight: 40,
     presetEditorSectionRowHeight: 28,
     presetEditorEditRowHeight: 28,
@@ -549,6 +582,21 @@ S := {
     listTooltipShownText: "",
     listTooltipRecordingRow: 0,
     listTooltipPresetRow: 0,
+    listDescOverlayGui: "",
+    listDescOverlayText: "",
+    listDescOverlayShown: false,
+    listDescOverlayLastText: "",
+    listDescOverlayLastX: 0,
+    listDescOverlayLastY: 0,
+    listTooltipMissStreak: 0,
+    listTooltipHoverKey: "",
+    listTooltipHoverSince: 0,
+    listTooltipPendingTip: "",
+    listTooltipPendingKind: "",
+    listTooltipPendingRow: 0,
+    listTooltipPendingX: 0,
+    listTooltipPendingY: 0,
+    presetEditorEnterCallback: "",
     recordingDescCache: Map(),
     presetDescCache: Map()
 }
@@ -1051,14 +1099,14 @@ CreateManageGui() {
         "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Add Data Input"
     )
-    S.addPresetButton.OnEvent("Click", ShowPresetEditor.Bind(true))
+    S.addPresetButton.OnEvent("Click", (*) => ShowPresetEditor(true))
 
     S.editButton := S.gui.Add(
         "Button",
         "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Edit Data Input"
     )
-    S.editButton.OnEvent("Click", ShowPresetEditor)
+    S.editButton.OnEvent("Click", (*) => ShowPresetEditor(false))
 
     S.deletePresetButton := S.gui.Add(
         "Button",
@@ -1244,6 +1292,7 @@ CreateManageGui() {
 
     S.gui.Show()
     ApplyManageAppIcon(S.gui)
+    EnsureManageOwnDialogs()
     SyncRunSettingsFromGui()
     SetManageMainListTooltipPolling(true)
     RefreshAllLists(true)
@@ -2849,10 +2898,135 @@ RenameSelectedCsv(*) {
 }
 
 /**
+ * Parses CSV editor text into editable row arrays. Blank and comment lines are skipped.
+ * @param {String} content CSV file content.
+ * @param {Integer} maxCols Maximum editable columns.
+ * @returns {Array<Array<String>>}
+ */
+ParseCsvEditorRows(content, maxCols) {
+    rows := []
+
+    Loop Parse content, "`n", "`r" {
+        line := Trim(A_LoopField)
+        if line = "" || SubStr(line, 1, 1) = "#"
+            continue
+
+        parsed := SplitManageCsvLine(line)
+        row := []
+        Loop Min(parsed.Length, maxCols)
+            row.Push(parsed[A_Index])
+        rows.Push(row)
+    }
+
+    if rows.Length = 0
+        rows.Push(["row", "col1", "col2", "col3"])
+
+    return rows
+}
+
+/**
+ * Returns editable column count for the CSV editor table.
+ * @param {Array<Array<String>>} rows Editable rows.
+ * @param {Integer} maxCols Maximum allowed columns.
+ * @returns {Integer}
+ */
+GetCsvEditorColumnCount(rows, maxCols) {
+    colCount := 4
+
+    for row in rows
+        colCount := Max(colCount, row.Length)
+
+    return Min(Max(colCount, 1), maxCols)
+}
+
+/**
+ * Builds fixed ListView columns for the CSV editor.
+ * @param {Integer} colCount Number of editable columns.
+ * @returns {Array<String>}
+ */
+BuildCsvEditorListColumns(colCount) {
+    columns := ["#"]
+
+    Loop colCount
+        columns.Push("Column " A_Index)
+
+    return columns
+}
+
+/**
+ * Populates the CSV editor ListView from editable row arrays.
+ * @param {Gui.ListView} listView Target ListView.
+ * @param {Array<Array<String>>} rows Editable rows.
+ * @param {Integer} colCount Number of editable columns.
+ */
+PopulateCsvEditorList(listView, rows, colCount) {
+    listView.Delete()
+
+    Loop rows.Length
+        RefreshCsvEditorListRow(listView, A_Index, rows[A_Index], colCount, true)
+
+    listView.ModifyCol(1, 40)
+    Loop colCount
+        listView.ModifyCol(A_Index + 1, A_Index = 1 ? 110 : 130)
+    SetManageListViewColumnIntegerSort(listView, 1)
+}
+
+/**
+ * Refreshes or adds a single CSV editor ListView row.
+ * @param {Gui.ListView} listView Target ListView.
+ * @param {Integer} rowIndex Stable row number.
+ * @param {Array<String>} row Editable row values.
+ * @param {Integer} colCount Number of editable columns.
+ * @param {Boolean} append When true, appends instead of modifying.
+ */
+RefreshCsvEditorListRow(listView, rowIndex, row, colCount, append := false) {
+    values := [rowIndex]
+
+    Loop colCount
+        values.Push(A_Index <= row.Length ? row[A_Index] : "")
+
+    if append {
+        listView.Add("", values*)
+        return
+    }
+
+    visualRowIndex := FindManageListViewVisualRow(listView, rowIndex, 1)
+    if !visualRowIndex
+        visualRowIndex := rowIndex
+
+    listView.Modify(visualRowIndex, "", values*)
+}
+
+/**
+ * Serializes CSV editor rows back into stored CSV content.
+ * @param {Array<Array<String>>} rows Editable rows.
+ * @returns {String}
+ */
+SerializeCsvEditorRows(rows) {
+    lines := []
+
+    for row in rows {
+        copy := []
+        for value in row
+            copy.Push(Trim(value))
+
+        while copy.Length > 1 && copy[copy.Length] = ""
+            copy.Pop()
+
+        if copy.Length = 1 && copy[1] = ""
+            continue
+
+        lines.Push(JoinManageDelimitedFields(copy))
+    }
+
+    return Join(lines, "`n")
+}
+
+/**
  * Opens the CSV batch editor to create or update a saved CSV file.
  */
 ShowCsvEditor(*) {
-    global C, S
+    global C, S, UI
 
     selectedPath := GetSelectedManagedCsvPath()
     if selectedPath = "" {
@@ -2865,6 +3039,10 @@ ShowCsvEditor(*) {
         ? ReadTextFile(selectedPath)
         : DefaultCsvTemplate()
 
+    csvEditorMaxCols := 8
+    csvEditorRows := ParseCsvEditorRows(existingContent, csvEditorMaxCols)
+    csvEditorColCount := GetCsvEditorColumnCount(csvEditorRows, csvEditorMaxCols)
+
     if S.gui
         S.gui.Hide()
 
@@ -2873,23 +3051,116 @@ ShowCsvEditor(*) {
     editor.SetFont("s10", "Segoe UI")
     editor.BackColor := "FFFFFF"
 
-    editor.Add("Text", "w430 c1A1A1A", "CSV name")
+    editorW := 720
+    listW := 680
+    detailLabelW := 70
+    detailEditW := 230
+
+    editor.Add("Text", "w" listW " c1A1A1A", "CSV name")
     nameEdit := editor.Add(
         "Edit",
-        "w430",
+        "w" listW,
         selectedPath ? FormatCsvName(selectedPath) : "batch-1"
     )
     editor.Add(
         "Text",
-        "xm w430 c555555",
-        "Row 1 = column labels (for your notes). Data rows start on row 2. Escape commas in values with \\, (for example Smith\\, Jones). Blank lines and # comments are ignored."
+        "xm w" listW " c555555",
+        "Row 1 is the header. Select a row below, edit its columns, then Apply row or Save. Commas and backslashes are escaped automatically."
     )
-    contentEdit := editor.Add("Edit", "xm w430 r14 Multi", existingContent)
+    csvList := editor.Add("ListView", "xm w" listW " h210 -Multi +Background" UI.listBg, BuildCsvEditorListColumns(csvEditorColCount))
+    PopulateCsvEditorList(csvList, csvEditorRows, csvEditorColCount)
+
+    addRowBtn := editor.Add("Button", "xm w100 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText, "Add row")
+    deleteRowBtn := editor.Add("Button", "x+8 w100 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText, "Delete row")
+
+    editor.Add("Text", "xm w" listW " c1A1A1A", "Selected row")
+    csvFieldEdits := []
+    Loop csvEditorMaxCols {
+        colNum := A_Index
+        rowOpt := Mod(colNum, 2) = 1 ? "xs" : "x+14"
+        editor.Add("Text", rowOpt " w" detailLabelW " c555555", "Col " colNum ":")
+        editCtrl := editor.Add("Edit", "x+0 w" detailEditW, "")
+        csvFieldEdits.Push(editCtrl)
+    }
+
+    applyRowBtn := editor.Add("Button", "xm w120 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText, "Apply row")
 
     saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
     closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
+    selectedCsvRowIndex := 0
+
+    SyncCsvEditorRowFromDetailPanel() {
+        if selectedCsvRowIndex < 1 || selectedCsvRowIndex > csvEditorRows.Length
+            return
+
+        row := []
+        Loop csvEditorColCount
+            row.Push(Trim(csvFieldEdits[A_Index].Value))
+
+        while row.Length > 1 && row[row.Length] = ""
+            row.Pop()
+
+        csvEditorRows[selectedCsvRowIndex] := row
+        RefreshCsvEditorListRow(csvList, selectedCsvRowIndex, row, csvEditorColCount)
+    }
+
+    LoadCsvEditorRow(rowIndex) {
+        SyncCsvEditorRowFromDetailPanel()
+        selectedCsvRowIndex := rowIndex
+
+        Loop csvEditorMaxCols {
+            csvFieldEdits[A_Index].Enabled := A_Index <= csvEditorColCount
+            csvFieldEdits[A_Index].Value := ""
+        }
+
+        if rowIndex < 1 || rowIndex > csvEditorRows.Length
+            return
+
+        row := csvEditorRows[rowIndex]
+        Loop csvEditorColCount
+            csvFieldEdits[A_Index].Value := A_Index <= row.Length ? row[A_Index] : ""
+    }
+
+    ApplyCsvEditorRow(*) {
+        SyncCsvEditorRowFromDetailPanel()
+        if selectedCsvRowIndex >= 1
+            SetStatus(Format("Updated CSV row {}", selectedCsvRowIndex))
+    }
+
+    AddCsvEditorRow(*) {
+        SyncCsvEditorRowFromDetailPanel()
+        insertIndex := selectedCsvRowIndex >= 1
+            ? Min(selectedCsvRowIndex + 1, csvEditorRows.Length + 1)
+            : csvEditorRows.Length + 1
+        firstCol := insertIndex = 1 ? "row" : String(insertIndex - 1)
+        csvEditorRows.InsertAt(insertIndex, [firstCol])
+        PopulateCsvEditorList(csvList, csvEditorRows, csvEditorColCount)
+        SelectManageListViewDataRow(csvList, insertIndex)
+        LoadCsvEditorRow(insertIndex)
+    }
+
+    DeleteCsvEditorRow(*) {
+        if selectedCsvRowIndex < 1 || selectedCsvRowIndex > csvEditorRows.Length
+            return
+        if selectedCsvRowIndex = 1 {
+            ShowManageMsgBox "Row 1 is the header row and cannot be deleted.", "Edit CSV", "Icon!"
+            return
+        }
+
+        csvEditorRows.RemoveAt(selectedCsvRowIndex)
+        PopulateCsvEditorList(csvList, csvEditorRows, csvEditorColCount)
+        nextRow := Min(selectedCsvRowIndex, csvEditorRows.Length)
+        SelectManageListViewDataRow(csvList, nextRow)
+        LoadCsvEditorRow(nextRow)
+    }
+
+    OnCsvEditorListSelect(*) {
+        LoadCsvEditorRow(GetManageListViewSelectedDataRowIndex(csvList))
+    }
 
     SaveCsvEditor(*) {
+        SyncCsvEditorRowFromDetailPanel()
+
         csvName := SafeCsvName(nameEdit.Value)
         if csvName = "" {
             ShowManageMsgBox "Enter a CSV name.", "Edit CSV", "Icon!"
@@ -2897,7 +3168,7 @@ ShowCsvEditor(*) {
         }
 
         csvPath := C.csvBatchesDir "\" csvName C.csvExt
-        content := Trim(contentEdit.Value, "`r`n")
+        content := SerializeCsvEditorRows(csvEditorRows)
 
         if content = "" {
             ShowManageMsgBox "Enter at least one CSV row.", "Edit CSV", "Icon!"
@@ -2938,13 +3209,22 @@ ShowCsvEditor(*) {
             S.gui.Show()
     }
 
+    csvList.OnEvent("ItemSelect", OnCsvEditorListSelect)
+    applyRowBtn.OnEvent("Click", ApplyCsvEditorRow)
+    addRowBtn.OnEvent("Click", AddCsvEditorRow)
+    deleteRowBtn.OnEvent("Click", DeleteCsvEditorRow)
     saveBtn.OnEvent("Click", SaveCsvEditor)
     closeBtn.OnEvent("Click", CloseCsvEditor)
     editor.OnEvent("Close", CloseCsvEditor)
     editor.OnEvent("Escape", CloseCsvEditor)
 
-    editor.Show("w470 h420")
-    contentEdit.Focus()
+    if csvEditorRows.Length {
+        SelectManageListViewDataRow(csvList, 1)
+        LoadCsvEditorRow(1)
+    }
+
+    editor.Show("w" editorW " h610")
+    csvList.Focus()
 }
 
 /**
@@ -3030,7 +3310,7 @@ DecodeRecordingLogDescriptionStoredFragment(stored) {
 GetRecordingLogEventNote(parts) {
     global RECORDING_LOG_NOTE_FIELD
 
-    if parts.Length >= 3 && parts[parts.Length - 2] = RECORDING_LOG_NOTE_FIELD
+    if parts.Length >= 3 && parts[parts.Length - 1] = RECORDING_LOG_NOTE_FIELD
         return parts[parts.Length]
     return ""
 }
@@ -3045,7 +3325,7 @@ SetRecordingLogEventNote(parts, noteLabel) {
     global RECORDING_LOG_NOTE_FIELD
 
     noteLabel := Trim(noteLabel)
-    if parts.Length >= 3 && parts[parts.Length - 2] = RECORDING_LOG_NOTE_FIELD
+    if parts.Length >= 3 && parts[parts.Length - 1] = RECORDING_LOG_NOTE_FIELD
         parts.Length -= 2
     if noteLabel != ""
         parts.Push(RECORDING_LOG_NOTE_FIELD, noteLabel)
@@ -3423,6 +3703,233 @@ GetManageWindowRootHwnd(hwnd) {
 }
 
 /**
+ * Returns screen bounds for a Gui control (left, top, right, bottom).
+ * @param {Gui.Control} guiCtrl Target control.
+ * @param {Integer} leftOut Screen left edge.
+ * @param {Integer} topOut Screen top edge.
+ * @param {Integer} rightOut Screen right edge.
+ * @param {Integer} bottomOut Screen bottom edge.
+ * @returns {Boolean} False when the control cannot be measured.
+ */
+ManageGetGuiControlScreenRect(guiCtrl, &leftOut, &topOut, &rightOut, &bottomOut) {
+    leftOut := 0
+    topOut := 0
+    rightOut := 0
+    bottomOut := 0
+
+    if !guiCtrl
+        return false
+
+    try {
+        guiCtrl.GetPos(&cx, &cy, &cw, &ch)
+        guiHw := guiCtrl.Gui.Hwnd
+    } catch {
+        return false
+    }
+
+    if cw < 1 || ch < 1 || !guiHw
+        return false
+
+    pt := Buffer(8, 0)
+    NumPut("int", cx, pt, 0)
+    NumPut("int", cy, pt, 4)
+    if !DllCall("ClientToScreen", "Ptr", guiHw, "Ptr", pt)
+        return false
+
+    leftOut := NumGet(pt, 0, "int")
+    topOut := NumGet(pt, 4, "int")
+    NumPut("int", cx + cw, pt, 0)
+    NumPut("int", cy + ch, pt, 4)
+    if !DllCall("ClientToScreen", "Ptr", guiHw, "Ptr", pt)
+        return false
+
+    rightOut := NumGet(pt, 0, "int")
+    bottomOut := NumGet(pt, 4, "int")
+    return rightOut > leftOut && bottomOut > topOut
+}
+
+/**
+ * True when the cursor is inside a Gui control's screen bounds.
+ * @param {Gui.Control} guiCtrl Target control.
+ * @returns {Boolean}
+ */
+ManageIsMouseInGuiControl(guiCtrl) {
+    if !ManageGetGuiControlScreenRect(guiCtrl, &left, &top, &right, &bottom)
+        return false
+
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&mx, &my)
+    return mx >= left && mx < right && my >= top && my < bottom
+}
+
+/**
+ * Resolves a ListView row index from client Y when subitem hit-test misses.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} clientY Mouse Y relative to the ListView client area.
+ * @returns {Integer} One-based row index, or 0 when none.
+ */
+ManageGetListViewRowFromClientY(listView, clientY) {
+    static LVM_GETTOPINDEX := 0x1027
+    static LVM_GETITEMRECT := 0x100E
+    static LVM_GETITEMCOUNT := 0x1004
+
+    try listHw := listView.Hwnd
+    catch
+        return 0
+
+    count := DllCall(
+        "SendMessage",
+        "Ptr", listHw,
+        "UInt", LVM_GETITEMCOUNT,
+        "Ptr", 0,
+        "Ptr", 0,
+        "Ptr"
+    )
+    if count < 1
+        return 0
+
+    rect := Buffer(16, 0)
+    NumPut("int", 0, rect, 0)
+    if !DllCall(
+        "SendMessage",
+        "Ptr", listHw,
+        "UInt", LVM_GETITEMRECT,
+        "Ptr", 0,
+        "Ptr", rect,
+        "Ptr"
+    )
+        return 0
+
+    firstTop := NumGet(rect, 4, "int")
+    firstBottom := NumGet(rect, 12, "int")
+    itemH := firstBottom - firstTop
+    if itemH < 8
+        itemH := 17
+
+    if clientY < firstTop
+        return 0
+
+    topIndex := DllCall(
+        "SendMessage",
+        "Ptr", listHw,
+        "UInt", LVM_GETTOPINDEX,
+        "Ptr", 0,
+        "Ptr", 0,
+        "Ptr"
+    )
+    rowIndex := topIndex + Floor((clientY - firstTop) / itemH) + 1
+    return rowIndex >= 1 && rowIndex <= count ? rowIndex : 0
+}
+
+/**
+ * Resolves a ListView row index under screen coordinates.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} screenX Screen X.
+ * @param {Integer} screenY Screen Y.
+ * @returns {Integer} One-based row index, or 0 when none.
+ */
+ManageGetListViewRowAtScreenPos(listView, screenX, screenY) {
+    if !listView
+        return 0
+
+    try listHw := listView.Hwnd
+    catch
+        return 0
+
+    if !ManageScreenCoordsToClient(listHw, screenX, screenY, &clx, &cly)
+        return 0
+
+    hit := GetManageListViewHitSubItem(listView, clx, cly)
+    if hit.row >= 1
+        return hit.row
+
+    return ManageGetListViewRowFromClientY(listView, cly)
+}
+
+/**
+ * Creates the owned list-description overlay once (above +AlwaysOnTop main window).
+ */
+EnsureManageListDescOverlay() {
+    global C, S, UI
+
+    if S.HasProp("listDescOverlayGui") && S.listDescOverlayGui
+        return
+
+    overlay := Gui("+AlwaysOnTop -Caption +ToolWindow +Border -MaximizeBox -MinimizeBox +LastFound +E0x20")
+    overlay.BackColor := UI.listTooltipBg
+    overlay.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.listDescOverlayText := overlay.Add(
+        "Text",
+        "x" C.manageListTooltipPadX " y" C.manageListTooltipPadY " w" C.manageListTooltipMaxWidth,
+        ""
+    )
+    S.listDescOverlayText.Opt("c" UI.listTooltipText)
+    BindManageChildGui(overlay)
+    S.listDescOverlayGui := overlay
+}
+
+/**
+ * Hides the list-description overlay popup.
+ */
+HideManageListDescOverlay() {
+    global S
+
+    try {
+        if S.HasProp("listDescOverlayGui") && S.listDescOverlayGui
+            S.listDescOverlayGui.Hide()
+    } catch {
+    }
+
+    S.listDescOverlayShown := false
+    S.listDescOverlayLastText := ""
+    S.listDescOverlayLastX := 0
+    S.listDescOverlayLastY := 0
+}
+
+/**
+ * Shows list description text in an owned overlay above the cursor.
+ * Standard ToolTip() can render behind a +AlwaysOnTop owner window.
+ * @param {String} message Tooltip body.
+ * @param {Integer} screenX Screen X.
+ * @param {Integer} screenY Screen Y.
+ */
+ShowManageListDescOverlay(message, screenX, screenY) {
+    global C, S
+
+    EnsureManageListDescOverlay()
+    text := ManageTruncateTooltipText(message)
+    if text = "" {
+        HideManageListDescOverlay()
+        return
+    }
+
+    S.listDescOverlayText.Value := text
+    contentW := C.manageListTooltipMaxWidth
+    contentH := EstimateManageToolTipHeight(text)
+    winW := contentW + (C.manageListTooltipPadX * 2)
+    winH := contentH + (C.manageListTooltipPadY * 2)
+    tipX := screenX + C.cursorTipOffsetX
+    tipY := screenY - winH - C.manageListTooltipGapAbove
+
+    if tipY < 0
+        tipY := 0
+    if tipX + winW > A_ScreenWidth
+        tipX := Max(0, A_ScreenWidth - winW)
+
+    if S.listDescOverlayShown
+        && S.listDescOverlayLastText = text
+        && S.listDescOverlayLastX = tipX
+        && S.listDescOverlayLastY = tipY
+        return
+
+    S.listDescOverlayGui.Show(Format("x{} y{} w{} h{} NoActivate", tipX, tipY, winW, winH))
+    S.listDescOverlayShown := true
+    S.listDescOverlayLastText := text
+    S.listDescOverlayLastX := tipX
+    S.listDescOverlayLastY := tipY
+}
+
+/**
  * Truncates long tooltip text before passing to ToolTip().
  * @param {String} text Tooltip body.
  * @param {Integer} limit Max grapheme roughly by StrLen().
@@ -3442,12 +3949,126 @@ ManageTruncateTooltipText(text, limit := 0) {
 }
 
 /**
+ * Estimates ToolTip height in pixels for placement above the cursor.
+ * @param {String} text Tooltip body (may include newlines).
+ * @returns {Integer}
+ */
+EstimateManageToolTipHeight(text) {
+    lineCount := Max(1, StrSplit(text, "`n").Length)
+    charsPerLine := 52
+
+    for , line in StrSplit(text, "`n")
+        lineCount := Max(lineCount, Ceil(Max(StrLen(line), 1) / charsPerLine))
+
+    return lineCount * 18 + 12
+}
+
+/**
+ * Cancels a pending delayed list-description overlay show.
+ */
+CancelManageListDescShowTimer() {
+    SetTimer(DelayedShowManageListDescOverlay, 0)
+}
+
+/**
+ * Timer callback: show overlay after hover delay if the pointer is still on the same row.
+ */
+DelayedShowManageListDescOverlay(*) {
+    global S
+
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&mx, &my)
+
+    row := S.listTooltipPendingRow
+    kind := S.listTooltipPendingKind
+    tip := S.listTooltipPendingTip
+
+    if row < 1 || tip = "" || kind = ""
+        return
+
+    try activeTab := S.mainTab.Value
+    catch
+        return
+
+    if kind = "recording" {
+        if activeTab != 1 || !ManageIsMouseInGuiControl(S.recordingList)
+            return
+        currentRow := ManageGetListViewRowAtScreenPos(S.recordingList, mx, my)
+        if currentRow != row || ManageGetRecordingListDescTip(row) != tip
+            return
+    } else if kind = "preset" {
+        if activeTab != 2 || !ManageIsMouseInGuiControl(S.presetList)
+            return
+        currentRow := ManageGetListViewRowAtScreenPos(S.presetList, mx, my)
+        if currentRow != row || ManageGetPresetListDescTip(row) != tip
+            return
+    } else {
+        return
+    }
+
+    ManageShowListDescTipForRow(tip, mx, my, row, kind)
+}
+
+/**
+ * Tracks hover on a list row; shows overlay after a delay, repositions when already visible.
+ * @param {String} tip Description text.
+ * @param {Integer} screenX Screen X.
+ * @param {Integer} screenY Screen Y.
+ * @param {Integer} row One-based ListView row index.
+ * @param {String} listKind "recording" or "preset".
+ */
+ManageTrackListDescHover(tip, screenX, screenY, row, listKind) {
+    global C, S
+
+    hoverKey := listKind . "|" . row
+
+    if hoverKey != S.listTooltipHoverKey {
+        S.listTooltipHoverKey := hoverKey
+        S.listTooltipHoverSince := A_TickCount
+        S.listTooltipPendingTip := tip
+        S.listTooltipPendingKind := listKind
+        S.listTooltipPendingRow := row
+        HideManageListDescOverlay()
+        S.listTooltipShownText := ""
+        S.listTooltipRecordingRow := 0
+        S.listTooltipPresetRow := 0
+        CancelManageListDescShowTimer()
+        SetTimer(DelayedShowManageListDescOverlay, -C.manageListTooltipShowDelayMs)
+    }
+
+    S.listTooltipPendingX := screenX
+    S.listTooltipPendingY := screenY
+    S.listTooltipPendingTip := tip
+
+    if S.listDescOverlayShown && S.listTooltipShownText = tip {
+        if listKind = "recording" && row = S.listTooltipRecordingRow {
+            ShowManageListDescOverlay(ManageTruncateTooltipText(tip), screenX, screenY)
+            return
+        }
+        if listKind = "preset" && row = S.listTooltipPresetRow {
+            ShowManageListDescOverlay(ManageTruncateTooltipText(tip), screenX, screenY)
+            return
+        }
+    }
+
+    if !S.listDescOverlayShown && (A_TickCount - S.listTooltipHoverSince >= C.manageListTooltipShowDelayMs)
+        ManageShowListDescTipForRow(tip, screenX, screenY, row, listKind)
+}
+
+/**
  * Hides hover tooltips for main list controls and resets tracking state.
  */
 ManageHideMainListTooltips(*) {
     global S
 
-    ToolTip()
+    CancelManageListDescShowTimer()
+    HideManageListDescOverlay()
+    S.listTooltipMissStreak := 0
+    S.listTooltipHoverKey := ""
+    S.listTooltipHoverSince := 0
+    S.listTooltipPendingTip := ""
+    S.listTooltipPendingKind := ""
+    S.listTooltipPendingRow := 0
     if S.HasProp("listTooltipShownText")
         S.listTooltipShownText := ""
     if S.HasProp("listTooltipRecordingRow")
@@ -3457,14 +4078,98 @@ ManageHideMainListTooltips(*) {
 }
 
 /**
- * Periodic poll: ToolTip beside cursor when hovering a recording row or preset row with optional description text.
+ * WM_MOUSEMOVE on main-window tree: refresh list description overlay (debounced).
+ */
+ManageOnMainWindowMouseMove(wParam, lParam, msg, hwnd) {
+    global C, S
+
+    static lastMoveTick := 0
+
+    try mainHw := S.gui.Hwnd
+    catch
+        return
+
+    if !mainHw || GetManageWindowRootHwnd(hwnd) != mainHw
+        return
+
+    if A_TickCount - lastMoveTick < C.manageListTooltipMouseMoveMinMs
+        return
+
+    lastMoveTick := A_TickCount
+    ManagePollMainWindowListTooltips()
+}
+
+/**
+ * Resolves description text for a hovered recordings-list row.
+ * @param {Integer} row One-based ListView row index.
+ * @returns {String}
+ */
+ManageGetRecordingListDescTip(row) {
+    global S
+
+    if row < 1 || row > S.recordingPaths.Length
+        return ""
+
+    path := S.recordingPaths[row]
+    if path = "" || !S.recordingDescCache.Has(path)
+        return ""
+
+    return Trim(S.recordingDescCache[path])
+}
+
+/**
+ * Resolves description text for a hovered data-inputs-list row.
+ * @param {Integer} row One-based ListView row index.
+ * @returns {String}
+ */
+ManageGetPresetListDescTip(row) {
+    global S
+
+    if row < 1 || row > S.presetPaths.Length
+        return ""
+
+    path := S.presetPaths[row]
+    if path = "" || !S.presetDescCache.Has(path)
+        return ""
+
+    return Trim(S.presetDescCache[path])
+}
+
+/**
+ * Shows or keeps the list description overlay for the current hover target.
+ * @param {String} tip Description text.
+ * @param {Integer} screenX Screen X.
+ * @param {Integer} screenY Screen Y.
+ * @param {Integer} row One-based ListView row index.
+ * @param {String} listKind "recording" or "preset".
+ */
+ManageShowListDescTipForRow(tip, screenX, screenY, row, listKind) {
+    global S
+
+    truncated := ManageTruncateTooltipText(tip)
+    if row = S.listTooltipRecordingRow && tip = S.listTooltipShownText && listKind = "recording" {
+        ShowManageListDescOverlay(truncated, screenX, screenY)
+        return
+    }
+    if row = S.listTooltipPresetRow && tip = S.listTooltipShownText && listKind = "preset" {
+        ShowManageListDescOverlay(truncated, screenX, screenY)
+        return
+    }
+
+    S.listTooltipShownText := tip
+    S.listTooltipRecordingRow := listKind = "recording" ? row : 0
+    S.listTooltipPresetRow := listKind = "preset" ? row : 0
+    ShowManageListDescOverlay(truncated, screenX, screenY)
+}
+
+/**
+ * Periodic poll: owned overlay above cursor when hovering a row with optional description text.
  */
 ManagePollMainWindowListTooltips(*) {
     global C, S
 
     CoordMode("Mouse", "Screen")
-    ; Flag 2: OutputVarControl is HWND (not ClassNN); required for GetManageWindowRootHwnd / DllCall.
-    MouseGetPos(&mx, &my, , &hoverHw, 2)
+    MouseGetPos(&mx, &my)
 
     try mainHw := S.gui.Hwnd
     catch {
@@ -3477,100 +4182,43 @@ ManagePollMainWindowListTooltips(*) {
         return
     }
 
-    if !WinActive("ahk_id " mainHw) {
+    if WinGetMinMax("ahk_id " mainHw) = -1 {
         ManageHideMainListTooltips()
         return
     }
 
-    if !hoverHw || GetManageWindowRootHwnd(hoverHw) != mainHw {
-        ManageHideMainListTooltips()
+    activeTab := 0
+    try activeTab := S.mainTab.Value
+
+    if activeTab = 1 && ManageIsMouseInGuiControl(S.recordingList) {
+        row := ManageGetListViewRowAtScreenPos(S.recordingList, mx, my)
+        tip := ManageGetRecordingListDescTip(row)
+
+        if row < 1 || tip = "" {
+            S.listTooltipMissStreak++
+            if S.listTooltipMissStreak >= C.manageListTooltipMissHide
+                ManageHideMainListTooltips()
+            return
+        }
+
+        S.listTooltipMissStreak := 0
+        ManageTrackListDescHover(tip, mx, my, row, "recording")
         return
     }
 
-    recHw := 0
+    if activeTab = 2 && ManageIsMouseInGuiControl(S.presetList) {
+        prow := ManageGetListViewRowAtScreenPos(S.presetList, mx, my)
+        ptip := ManageGetPresetListDescTip(prow)
 
-    try recHw := S.recordingList.Hwnd
-    catch {
-        ManageHideMainListTooltips()
-        return
-    }
-
-    presHw := 0
-
-    try presHw := S.presetList.Hwnd
-    catch {
-        presHw := 0
-    }
-
-    if recHw && hoverHw = recHw {
-        tip := ""
-        clx := 0
-        cly := 0
-        if !ManageScreenCoordsToClient(recHw, mx, my, &clx, &cly) {
-            ManageHideMainListTooltips()
+        if prow < 1 || ptip = "" {
+            S.listTooltipMissStreak++
+            if S.listTooltipMissStreak >= C.manageListTooltipMissHide
+                ManageHideMainListTooltips()
             return
         }
 
-        hit := GetManageListViewHitSubItem(S.recordingList, clx, cly)
-        row := hit.row
-
-        if row >= 1 && row <= S.recordingPaths.Length {
-            path := S.recordingPaths[row]
-            if path != "" && S.recordingDescCache.Has(path)
-                tip := Trim(S.recordingDescCache[path])
-        }
-
-        shown := Trim(tip) != ""
-
-        if !shown || row < 1 {
-            ManageHideMainListTooltips()
-            return
-        }
-
-        if row = S.listTooltipRecordingRow && tip = S.listTooltipShownText {
-            ToolTip(ManageTruncateTooltipText(tip), mx + C.cursorTipOffsetX, my + C.cursorTipOffsetY)
-            return
-        }
-
-        S.listTooltipShownText := tip
-        S.listTooltipRecordingRow := row
-        S.listTooltipPresetRow := 0
-        ToolTip(ManageTruncateTooltipText(tip), mx + C.cursorTipOffsetX, my + C.cursorTipOffsetY)
-        return
-    }
-
-    if presHw && hoverHw = presHw {
-        clxb := 0
-        clyb := 0
-        if !ManageScreenCoordsToClient(presHw, mx, my, &clxb, &clyb) {
-            ManageHideMainListTooltips()
-            return
-        }
-
-        hit := GetManageListViewHitSubItem(S.presetList, clxb, clyb)
-        prow := hit.row
-        ptip := ""
-
-        if prow >= 1 && prow <= S.presetPaths.Length {
-            pp := S.presetPaths[prow]
-            if pp != "" && S.presetDescCache.Has(pp)
-                ptip := Trim(S.presetDescCache[pp])
-        }
-
-        if prow < 1 || Trim(ptip) = "" {
-            ManageHideMainListTooltips()
-            return
-        }
-
-        if prow = S.listTooltipPresetRow && ptip = S.listTooltipShownText {
-            ToolTip(ManageTruncateTooltipText(ptip), mx + C.cursorTipOffsetX, my + C.cursorTipOffsetY)
-            return
-        }
-
-        S.listTooltipShownText := ptip
-        S.listTooltipPresetRow := prow
-        S.listTooltipRecordingRow := 0
-        ToolTip(ManageTruncateTooltipText(ptip), mx + C.cursorTipOffsetX, my + C.cursorTipOffsetY)
+        S.listTooltipMissStreak := 0
+        ManageTrackListDescHover(ptip, mx, my, prow, "preset")
         return
     }
 
@@ -3584,10 +4232,12 @@ ManagePollMainWindowListTooltips(*) {
 SetManageMainListTooltipPolling(enabled) {
     global C
 
-    if enabled
+    if enabled {
         SetTimer(ManagePollMainWindowListTooltips, C.manageListTooltipPollMs)
-    else {
+        OnMessage(C.WM_MOUSEMOVE, ManageOnMainWindowMouseMove)
+    } else {
         SetTimer(ManagePollMainWindowListTooltips, 0)
+        OnMessage(C.WM_MOUSEMOVE, ManageOnMainWindowMouseMove, 0)
         ManageHideMainListTooltips()
     }
 }
@@ -3671,7 +4321,9 @@ GetManageListViewSubItemRect(listView, rowIndex, colIndex) {
     static LVM_GETSUBITEMRECT := 0x1038
 
     rect := Buffer(16, 0)
-    NumPut("int", colIndex - 1, rect, 0)
+    ; RECT.left requests the bounds rectangle; RECT.top supplies the zero-based subitem.
+    NumPut("int", 0, rect, 0)
+    NumPut("int", colIndex - 1, rect, 4)
     if !DllCall(
         "SendMessage",
         "Ptr", listView.Hwnd,
@@ -3883,7 +4535,27 @@ ShowRecordingLogEditor(*) {
         rawPreview.Value := BuildRecordingLogEditorSerializedPreview(headerLines, events, descEdit.Value)
     }
 
+    SyncSelectedLogRowFromDetailPanel() {
+        if selectedRowIndex < 1 || selectedRowIndex > events.Length
+            return
+
+        event := events[selectedRowIndex]
+        parts := event.parts
+        parts[1] := Trim(msEdit.Value)
+
+        Loop detailFieldDefs.Length {
+            fieldDef := detailFieldDefs[A_Index]
+            if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length
+                parts[fieldDef.partIndex] := Trim(detailEdits[A_Index].Value)
+        }
+
+        SetRecordingLogEventNote(parts, noteEdit.Value)
+        RefreshRecordingLogEditorListRow(logList, selectedRowIndex, event)
+        UpdateRawPreview()
+    }
+
     LoadDetailPanel(rowIndex) {
+        SyncSelectedLogRowFromDetailPanel()
         selectedRowIndex := rowIndex
         detailFieldDefs := []
 
@@ -3927,21 +4599,8 @@ ShowRecordingLogEditor(*) {
         if selectedRowIndex < 1 || selectedRowIndex > events.Length
             return
 
-        event := events[selectedRowIndex]
-        parts := event.parts
-        parts[1] := Trim(msEdit.Value)
-
-        Loop detailFieldDefs.Length {
-            fieldDef := detailFieldDefs[A_Index]
-            if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length
-                parts[fieldDef.partIndex] := Trim(detailEdits[A_Index].Value)
-        }
-
-        SetRecordingLogEventNote(parts, noteEdit.Value)
-
-        RefreshRecordingLogEditorListRow(logList, selectedRowIndex, event)
-        UpdateRawPreview()
-        SetStatus(Format("Updated log row {} — {}", selectedRowIndex, BuildRecordingLogEditorSummary(parts)))
+        SyncSelectedLogRowFromDetailPanel()
+        SetStatus(Format("Updated log row {} — {}", selectedRowIndex, BuildRecordingLogEditorSummary(events[selectedRowIndex].parts)))
     }
 
     OnLogListSelect(*) {
@@ -3949,18 +4608,7 @@ ShowRecordingLogEditor(*) {
     }
 
     SaveLog(*) {
-        if selectedRowIndex >= 1 && selectedRowIndex <= events.Length {
-            event := events[selectedRowIndex]
-            parts := event.parts
-            parts[1] := Trim(msEdit.Value)
-            Loop detailFieldDefs.Length {
-                fieldDef := detailFieldDefs[A_Index]
-                if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length
-                    parts[fieldDef.partIndex] := Trim(detailEdits[A_Index].Value)
-            }
-            SetRecordingLogEventNote(parts, noteEdit.Value)
-            RefreshRecordingLogEditorListRow(logList, selectedRowIndex, event)
-        }
+        SyncSelectedLogRowFromDetailPanel()
 
         try {
             logFile := FileOpen(path, "w", "UTF-8-RAW")
@@ -4025,6 +4673,47 @@ SuggestNewPresetName() {
 }
 
 /**
+ * Top-level Enter handler for preset editor inline edit.
+ * Hotkey must not target nested editor functions (AHK v2 .Call errors).
+ */
+PresetEditorInlineEnterHotkey(*) {
+    global S
+
+    if !S.presetEditorEnterCallback
+        return
+
+    if Type(S.presetEditorEnterCallback) != "Func"
+        return
+
+    try S.presetEditorEnterCallback.Call()
+}
+
+/**
+ * Enables Enter-to-commit while a preset variable cell is being edited inline.
+ * @param {Func} commitFn Nested CommitVariableInlineEdit from the open editor.
+ */
+EnablePresetEditorInlineEnterHotkey(commitFn) {
+    global S
+
+    if Type(commitFn) != "Func"
+        return
+
+    DisablePresetEditorInlineEnterHotkey()
+    S.presetEditorEnterCallback := commitFn
+    Hotkey "Enter", PresetEditorInlineEnterHotkey, "On"
+}
+
+/**
+ * Disables Enter-to-commit for preset editor inline edit.
+ */
+DisablePresetEditorInlineEnterHotkey() {
+    global S
+
+    S.presetEditorEnterCallback := ""
+    try Hotkey "Enter", PresetEditorInlineEnterHotkey, "Off"
+}
+
+/**
  * Opens the data input editor for the selected data input or a new data input.
  * @param {Boolean} createNew When true, opens a blank editor with a suggested name.
  */
@@ -4035,6 +4724,11 @@ ShowPresetEditor(createNew := false, *) {
         ClearPresetSelection()
 
     selectedPreset := createNew ? "" : GetSelectedPresetPath()
+    if !createNew && selectedPreset = "" {
+        ShowManageMsgBox "Select a data input first, then click Edit Data Input.", "Edit Data Input", "Icon!"
+        return
+    }
+
     originalPresetPath := selectedPreset
     selectedRecording := GetSelectedRecordingPath()
     existingSettings := selectedPreset && FileExist(selectedPreset)
@@ -4124,8 +4818,7 @@ ShowPresetEditor(createNew := false, *) {
 
     DisablePresetInlineEditHotkeys() {
         presetEditorActive := false
-        HotIf
-        try Hotkey "Enter", "Off"
+        DisablePresetEditorInlineEnterHotkey()
     }
 
     CommitVariableInlineEdit(*) {
@@ -4158,6 +4851,7 @@ ShowPresetEditor(createNew := false, *) {
         inlineEditRow := 0
         inlineEditCol := 0
         inlineEditOriginal := ""
+        DisablePresetEditorInlineEnterHotkey()
     }
 
     CancelVariableInlineEdit(*) {
@@ -4176,6 +4870,7 @@ ShowPresetEditor(createNew := false, *) {
         inlineEditRow := 0
         inlineEditCol := 0
         inlineEditOriginal := ""
+        DisablePresetEditorInlineEnterHotkey()
     }
 
     StartVariableInlineEdit(visualRowIndex, colIndex) {
@@ -4190,7 +4885,10 @@ ShowPresetEditor(createNew := false, *) {
 
         ControlGetPos &listX, &listY, , , variablesList
         rect := GetManageListViewSubItemRect(variablesList, visualRowIndex, colIndex)
-        editW := Max(rect.right - rect.left, 40)
+        maxEditW := colIndex = presetVarColLabel
+            ? UI.presetEditorInlineLabelMaxWidth
+            : UI.presetEditorInlineValueMaxWidth
+        editW := Min(Max(rect.right - rect.left, 40), maxEditW)
         editH := Max(rect.bottom - rect.top, 22)
 
         inlineEditRow := dataRowIndex
@@ -4200,6 +4898,7 @@ ShowPresetEditor(createNew := false, *) {
         inlineEditCtrl.Value := inlineEditOriginal
         inlineEditCtrl.Visible := true
         inlineEditCtrl.Focus()
+        EnablePresetEditorInlineEnterHotkey(CommitVariableInlineEdit)
     }
 
     LoadVariableDetailPanel(rowIndex) {
@@ -4308,13 +5007,11 @@ ShowPresetEditor(createNew := false, *) {
 
     SaveEditor(*) {
         CommitVariableInlineEdit()
+        DisablePresetEditorInlineEnterHotkey()
+        SyncSelectedVariableRowFromDetailPanel()
 
-        if selectedRowIndex >= 1 && selectedRowIndex <= editorVariableRows.Length {
-            row := editorVariableRows[selectedRowIndex]
-            row.label := Trim(labelEdit.Value)
-            row.value := Trim(valueEdit.Value)
-            RefreshPresetVariableListRow(variablesList, selectedRowIndex, row)
-        }
+        if selectedRowIndex >= 1 && selectedRowIndex <= editorVariableRows.Length
+            RefreshPresetVariableListRow(variablesList, selectedRowIndex, editorVariableRows[selectedRowIndex])
 
         presetName := SafePresetName(nameEdit.Value)
         if presetName = "" {
@@ -4334,28 +5031,39 @@ ShowPresetEditor(createNew := false, *) {
 
         settings.description := Trim(descEdit.Value)
 
+        if settings.variables.Length = 0 {
+            ShowManageMsgBox "Enter at least one variable value.", "Edit Data Input", "Icon!"
+            return
+        }
+
         presetPath := C.savesDir "\" presetName C.saveExt
 
         try {
             WritePresetFile(settings, presetPath)
-
-            if originalPresetPath != "" && StrLower(originalPresetPath) != StrLower(presetPath)
-                && FileExist(originalPresetPath)
-                DeleteManagedFile(originalPresetPath)
-
-            ApplySettings(settings)
-            SyncRunSettingsFromGui()
-            RefreshPresetList()
-            SelectByBaseName(S.presetList, S.presetPaths, FileBaseName(presetPath))
-            RememberSelections()
-            UpdateSelectionStatus()
-            SetStatus(originalPresetPath != "" && StrLower(originalPresetPath) = StrLower(presetPath)
-                ? "Updated data input — " presetName
-                : "Saved data input — " presetName)
-            CloseEditor()
         } catch as err {
-            ShowManageMsgBox "Could not save inputs:`n" err.Message, "Edit Data Input", "Icon!"
+            ShowManageMsgBox "Could not write the data input file:`n" err.Message, "Edit Data Input", "Icon!"
+            return
         }
+
+        if originalPresetPath != "" && StrLower(originalPresetPath) != StrLower(presetPath)
+            && FileExist(originalPresetPath) {
+            try DeleteManagedFile(originalPresetPath)
+            catch as err {
+                ShowManageMsgBox "Saved as " presetName ", but could not remove the old file:`n" err.Message,
+                    "Edit Data Input", "Icon!"
+            }
+        }
+
+        ApplySettings(settings)
+        SyncRunSettingsFromGui()
+        RefreshPresetList()
+        SelectByBaseName(S.presetList, S.presetPaths, FileBaseName(presetPath))
+        RememberSelections()
+        UpdateSelectionStatus()
+        SetStatus(originalPresetPath != "" && StrLower(originalPresetPath) = StrLower(presetPath)
+            ? "Updated data input — " presetName
+            : "Saved data input — " presetName)
+        CloseEditor()
     }
 
     CloseEditor(*) {
@@ -4378,15 +5086,6 @@ ShowPresetEditor(createNew := false, *) {
         CloseEditor()
     }
 
-    PresetInlineEditHotIf(*) {
-        if !presetEditorActive || !WinActive("ahk_id " editorHwnd)
-            return false
-        try
-            return inlineEditCtrl.Visible
-        catch
-            return false
-    }
-
     saveBtn.OnEvent("Click", SaveEditor)
     closeBtn.OnEvent("Click", CloseEditor)
     editor.OnEvent("Close", CloseEditor)
@@ -4398,10 +5097,6 @@ ShowPresetEditor(createNew := false, *) {
     applyRowBtn.OnEvent("Click", ApplySelectedVariableRow)
     addRowBtn.OnEvent("Click", AddPresetVariableRow)
     deleteRowBtn.OnEvent("Click", DeletePresetVariableRow)
-
-    HotIf PresetInlineEditHotIf
-    Hotkey "Enter", CommitVariableInlineEdit, "On"
-    HotIf
 
     if editorVariableRows.Length {
         SelectManageListViewDataRow(variablesList, 1)
@@ -6284,7 +6979,7 @@ JoinManageDelimitedFields(fields) {
     escaped := []
 
     for field in fields
-        escaped.Push(EscapeManageDelimitedField(field))
+        escaped.Push(EscapeManageDelimitedField(String(field)))
 
     return Join(escaped, ",")
 }
@@ -7325,10 +8020,10 @@ SerializePreset(settings) {
         . "human_typing=" (settings.human_typing ? 1 : 0) "`n"
     if desc != ""
         presetBody .= "`n# optional description shown as tooltip on the Data Inputs list row`ndescription="
-            desc "`n"
+            . desc . "`n"
 
     presetBody .= "`n# variable-1, variable-2, variable-3 ... (optional note labels; escape commas with \\,)`n"
-        . JoinManageDelimitedFields(settings.variables) "`n"
+        . JoinManageDelimitedFields(settings.variables) . "`n"
     return presetBody
 }
 
