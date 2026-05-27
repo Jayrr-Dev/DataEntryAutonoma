@@ -319,7 +319,7 @@ Higher speed values run faster.
 
     defaultPlaybackSpeed: 1.0,
     defaultTypingSpeed: 1.0,
-    defaultMoveSpeed: 3,
+    defaultMoveSpeed: 10,
     defaultInitialDelayMs: 1000,
     defaultClickPauseMs: 150,
     defaultSegmentPauseMs: 200,
