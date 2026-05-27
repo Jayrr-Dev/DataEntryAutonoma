@@ -48,6 +48,7 @@ $ASSETS_RELATIVE_PATH = "assets"
 $GITHUB_REPO_OWNER = "Jayrr-Dev"
 $GITHUB_REPO_NAME = "DataEntryAutonoma"
 $GITHUB_RELEASES_LATEST_URL = "https://api.github.com/repos/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
+$GITHUB_RELEASES_PAGE_URL = "https://github.com/$GITHUB_REPO_OWNER/$GITHUB_REPO_NAME/releases/latest"
 $RELEASE_ZIP_NAME_PATTERN = "DataEntryAutonoma-v*-win64.zip"
 $DOWNLOAD_USER_AGENT = "$APP_DISPLAY_NAME Install Wizard"
 
@@ -123,33 +124,7 @@ function Ensure-InstallSourceReady {
         return $true
     } catch {
         Set-WizardStatusMessage "Download failed."
-
-        $downloadError = $_.Exception.Message
-        $browseHint = @"
-Could not download $EXE_FILE_NAME from GitHub.
-
-$downloadError
-
-If you already downloaded the release zip, extract it and select $EXE_FILE_NAME below.
-Otherwise attach DataEntryAutonoma-v*-win64.zip to the GitHub release, or run the wizard from a folder that already contains the exe.
-"@
-
-        [System.Windows.Forms.MessageBox]::Show(
-            $browseHint,
-            "$APP_DISPLAY_NAME Setup",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Warning
-        ) | Out-Null
-
-        $pickedPath = Show-InstallSourceBrowseDialog
-        if ($pickedPath -ne "") {
-            $script:StandaloneExeSourcePath = $pickedPath
-            $script:ReleaseSourceRoot = Split-Path $pickedPath -Parent
-            $script:DownloadedReleaseVersion = ""
-            return $true
-        }
-
-        Show-WizardError "Could not find or download $EXE_FILE_NAME.`r`n$($_.Exception.Message)"
+        $script:InstallSourcePrepFailed = $true
         return $false
     }
 }
@@ -166,6 +141,126 @@ function Show-InstallSourceBrowseDialog {
     }
 
     return ""
+}
+
+# Opens the latest GitHub release page in the default browser.
+function Open-GitHubReleasePage {
+    Start-Process $GITHUB_RELEASES_PAGE_URL
+}
+
+# Prompts for a local exe when automatic download is unavailable.
+function Set-InstallSourceFromManualBrowse {
+    $pickedPath = Show-InstallSourceBrowseDialog
+    if ($pickedPath -eq "") {
+        return $false
+    }
+
+    $script:StandaloneExeSourcePath = $pickedPath
+    $script:ReleaseSourceRoot = Split-Path $pickedPath -Parent
+    $script:DownloadedReleaseVersion = ""
+    $script:InstallSourcePrepFailed = $false
+    return $true
+}
+
+# Refreshes welcome-step status text and title after the install source is resolved.
+function Update-WelcomeInstallSourceReadyUi {
+    if (Test-ControlUsable $script:Welcome_StatusLabel) {
+        Set-WizardStatusMessage (Get-InstallSourceSummary)
+        $script:Welcome_StatusLabel.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
+    }
+
+    $script:WizardAppVersion = Get-TargetInstallVersion
+    Update-InstallWizardFormTitle -Version $script:WizardAppVersion
+    Set-WelcomeFallbackButtonsVisible $false
+    Set-WelcomeDownloadProgressVisible $false
+    $btnNext.Text = "Next >"
+}
+
+# Shows or hides the welcome-step download progress bar.
+function Set-WelcomeDownloadProgressVisible {
+    param([bool]$Visible)
+
+    if (-not (Test-ControlUsable $script:Welcome_ProgressBar)) {
+        return
+    }
+
+    $script:Welcome_ProgressBar.Visible = $Visible
+    if ($Visible) {
+        $script:Welcome_ProgressBar.Style = "Marquee"
+        $script:Welcome_ProgressBar.MarqueeAnimationSpeed = 30
+    }
+}
+
+# Shows fallback actions when GitHub download is unavailable.
+function Set-WelcomeFallbackButtonsVisible {
+    param([bool]$Visible)
+
+    foreach ($ctrl in @($script:Welcome_GetReleaseBtn, $script:Welcome_BrowseExeBtn, $script:Welcome_RetryBtn)) {
+        if (Test-ControlUsable $ctrl) {
+            $ctrl.Visible = $Visible
+        }
+    }
+}
+
+# Positions welcome download controls below the status label.
+function Update-WelcomeAuxiliaryLayout {
+    if (-not (Test-ControlUsable $script:Welcome_StatusLabel)) {
+        return
+    }
+
+    $y = $script:Welcome_StatusLabel.Bottom + 8
+
+    if (Test-ControlUsable $script:Welcome_ProgressBar) {
+        $script:Welcome_ProgressBar.Location = New-Object System.Drawing.Point(0, $y)
+        $y += $script:Welcome_ProgressBar.Height + 8
+    }
+
+    if (Test-ControlUsable $script:Welcome_RetryBtn) {
+        $script:Welcome_RetryBtn.Location = New-Object System.Drawing.Point(0, $y)
+        $script:Welcome_GetReleaseBtn.Location = New-Object System.Drawing.Point(108, $y)
+        $script:Welcome_BrowseExeBtn.Location = New-Object System.Drawing.Point(286, $y)
+    }
+}
+
+# Downloads (or confirms) the install source on the welcome screen.
+function Invoke-WelcomeInstallSourcePrep {
+    if (Test-StandaloneExeAvailable) {
+        $script:InstallSourcePrepFailed = $false
+        Update-WelcomeInstallSourceReadyUi
+        return $true
+    }
+
+    $script:WizardBusy = $true
+    Set-WizardNavigationEnabled $false
+    Set-WelcomeFallbackButtonsVisible $false
+    Set-WelcomeDownloadProgressVisible $true
+    Set-WizardStatusMessage "Downloading the latest version from GitHub..."
+    if (Test-ControlUsable $script:Welcome_StatusLabel) {
+        $script:Welcome_StatusLabel.ForeColor = $COLOR_MUTED
+    }
+    Update-WelcomeAuxiliaryLayout
+    [System.Windows.Forms.Application]::DoEvents()
+
+    try {
+        if (Ensure-InstallSourceReady) {
+            $script:InstallSourcePrepFailed = $false
+            Update-WelcomeInstallSourceReadyUi
+            return $true
+        }
+
+        Set-WizardStatusMessage "Could not download automatically. Open GitHub Releases, or browse for $EXE_FILE_NAME."
+        if (Test-ControlUsable $script:Welcome_StatusLabel) {
+            $script:Welcome_StatusLabel.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+        }
+        Set-WelcomeDownloadProgressVisible $false
+        Set-WelcomeFallbackButtonsVisible $true
+        $btnNext.Text = "Retry download"
+        Update-WelcomeAuxiliaryLayout
+        return $false
+    } finally {
+        $script:WizardBusy = $false
+        Set-WizardNavigationEnabled $true
+    }
 }
 
 # Updates the welcome step status label when present.
@@ -241,7 +336,7 @@ function Update-InstallWizardFormTitle {
 # Returns a short label for the install source shown on the welcome screen.
 function Get-InstallSourceSummary {
     if (-not (Test-StandaloneExeAvailable)) {
-        return "The app will be downloaded when you click Next."
+        return "Preparing download from GitHub..."
     }
 
     if ($script:DownloadedReleaseVersion) {
@@ -559,6 +654,11 @@ $script:Step3_Failed = $false
 $script:IsUpgrade = $false
 $script:WizardBusy = $false
 $script:Welcome_StatusLabel = $null
+$script:Welcome_ProgressBar = $null
+$script:Welcome_GetReleaseBtn = $null
+$script:Welcome_BrowseExeBtn = $null
+$script:Welcome_RetryBtn = $null
+$script:InstallSourcePrepFailed = $false
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = Get-InstallWizardFormTitle -Version $script:WizardAppVersion
@@ -678,7 +778,7 @@ Version: v$($script:WizardAppVersion)
 
 CSV files use row 1 for column labels and can be edited in the built-in table editor. Share and Import portable bundles (folder or .dea.zip) from the main window title row.
 
-Click Next to choose where to install.
+When the app is ready, click Next to choose where to install.
 "@
 
             $body = Add-StackedBodyLabel -Text $welcomeText
@@ -687,6 +787,44 @@ Click Next to choose where to install.
                 -Below $body `
                 -ForeColor ([System.Drawing.Color]::FromArgb(6, 95, 70))
             $script:Welcome_StatusLabel = $status
+
+            $progress = New-Object System.Windows.Forms.ProgressBar
+            $progress.Style = "Marquee"
+            $progress.MarqueeAnimationSpeed = 30
+            $progress.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, 8)
+            $progress.Visible = $false
+            $contentPanel.Controls.Add($progress)
+            $script:Welcome_ProgressBar = $progress
+
+            $retryBtn = New-Object System.Windows.Forms.Button
+            $retryBtn.Text = "Retry download"
+            $retryBtn.Size = New-Object System.Drawing.Size(100, 28)
+            $retryBtn.Visible = $false
+            $retryBtn.Add_Click({ Invoke-WelcomeInstallSourcePrep | Out-Null })
+            $contentPanel.Controls.Add($retryBtn)
+            $script:Welcome_RetryBtn = $retryBtn
+
+            $getReleaseBtn = New-Object System.Windows.Forms.Button
+            $getReleaseBtn.Text = "Open releases"
+            $getReleaseBtn.Size = New-Object System.Drawing.Size(170, 28)
+            $getReleaseBtn.Visible = $false
+            $getReleaseBtn.Add_Click({ Open-GitHubReleasePage })
+            $contentPanel.Controls.Add($getReleaseBtn)
+            $script:Welcome_GetReleaseBtn = $getReleaseBtn
+
+            $browseExeBtn = New-Object System.Windows.Forms.Button
+            $browseExeBtn.Text = "Browse for exe..."
+            $browseExeBtn.Size = New-Object System.Drawing.Size(130, 28)
+            $browseExeBtn.Visible = $false
+            $browseExeBtn.Add_Click({
+                if (Set-InstallSourceFromManualBrowse) {
+                    Update-WelcomeInstallSourceReadyUi
+                }
+            })
+            $contentPanel.Controls.Add($browseExeBtn)
+            $script:Welcome_BrowseExeBtn = $browseExeBtn
+
+            Update-WelcomeAuxiliaryLayout
         }
 
         1 {
@@ -956,20 +1094,19 @@ $btnNext.Add_Click({
     }
 
     if ($script:CurrentStep -eq 0) {
-        if (-not (Test-StandaloneExeAvailable)) {
-            $script:WizardBusy = $true
-            Set-WizardNavigationEnabled $false
-            try {
-                if (-not (Ensure-InstallSourceReady -StatusMessage "Downloading the latest version...")) {
-                    return
-                }
+        if ($btnNext.Text -eq "Retry download") {
+            Invoke-WelcomeInstallSourcePrep | Out-Null
+            return
+        }
 
-                $script:WizardAppVersion = Get-TargetInstallVersion
-                Update-InstallWizardFormTitle -Version $script:WizardAppVersion
-            } finally {
-                $script:WizardBusy = $false
-                Set-WizardNavigationEnabled $true
-            }
+        if (-not (Test-StandaloneExeAvailable)) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "The app is not ready to install yet. Wait for the download to finish, click Retry download, or browse for $EXE_FILE_NAME.",
+                $APP_DISPLAY_NAME,
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            ) | Out-Null
+            return
         }
     }
 
@@ -998,4 +1135,11 @@ $btnNext.Add_Click({
 })
 
 Show-WizardStep
+
+$form.Add_Shown({
+    if ($script:CurrentStep -eq 0 -and -not (Test-StandaloneExeAvailable)) {
+        Invoke-WelcomeInstallSourcePrep | Out-Null
+    }
+})
+
 [void]$form.ShowDialog()
