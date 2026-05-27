@@ -81,31 +81,12 @@ Edit Recording Log, Events tab (top to bottom)
 (i) next to Recording events
 Opens this help.
 
-Global adjustment (all clicks)
-Above the events table. Use when clicks land in the wrong place on another PC, monitor, or RDP/Citrix window.
-
-Offset X / Offset Y (px)
-Pixel nudge applied to every click at Run. Saved in the log header when you Save. Does not rewrite table rows by itself.
-
-Ref client W / H
-The client-area size the recording was made against. Defaults from the first click in the log (or from saved header values).
-
-Target W / H
-The client size you want coordinates scaled toward (e.g. a smaller RDP window than 1920×1080).
-
-Apply to all clicks
-Rescales every click, scroll, and mouse-hold coordinate in the table from Ref → Target, then adds Offset into those stored values. After Apply, Offset fields reset to 0 so Run does not double-apply. Ref fields update to match Target.
-
-Typical fixes
-• Clicks slightly off: set Offset X/Y, Save, Run (no Apply needed).
-• Clicks too high/low on RDP: lower Target H vs Ref H, Apply to all clicks, Save.
-• Permanent edit: Apply to all clicks, then Save.
-
 Recording events table
 One row per logged event. Columns: #, Ms (elapsed ms), Type, Label, Summary.
 
 Selected row
 Edit Elapsed (ms) and the fields shown for that event type (click, key, scroll, shortcut, and so on).
+Click rows include Window title and Exe when the log stores rich window metadata. Changing title or exe clears the stored hwnd for that row.
 Label is an optional note, ignored during Run and playback.
 
 Apply row
@@ -115,6 +96,9 @@ Switching rows or Save also commits the current row.
 Label storage
 Stored as |note|your text at the end of the log line. Does not affect Run.
 
+Global Adjust tab
+Bulk coordinate offset, client-size rescale, and target-window changes for the whole recording. See (i) on that tab.
+
 Raw log tab
 Read-only preview built from the Events table. Save writes the table back to the log file.
 
@@ -122,7 +106,45 @@ Description (top of window)
 Free-form notes in the log header. Hover the recording on the main Recordings list to preview as a tooltip.
 
 Save / Close
-Save updates the recording file (including Offset and Ref client size in the header). Close leaves the file unchanged if you did not save.
+Save updates the recording file (including Global Adjust offset and ref client size in the header). Close leaves the file unchanged if you did not save.
+    )",
+    recordingLogGlobalAdjustHelpTitle: "Global Adjust help",
+    recordingLogGlobalAdjustHelpMessage: "
+    (
+Edit Recording Log, Global Adjust tab
+
+(i) next to Global adjustment
+Opens this help.
+
+Use when clicks land in the wrong place on another PC, monitor, or RDP/Citrix window, or when Run targets the wrong window.
+
+Coordinate adjustment
+
+Offset (px): X / Y
+Pixel nudge applied to every click at Run. Saved in the log header when you Save. Does not rewrite table rows by itself.
+
+Screen: w / h → w / h
+First w/h is the client-area size the recording was made against (defaults from the first click). Second w/h is the size to scale toward (e.g. a smaller RDP window).
+
+Apply to all clicks
+Rescales every click, scroll, and mouse-hold coordinate in the Events table from the first w/h to the second, then adds Offset into those stored values. After Apply, Offset fields reset to 0 so Run does not double-apply. The first w/h fields update to match the second.
+
+Target window
+
+Target title / exe / class
+The window Run uses to find click targets. Defaults from the first event with window metadata.
+
+Target title dropdown
+Lists visible open windows (title — exe). Pick one to fill title, exe, and class. You can still type a custom title. The ↻ button rescans open windows.
+
+Apply target window
+Rewrites title, exe, and class on every click, scroll, mouse-hold, key, and shortcut row in the Events table. Leave a field blank to leave that field unchanged on each row. Stale hwnd values are cleared so Run matches by title, exe, and class instead.
+
+Typical fixes
+• Clicks slightly off: set Offset X/Y, Save, Run (no Apply needed).
+• Clicks too high/low on RDP: lower the second h vs the first h, Apply to all clicks, Save.
+• Wrong window at Run: fix Target title or exe, Apply target window, Save.
+• Permanent edit: Apply to all clicks, then Save.
     )",
     recordingsTabHelpMessage: "
     (
@@ -524,11 +546,14 @@ UI := {
     presetEditorOuterPad: 0,
     presetEditorSafetyPad: 0,
     recordingLogEditorWidth: 580,
-    recordingLogEditorTabHeight: 596,
-    recordingLogEditorListHeight: 200,
+    recordingLogEditorTabHeight: 685,
+    recordingLogEditorListHeight: 320,
     recordingLogEditorGlobalAdjustHeight: 76,
+    recordingLogEditorDetailFieldCount: 5,
     recordingLogEditorDetailLabelWidth: 108,
     recordingLogEditorDetailValueWidth: 432,
+    recordingLogEditorTargetTitleRefreshWidth: 26,
+    recordingLogEditorTargetTitleRefreshGap: 8,
     recordingLogEditorButtonRowHeight: 40,
     recordingLogEditorOuterPad: 32,
     recordingLogEditorDescLabelH: 16,
@@ -866,6 +891,27 @@ AddManageChildInfoButton(gui, options := "x+2") {
 
     btn := gui.Add("Button", options " w" UI.infoBtnSize " h" UI.infoBtnSize " -Theme", "i")
     ApplyManageCircularInfoButton(btn)
+    return btn
+}
+
+/**
+ * Adds a square refresh icon button on a child dialog or editor window.
+ * @param {Gui} gui Target window.
+ * @param {String} options Gui Add options after position (default x+8).
+ * @returns {Gui.Button}
+ */
+AddManageChildRefreshButton(gui, options := "x+8") {
+    global UI
+
+    btn := gui.Add(
+        "Button",
+        options " w" UI.recordingLogEditorTargetTitleRefreshWidth " h"
+            . UI.recordingLogEditorTargetTitleRefreshWidth " -Theme",
+        "↻"
+    )
+    btn.SetFont("s12", UI.fontFamily)
+    btn.Opt("+Background" UI.secondaryBtnBg " c" UI.secondaryBtnText)
+    btn.ToolTip := "Refresh open windows list"
     return btn
 }
 
@@ -2038,6 +2084,15 @@ ShowRecordingLogEventsHelp(*) {
     global C
 
     ShowManageHelpMessage(C.recordingLogEventsHelpMessage, C.recordingLogEventsHelpTitle)
+}
+
+/**
+ * Shows help for Global Adjust in Edit Log.
+ */
+ShowRecordingLogGlobalAdjustHelp(*) {
+    global C
+
+    ShowManageHelpMessage(C.recordingLogGlobalAdjustHelpMessage, C.recordingLogGlobalAdjustHelpTitle)
 }
 
 /**
@@ -3625,6 +3680,17 @@ GetRecordingLogEditorWindowHeight() {
 }
 
 /**
+ * Returns ComboBox width for the target-title row (label + combo + gap + refresh fit tab content).
+ * @returns {Integer}
+ */
+GetRecordingLogEditorTargetTitleComboWidth() {
+    global UI
+
+    return UI.recordingLogEditorDetailValueWidth - UI.recordingLogEditorTargetTitleRefreshWidth
+        - UI.recordingLogEditorTargetTitleRefreshGap
+}
+
+/**
  * Restores editor/tooltip description from one stored header fragment (CR stripped; display sep → LF).
  * @param {String} stored Text after `# description:` on disk.
  * @returns {String}
@@ -3726,22 +3792,47 @@ GetRecordingLogEditorDetailFields(parts) {
                 fields.Push({ label: "Pct X", partIndex: 8 })
             if parts.Length >= 10
                 fields.Push({ label: "Pct Y", partIndex: 9 })
+            windowFields := GetRecordingLogEventWindowFields(parts)
+            if IsObject(windowFields) {
+                fields.Push({ label: "Window title", partIndex: windowFields.title, clearsHwnd: true })
+                fields.Push({ label: "Exe", partIndex: windowFields.exe, clearsHwnd: true })
+            }
         case "key":
             fields.Push({ label: "Variable", partIndex: 3 })
+            windowFields := GetRecordingLogEventWindowFields(parts)
+            if IsObject(windowFields) {
+                fields.Push({ label: "Window title", partIndex: windowFields.title, clearsHwnd: true })
+                fields.Push({ label: "Exe", partIndex: windowFields.exe, clearsHwnd: true })
+            }
         case "shortcut":
             fields.Push({ label: "Send text", partIndex: 3 })
             if parts.Length >= 5
                 fields.Push({ label: "Display label", partIndex: 4 })
+            windowFields := GetRecordingLogEventWindowFields(parts)
+            if IsObject(windowFields) {
+                fields.Push({ label: "Window title", partIndex: windowFields.title, clearsHwnd: true })
+                fields.Push({ label: "Exe", partIndex: windowFields.exe, clearsHwnd: true })
+            }
         case "scroll":
             fields.Push({ label: "Direction", partIndex: 3 })
             if parts.Length >= 5
                 fields.Push({ label: "Delta", partIndex: 4 })
             if parts.Length >= 6
                 fields.Push({ label: "Notches", partIndex: 5 })
+            windowFields := GetRecordingLogEventWindowFields(parts)
+            if IsObject(windowFields) {
+                fields.Push({ label: "Window title", partIndex: windowFields.title, clearsHwnd: true })
+                fields.Push({ label: "Exe", partIndex: windowFields.exe, clearsHwnd: true })
+            }
         case "mouse_hold":
             fields.Push({ label: "Button", partIndex: 3 })
             if parts.Length >= 5
                 fields.Push({ label: "Duration (ms)", partIndex: 4 })
+            windowFields := GetRecordingLogEventWindowFields(parts)
+            if IsObject(windowFields) {
+                fields.Push({ label: "Window title", partIndex: windowFields.title, clearsHwnd: true })
+                fields.Push({ label: "Exe", partIndex: windowFields.exe, clearsHwnd: true })
+            }
         default:
             if eventType = "meta" && parts.Length >= 4 && parts[3] = "delay"
                 fields.Push({ label: "Delay (ms)", partIndex: 4 })
@@ -3944,6 +4035,180 @@ DetectRecordingReferenceClientSize(events) {
     }
 
     return { w: 1920, h: 1080 }
+}
+
+/**
+ * Returns part indices for window metadata on one recording log event row.
+ * @param {Array} parts Pipe-delimited log fields.
+ * @returns {Object|String} `{hwnd, class, title, exe}` or empty string.
+ */
+GetRecordingLogEventWindowFields(parts) {
+    if parts.Length < 3
+        return ""
+
+    switch parts[2] {
+        case "click":
+            if parts.Length >= 19
+                return { hwnd: 16, class: 17, title: 18, exe: 19 }
+        case "scroll":
+            if parts.Length >= 21
+                return { hwnd: 18, class: 19, title: 20, exe: 21 }
+        case "mouse_hold":
+            if parts.Length >= 20
+                return { hwnd: 17, class: 18, title: 19, exe: 20 }
+        case "key":
+            if parts.Length >= 9
+                return { hwnd: 6, class: 7, title: 8, exe: 9 }
+        case "shortcut":
+            if parts.Length >= 10
+                return { hwnd: 7, class: 8, title: 9, exe: 10 }
+    }
+
+    return ""
+}
+
+/**
+ * Returns window metadata from the first event row that stores it.
+ * @param {Array<Object>} events Parsed event rows.
+ * @returns {{title: String, exe: String, className: String}}
+ */
+DetectRecordingReferenceWindowTarget(events) {
+    for event in events {
+        windowFields := GetRecordingLogEventWindowFields(event.parts)
+        if IsObject(windowFields)
+            return {
+                title: event.parts[windowFields.title],
+                exe: event.parts[windowFields.exe],
+                className: event.parts[windowFields.class]
+            }
+    }
+
+    return { title: "", exe: "", className: "" }
+}
+
+/**
+ * Builds a sorted list of visible top-level windows for the target-title picker.
+ * @returns {Array<Object>} `{title, exe, className, displayLabel}` entries.
+ */
+ListManageOpenWindowsForPicker() {
+    windows := []
+    seen := Map()
+
+    for hwnd in WinGetList() {
+        try {
+            if !DllCall("IsWindowVisible", "Ptr", hwnd, "Int")
+                continue
+
+            title := CleanField(WinGetTitle("ahk_id " hwnd))
+            exe := CleanField(WinGetProcessName("ahk_id " hwnd))
+            className := CleanField(WinGetClass("ahk_id " hwnd))
+
+            if title = "" && exe = "" && className = ""
+                continue
+
+            key := title "|" exe "|" className
+            if seen.Has(key)
+                continue
+            seen[key] := true
+
+            displayLabel := title != ""
+                ? Format("{} — {}", title, exe)
+                : Format("{} — {}", className, exe)
+
+            windows.Push({ title: title, exe: exe, className: className, displayLabel: displayLabel })
+        }
+    }
+
+    Loop windows.Length - 1 {
+        swapped := false
+        Loop windows.Length - A_Index {
+            i := A_Index
+            if StrCompare(windows[i].displayLabel, windows[i + 1].displayLabel, true) > 0 {
+                temp := windows[i]
+                windows[i] := windows[i + 1]
+                windows[i + 1] := temp
+                swapped := true
+            }
+        }
+        if !swapped
+            break
+    }
+
+    return windows
+}
+
+/**
+ * Fills the target-title ComboBox with open-window picker entries.
+ * @param {Gui.ComboBox} combo Target title combo control.
+ * @param {Array<Object>} windowPickerOptions Output from `ListManageOpenWindowsForPicker`.
+ */
+PopulateRecordingLogTargetWindowCombo(combo, windowPickerOptions) {
+    combo.Delete()
+
+    labels := []
+    for win in windowPickerOptions
+        labels.Push(win.displayLabel)
+
+    if labels.Length
+        combo.Add(labels)
+}
+
+/**
+ * Returns title, exe, and class for one open-window picker selection.
+ * @param {Array<Object>} windowPickerOptions Picker entries aligned with the combo list.
+ * @param {Integer} selectedIndex One-based ComboBox selection index.
+ * @returns {Object|String} `{title, exe, className}` or empty string when invalid.
+ */
+GetRecordingLogTargetWindowPickerSelection(windowPickerOptions, selectedIndex) {
+    if selectedIndex < 1 || selectedIndex > windowPickerOptions.Length
+        return ""
+
+    win := windowPickerOptions[selectedIndex]
+    return { title: win.title, exe: win.exe, className: win.className }
+}
+
+/**
+ * Updates window metadata on every event row that stores it.
+ * @param {Array<Object>} events Parsed event rows (mutated).
+ * @param {String} title Window title; blank leaves each row unchanged.
+ * @param {String} exe Process name; blank leaves each row unchanged.
+ * @param {String} className Window class; blank leaves each row unchanged.
+ * @returns {Integer} Number of rows updated.
+ */
+ApplyRecordingLogGlobalWindowTarget(events, title, exe, className) {
+    title := Trim(title)
+    exe := Trim(exe)
+    className := Trim(className)
+    updated := 0
+
+    for event in events {
+        parts := event.parts
+        windowFields := GetRecordingLogEventWindowFields(parts)
+        if !IsObject(windowFields)
+            continue
+
+        changed := false
+
+        if title != "" && parts[windowFields.title] != title {
+            parts[windowFields.title] := title
+            changed := true
+        }
+        if exe != "" && parts[windowFields.exe] != exe {
+            parts[windowFields.exe] := exe
+            changed := true
+        }
+        if className != "" && parts[windowFields.class] != className {
+            parts[windowFields.class] := className
+            changed := true
+        }
+
+        if changed {
+            parts[windowFields.hwnd] := ""
+            updated += 1
+        }
+    }
+
+    return updated
 }
 
 /**
@@ -5013,6 +5278,7 @@ ShowRecordingLogEditor(*) {
     detectedRefSize := DetectRecordingReferenceClientSize(events)
     defaultRefW := playbackGlobals.refClientW > 0 ? playbackGlobals.refClientW : detectedRefSize.w
     defaultRefH := playbackGlobals.refClientH > 0 ? playbackGlobals.refClientH : detectedRefSize.h
+    defaultWindowTarget := DetectRecordingReferenceWindowTarget(events)
 
     CloseRecordingLogEditor()
 
@@ -5037,36 +5303,13 @@ ShowRecordingLogEditor(*) {
     editorTab := editor.Add(
         "Tab3",
         "xm w" UI.recordingLogEditorWidth " h" UI.recordingLogEditorTabHeight,
-        ["Events", "Raw log"]
+        ["Events", "Global Adjust", "Raw log"]
     )
 
     editorTab.UseTab(1)
     editor.Add("Text", "Section c1A1A1A", "Recording events")
     recordingLogEventsInfoButton := AddManageChildInfoButton(editor, "x+2")
     recordingLogEventsInfoButton.OnEvent("Click", ShowRecordingLogEventsHelp)
-    editor.Add("Text", "xs w" UI.recordingLogEditorWidth " c555555 Section", "Global adjustment (all clicks)")
-    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Offset X (px):")
-    globalOffsetXEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, playbackGlobals.offsetX)
-    editor.Add("Text", "x+8 w20 c555555", "Y:")
-    globalOffsetYEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, playbackGlobals.offsetY)
-    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Ref client W:")
-    refClientWEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, defaultRefW)
-    editor.Add("Text", "x+4 w14 c555555", "H:")
-    refClientHEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, defaultRefH)
-    editor.Add("Text", "x+8 w16 c555555", "→ W:")
-    targetClientWEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, defaultRefW)
-    editor.Add("Text", "x+4 w14 c555555", "H:")
-    targetClientHEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, defaultRefH)
-    applyGlobalBtn := editor.Add(
-        "Button",
-        "xs w180 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Apply to all clicks"
-    )
-    editor.Add(
-        "Text",
-        "xs w" UI.recordingLogEditorWidth " c888888",
-        "Offset is saved for Run. Apply rescales coordinates from ref to target and bakes offset into the table."
-    )
     logList := editor.Add(
         "ListView",
         "xs w" UI.recordingLogEditorWidth " h" UI.recordingLogEditorListHeight " -Multi +Background" UI.listBg,
@@ -5085,6 +5328,10 @@ ShowRecordingLogEditor(*) {
     detailField2Edit := editor.Add("Edit", "x+0 w" UI.recordingLogEditorDetailValueWidth, "")
     detailField3Label := editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "")
     detailField3Edit := editor.Add("Edit", "x+0 w" UI.recordingLogEditorDetailValueWidth, "")
+    detailField4Label := editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "")
+    detailField4Edit := editor.Add("Edit", "x+0 w" UI.recordingLogEditorDetailValueWidth, "")
+    detailField5Label := editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "")
+    detailField5Edit := editor.Add("Edit", "x+0 w" UI.recordingLogEditorDetailValueWidth, "")
     applyRowBtn := editor.Add(
         "Button",
         "xs w120 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
@@ -5092,6 +5339,62 @@ ShowRecordingLogEditor(*) {
     )
 
     editorTab.UseTab(2)
+    editor.Add("Text", "Section c1A1A1A", "Global adjustment")
+    recordingLogGlobalAdjustInfoButton := AddManageChildInfoButton(editor, "x+2")
+    recordingLogGlobalAdjustInfoButton.OnEvent("Click", ShowRecordingLogGlobalAdjustHelp)
+    editor.Add(
+        "Text",
+        "xs w" UI.recordingLogEditorWidth " c555555",
+        "Bulk changes for the whole recording. Events tab rows update when you Apply."
+    )
+    editor.Add("Text", "xs w" UI.recordingLogEditorWidth " c1A1A1A Section", "Coordinates")
+    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Offset (px):")
+    editor.Add("Text", "x+0 w14 c555555", "X:")
+    globalOffsetXEdit := editor.Add("Edit", "x+0 w64 +Background" UI.editBg, playbackGlobals.offsetX)
+    editor.Add("Text", "x+8 w14 c555555", "Y:")
+    globalOffsetYEdit := editor.Add("Edit", "x+0 w64 +Background" UI.editBg, playbackGlobals.offsetY)
+    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Screen:")
+    editor.Add("Text", "x+0 w14 c555555", "w:")
+    refClientWEdit := editor.Add("Edit", "x+0 w64 +Background" UI.editBg, defaultRefW)
+    editor.Add("Text", "x+4 w14 c555555", "h:")
+    refClientHEdit := editor.Add("Edit", "x+0 w64 +Background" UI.editBg, defaultRefH)
+    editor.Add("Text", "x+8 w12 c555555", "→")
+    editor.Add("Text", "x+4 w14 c555555", "w:")
+    targetClientWEdit := editor.Add("Edit", "x+0 w64 +Background" UI.editBg, defaultRefW)
+    editor.Add("Text", "x+4 w14 c555555", "h:")
+    targetClientHEdit := editor.Add("Edit", "x+0 w64 +Background" UI.editBg, defaultRefH)
+    applyGlobalBtn := editor.Add(
+        "Button",
+        "xs w180 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Apply to all clicks"
+    )
+    editor.Add("Text", "xs w" UI.recordingLogEditorWidth " c1A1A1A Section", "Target window")
+    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Target title:")
+    windowPickerOptions := ListManageOpenWindowsForPicker()
+    targetTitleCombo := editor.Add(
+        "ComboBox",
+        "x+0 w" GetRecordingLogEditorTargetTitleComboWidth() " +Background" UI.editBg
+    )
+    PopulateRecordingLogTargetWindowCombo(targetTitleCombo, windowPickerOptions)
+    if defaultWindowTarget.title != ""
+        targetTitleCombo.Text := defaultWindowTarget.title
+    refreshTargetWindowsBtn := AddManageChildRefreshButton(editor)
+    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Target exe:")
+    targetExeEdit := editor.Add("Edit", "x+0 w160 +Background" UI.editBg, defaultWindowTarget.exe)
+    editor.Add("Text", "x+8 w36 c555555", "Class:")
+    targetClassEdit := editor.Add("Edit", "x+0 w248 +Background" UI.editBg, defaultWindowTarget.className)
+    applyTargetWindowBtn := editor.Add(
+        "Button",
+        "xs w180 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Apply target window"
+    )
+    editor.Add(
+        "Text",
+        "xs w" UI.recordingLogEditorWidth " c888888",
+        "Offset is saved for Run when you Save. Apply buttons rewrite Events tab rows."
+    )
+
+    editorTab.UseTab(3)
     editor.Add("Text", "Section c1A1A1A", "Raw log preview")
     editor.Add(
         "Text",
@@ -5109,8 +5412,8 @@ ShowRecordingLogEditor(*) {
     saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
     closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
 
-    detailLabels := [detailField1Label, detailField2Label, detailField3Label]
-    detailEdits := [detailField1Edit, detailField2Edit, detailField3Edit]
+    detailLabels := [detailField1Label, detailField2Label, detailField3Label, detailField4Label, detailField5Label]
+    detailEdits := [detailField1Edit, detailField2Edit, detailField3Edit, detailField4Edit, detailField5Edit]
     selectedRowIndex := 0
     detailFieldDefs := []
 
@@ -5142,8 +5445,15 @@ ShowRecordingLogEditor(*) {
 
         Loop detailFieldDefs.Length {
             fieldDef := detailFieldDefs[A_Index]
-            if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length
-                parts[fieldDef.partIndex] := Trim(detailEdits[A_Index].Value)
+            if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length {
+                newValue := Trim(detailEdits[A_Index].Value)
+                if fieldDef.HasProp("clearsHwnd") && fieldDef.clearsHwnd && parts[fieldDef.partIndex] != newValue {
+                    windowFields := GetRecordingLogEventWindowFields(parts)
+                    if IsObject(windowFields)
+                        parts[windowFields.hwnd] := ""
+                }
+                parts[fieldDef.partIndex] := newValue
+            }
         }
 
         SetRecordingLogEventNote(parts, noteEdit.Value)
@@ -5160,7 +5470,7 @@ ShowRecordingLogEditor(*) {
             msEdit.Value := ""
             msEdit.ReadOnly := true
             noteEdit.Value := ""
-            Loop 3 {
+            Loop UI.recordingLogEditorDetailFieldCount {
                 detailLabels[A_Index].Text := ""
                 detailLabels[A_Index].Visible := false
                 detailEdits[A_Index].Value := ""
@@ -5176,7 +5486,7 @@ ShowRecordingLogEditor(*) {
         noteEdit.Value := GetRecordingLogEventNote(parts)
         detailFieldDefs := GetRecordingLogEditorDetailFields(parts)
 
-        Loop 3 {
+        Loop UI.recordingLogEditorDetailFieldCount {
             if A_Index <= detailFieldDefs.Length {
                 fieldDef := detailFieldDefs[A_Index]
                 detailLabels[A_Index].Text := fieldDef.label ":"
@@ -5245,6 +5555,55 @@ ShowRecordingLogEditor(*) {
         SetStatus(Format("Updated {} coordinate row(s).", updated))
     }
 
+    ApplyTargetWindowAdjust(*) {
+        SyncSelectedLogRowFromDetailPanel()
+
+        title := Trim(targetTitleCombo.Text)
+        exe := Trim(targetExeEdit.Value)
+        className := Trim(targetClassEdit.Value)
+
+        if title = "" && exe = "" && className = "" {
+            SetStatus("Enter a target title, exe, or class to apply.")
+            return
+        }
+
+        updated := ApplyRecordingLogGlobalWindowTarget(events, title, exe, className)
+        if updated = 0 {
+            SetStatus("No events with window metadata to update.")
+            return
+        }
+
+        PopulateRecordingLogEventsList(logList, events)
+        if selectedRowIndex >= 1 && selectedRowIndex <= events.Length {
+            SelectManageListViewDataRow(logList, selectedRowIndex)
+            LoadDetailPanel(selectedRowIndex)
+        }
+
+        UpdateRawPreview()
+        SetStatus(Format("Updated target window on {} row(s).", updated))
+    }
+
+    RefreshTargetWindowPicker(*) {
+        currentTitle := Trim(targetTitleCombo.Text)
+        windowPickerOptions := ListManageOpenWindowsForPicker()
+        PopulateRecordingLogTargetWindowCombo(targetTitleCombo, windowPickerOptions)
+
+        if currentTitle != ""
+            targetTitleCombo.Text := currentTitle
+
+        SetStatus(Format("Found {} open window(s).", windowPickerOptions.Length))
+    }
+
+    OnTargetWindowTitleComboSelect(*) {
+        selection := GetRecordingLogTargetWindowPickerSelection(windowPickerOptions, targetTitleCombo.Value)
+        if selection = ""
+            return
+
+        targetTitleCombo.Text := selection.title
+        targetExeEdit.Value := selection.exe
+        targetClassEdit.Value := selection.className
+    }
+
     OnLogListSelect(*) {
         LoadDetailPanel(GetManageListViewSelectedDataRowIndex(logList))
     }
@@ -5290,6 +5649,9 @@ ShowRecordingLogEditor(*) {
     logList.OnEvent("DoubleClick", ApplySelectedRow)
     applyRowBtn.OnEvent("Click", ApplySelectedRow)
     applyGlobalBtn.OnEvent("Click", ApplyGlobalAdjust)
+    applyTargetWindowBtn.OnEvent("Click", ApplyTargetWindowAdjust)
+    refreshTargetWindowsBtn.OnEvent("Click", RefreshTargetWindowPicker)
+    targetTitleCombo.OnEvent("Change", OnTargetWindowTitleComboSelect)
     saveBtn.OnEvent("Click", SaveLog)
     closeBtn.OnEvent("Click", CloseLogEditor)
     editor.OnEvent("Close", CloseLogEditor)
