@@ -37,10 +37,11 @@ C := {
     flushIntervalMs: 1000,
     batchRowPauseMs: 750,
     recordingsTabHelpTitle: "Recordings help",
-    presetsTabHelpTitle: "Input Presets help",
-    csvBatchHelpTitle: "CSV Bulk Inputs help",
+    presetsTabHelpTitle: "Data Inputs help",
+    csvBatchHelpTitle: "Bulk Inputs help",
     runOptionsTabHelpTitle: "Run Options help",
-    presetVariablesHelpTitle: "Preset variables help",
+    speedSettingsTabHelpTitle: "Speed Settings help",
+    presetVariablesHelpTitle: "Data input variables help",
     presetVariablesHelpMessage: "
     (
 One row per variable in the table. Row 1 = variable-1, row 2 = variable-2, and so on.
@@ -75,20 +76,19 @@ Delete: remove the selected recording
 While recording:
 - Esc saves (Cancel on the save dialog discards)
 - Normal clicks stay clicks
+- Hold Caps Lock to record a delay (Caps Lock is suppressed while recording)
 - Hold or drag left-click for Excel-style selection
 - Ctrl, Shift, or Alt shortcuts are recorded and replayed
     )",
     presetsTabHelpMessage: "
     (
-Choose Use input preset for Run, then pick a preset from the list.
+Choose Use data input for Run, then pick a data input from the list.
 
-Edit Preset opens a tabbed editor:
-- Details: preset name and variable values (table with Label and Value columns)
-- Speed settings: run, typing, move speed, and initial delay
-- Advanced: click/step pauses and between-steps timing
-Mouse movement and typing style are set on the Run Options tab, not in the preset.
-Delete Preset: remove the selected preset
-Add preset: create a new preset (opens the editor with a suggested name)
+Edit Data Input opens an editor for the name and variable values (table with Label and Value columns).
+Speed multipliers and initial delay are on the Speed Settings tab.
+Mouse movement, typing style, and timing pauses are on the Run Options tab.
+Delete Data Input: remove the selected data input
+Add Data Input: create a new data input (opens the editor with a suggested name)
 
 Variable rows map to variable-1, variable-2, and so on in your recording.
 Optional note labels before a colon are for your notes only and are stripped at run time.
@@ -103,13 +103,13 @@ Examples (all type Alice then Bob):
 
 Plain lines without a colon still work as before.
 Escape a comma in a value with backslash: Developed_By:I\, LEE types I, LEE.
-Input preset and CSV bulk inputs cannot both be active for Run.
+Data input and bulk inputs cannot both be active for Run.
     )",
     csvBatchHelpMessage: "
     (
-CSV bulk inputs run the selected recording once per row. Each row supplies values for that pass.
+Bulk inputs run the selected recording once per row. Each row supplies values for that pass.
 
-Choose Use CSV bulk inputs for Run (only one input source can be active).
+Choose Use bulk inputs for Run (only one input source can be active).
 
 Saved files:
 - Stored in csv-batches\
@@ -144,7 +144,7 @@ Rules:
 - Escape a backslash as \\
 - Blank lines and lines starting with # are ignored
 
-Run mode (Config section on the CSV tab):
+Run mode (Config section on the Bulk Inputs tab):
 - Ask to run next line: progress table and prompt before each row (Run, Skip, Run all remaining)
 - Run all rows automatically: no prompts between rows
 
@@ -162,16 +162,34 @@ Typing:
 - Human-like: per-key delays
 - Instant: send text immediately
 
-For delay and speed numbers, use Edit Preset on the Input Presets tab:
-- Speed settings tab: run, typing, move speed, initial delay
-- Advanced tab: click pause, step pause, between-steps timing
+Timing & pauses:
+Click pause: after move, before click (ms)
+Step pause: after each target before the next (ms)
+
+Between steps:
+- Fixed pauses only: use click and step pause values; ignore recorded gaps
+- Recorded gaps: replay seconds between steps from Record
+
+For speed multipliers and initial delay, use the Speed Settings tab.
     )",
-    recordingTipText: "Esc = Save · Click = click · Hold or drag = mouse hold",
+    speedSettingsTabHelpMessage: "
+    (
+These options apply to the next Run.
+
+Run speed: overall playback speed multiplier
+Typing speed: how fast typed variable values are sent
+Move speed: how fast the mouse moves between targets
+Initial delay: wait time (ms) before playback starts
+
+Higher speed values run faster.
+    )",
+    recordingTipText: "Esc = Save · Click = click · Hold Caps Lock = delay · Hold/drag LMB = hold",
     recordingTipOffsetX: 240,
     recordingTipOffsetY: 16,
     cursorTipOffsetX: 12,
     cursorTipOffsetY: 12,
     mouseHoldIndicatorText: "HOLD",
+    recordingDelayIndicatorText: "DELAY",
     hotkeyTipPrefix: "Hotkey:",
     recordingTipRefreshMs: 1000,
     recordingTransientTipMs: 3000,
@@ -261,6 +279,7 @@ For delay and speed numbers, use Edit Preset on the Input Presets tab:
     WM_SYSKEYDOWN: 0x104,
     WM_SYSKEYUP: 0x105,
 
+    VK_CAPITAL: 0x14,
     VK_ESCAPE: 0x1B,
     VK_F9: 0x78,
     VK_F10: 0x79,
@@ -307,12 +326,13 @@ UI := {
     tabButtonRowInset: 4,
     recordingColNameWidth: 248,
     recordingColVarCountWidth: 118,
+    recordingListHeight: 300,
     marginX: 18,
-    marginY: 16,
-    btnGap: 6,
+    marginY: 4,
+    btnGap: 10,
     btnHeightSecondary: 26,
     btnHeightTool: 28,
-    btnHeightPrimary: 44,
+    btnHeightPrimary: 30,
     infoBtnSize: 14,
     infoBtnFontSize: 7,
     infoBtnBg: "EEF2FF",
@@ -320,6 +340,7 @@ UI := {
     tabRadioRowH: 28,
     tabStripHeight: 36,
     tabInnerPad: 52,
+    manageTabPanelHeight: 400,
     tabRowGap: 8,
     tabLabelHeight: 16,
     tabPanelSafetyPad: 12,
@@ -327,21 +348,26 @@ UI := {
     recordingColVarCount: "Variable count",
     statusHeight: 30,
     csvEditWidth: 300,
-    presetAddBtnWidth: 100,
+    presetAddBtnWidth: 118,
     csvBatchTableWidth: 560,
     csvBatchTableHeight: 180,
     csvBatchPromptDetailsLines: 5,
     csvBatchPromptBtnWidth: 118,
     presetEditorWidth: 720,
-    presetEditorTabHeight: 650,
     presetEditorFieldWidth: 720,
     presetEditorLabelWidth: 180,
     presetEditorValueWidth: 220,
     presetEditorListHeight: 260,
     presetEditorDetailLabelWidth: 108,
     presetEditorDetailValueWidth: 600,
-    presetEditorButtonRowHeight: 40,
+    presetEditorHelpHeight: 40,
+    presetEditorSectionRowHeight: 28,
+    presetEditorEditRowHeight: 28,
+    presetEditorSaveSectionGap: 14,
+    presetEditorButtonRowHeight: 44,
+    presetEditorBottomPad: 20,
     presetEditorOuterPad: 32,
+    presetEditorSafetyPad: 24,
     recordingLogEditorWidth: 580,
     recordingLogEditorTabHeight: 580,
     recordingLogEditorListHeight: 240,
@@ -353,6 +379,9 @@ UI := {
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
 APP_GUI_TITLE := "Data Entry Autonoma v" C.appVersion
+AUTHOR_NAME := "Jayrr"
+AUTHOR_GITHUB_URL := "https://github.com/Jayrr-Dev"
+AUTHOR_COPYRIGHT_YEAR := "2026"
 
 ; =============================================================================
 ; State
@@ -385,6 +414,9 @@ S := {
     leftHoldDownY: 0,
     leftHoldEndX: 0,
     leftHoldEndY: 0,
+    capsLockHoldPending: false,
+    capsLockHoldActive: false,
+    capsLockHoldDownAt: 0,
     modCtrlDown: false,
     modShiftDown: false,
     modAltDown: false,
@@ -451,9 +483,18 @@ S := {
     instantMouseRadio: "",
     humanTypingRadio: "",
     instantTypingRadio: "",
+    playbackSpeedEdit: "",
+    typingSpeedEdit: "",
+    moveSpeedEdit: "",
+    initialDelayEdit: "",
+    clickPauseEdit: "",
+    segmentPauseEdit: "",
+    fixedPausesRadio: "",
+    recordedGapsRadio: "",
     recordingInfoButton: "",
     presetInfoButton: "",
     runOptionsInfoButton: "",
+    speedSettingsInfoButton: "",
     mainTab: ""
 }
 
@@ -491,6 +532,31 @@ ApplyManageGuiTheme(gui) {
     gui.MarginX := UI.marginX
     gui.MarginY := UI.marginY
     ApplyManageAppIcon(gui)
+}
+
+/**
+ * Forces a Tab3 control onto one tab row (scroll arrows when labels overflow).
+ * @param {Gui.Tab} tabCtrl Tab3 control.
+ */
+ApplyManageTabControlSingleRow(tabCtrl) {
+    if !tabCtrl
+        return
+
+    TCS_MULTILINE := 0x0200
+    GWL_STYLE := -16
+    SWP_FLAGS := 0x0027
+
+    style := DllCall("GetWindowLongPtr", "Ptr", tabCtrl.Hwnd, "Int", GWL_STYLE, "Ptr")
+    if style & TCS_MULTILINE {
+        DllCall("SetWindowLongPtr", "Ptr", tabCtrl.Hwnd, "Int", GWL_STYLE, "Ptr", style & ~TCS_MULTILINE, "Ptr")
+        DllCall(
+            "SetWindowPos",
+            "Ptr", tabCtrl.Hwnd, "Ptr", 0,
+            "Int", 0, "Int", 0, "Int", 0, "Int", 0,
+            "UInt", SWP_FLAGS,
+            "Int", 0, "Int", 0
+        )
+    }
 }
 
 /**
@@ -678,9 +744,19 @@ GetManageInputTabMetrics() {
         + UI.tabLabelHeight + UI.tabRowGap
         + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool
     playbackContent := UI.tabLabelHeight + UI.tabRowGap + (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap + 36
+    runOptionsChrome := playbackContent + UI.tabLabelHeight + UI.tabRowGap
+        + (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap
+        + UI.tabLabelHeight + UI.tabRowGap + UI.tabRadioRowH + UI.tabRowGap + 36
+    speedChrome := UI.tabLabelHeight + UI.tabRowGap
+        + (UI.tabLabelHeight + UI.tabRowGap + 24) * 4 + UI.tabRowGap + 36
 
-    tabContentH := Max(csvChrome + UI.listMinH, playbackContent)
-    listRecordingH := Max(UI.listMinH, tabContentH - recordingChrome)
+    recordingTabContentH := recordingChrome + UI.recordingListHeight
+    autoTabContentH := Max(csvChrome + UI.listMinH, runOptionsChrome, speedChrome, recordingTabContentH)
+    tabChromeH := UI.tabStripHeight + UI.tabInnerPad + UI.tabPanelSafetyPad + 8
+    tabContentH := UI.manageTabPanelHeight > 0
+        ? Max(UI.listMinH, UI.manageTabPanelHeight - tabChromeH)
+        : autoTabContentH
+    listRecordingH := UI.recordingListHeight
     listPresetH := Max(UI.listMinH, tabContentH - presetChrome)
     listCsvH := Max(UI.listMinH, tabContentH - csvChrome)
 
@@ -693,24 +769,52 @@ GetManageInputTabMetrics() {
 }
 
 /**
- * Returns Tab3 height (tab strip + tallest page content) so nothing is clipped.
+ * Returns Tab3 height (tab strip + page content). Uses UI.manageTabPanelHeight when > 0.
  * @returns {Integer}
  */
 GetManageTabPanelHeight() {
     global UI
 
+    if UI.manageTabPanelHeight > 0
+        return UI.manageTabPanelHeight
     metrics := GetManageInputTabMetrics()
     return UI.tabStripHeight + UI.tabInnerPad + metrics.tabContentH + UI.tabPanelSafetyPad + 8
 }
 
 /**
- * Returns Edit Preset dialog height (tab panel + button row + outer padding).
+ * Returns Edit Data Input dialog height (content + button row + padding).
  * @returns {Integer}
  */
 GetPresetEditorWindowHeight() {
     global UI
 
-    return UI.presetEditorTabHeight + UI.presetEditorButtonRowHeight + UI.presetEditorOuterPad
+    editRowH := UI.presetEditorEditRowHeight
+    nameBlock := UI.tabLabelHeight + UI.tabRowGap + editRowH + UI.tabRowGap
+    varHeader := UI.presetEditorSectionRowHeight + UI.tabRowGap
+    varHelp := UI.presetEditorHelpHeight + UI.tabRowGap
+    varTools := UI.btnHeightTool + UI.tabRowGap
+    varList := UI.presetEditorListHeight + UI.tabRowGap
+    detailHeader := UI.tabLabelHeight + UI.tabRowGap
+    detailRows := (editRowH + UI.tabRowGap) * 3
+    saveBlock := UI.presetEditorSaveSectionGap + UI.presetEditorButtonRowHeight
+    contentH := nameBlock + varHeader + varHelp + varTools + varList
+        + detailHeader + detailRows + saveBlock
+
+    return contentH + UI.presetEditorBottomPad + UI.presetEditorOuterPad + UI.presetEditorSafetyPad
+        + (UI.marginY * 2)
+}
+
+/**
+ * Adds a centered copyright footer; author name opens GitHub in the default browser.
+ * @param {Gui} gui Parent manage window.
+ */
+AddManageAuthorFooter(gui) {
+    global UI, AUTHOR_NAME, AUTHOR_GITHUB_URL, AUTHOR_COPYRIGHT_YEAR
+
+    gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    gui.Add("Text", "xm w" UI.contentWidth " h1", "")
+    footerHtml := "© " AUTHOR_COPYRIGHT_YEAR ' <a href="' AUTHOR_GITHUB_URL '">' AUTHOR_NAME "</a>"
+    gui.Add("Link", "xm w" UI.contentWidth " c" UI.textMuted " Center", footerHtml)
 }
 
 /**
@@ -737,7 +841,7 @@ CreateManageGui() {
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textMuted,
-        "Record once. Run with presets or CSV batches.  v" C.appVersion
+        "Record once. Run with data inputs or CSV batches.  v" C.appVersion
     )
 
     S.statusCtrl := S.gui.Add(
@@ -752,8 +856,9 @@ CreateManageGui() {
     S.mainTab := S.gui.Add(
         "Tab3",
         "xm w" UI.contentWidth " h" GetManageTabPanelHeight(),
-        ["Recordings", "Input Presets", "CSV Bulk Inputs", "Run Options"]
+        ["Recordings", "Data Inputs", "Bulk Inputs", "Run Options", "Speed Settings"]
     )
+    ApplyManageTabControlSingleRow(S.mainTab)
 
     ; --- Recording tab ---
     S.mainTab.UseTab(1)
@@ -788,17 +893,17 @@ CreateManageGui() {
     )
     S.deleteRecordingButton.OnEvent("Click", DeleteSelectedRecording)
 
-    ; --- Input Presets tab ---
+    ; --- Data Inputs tab ---
     S.mainTab.UseTab(2)
     S.presetInfoButton := AddManageTabSectionLabel("Run input source", ShowPresetsTabHelp)
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-    S.usePresetRadio := S.gui.Add("Radio", "xs Checked", "Use input preset for Run")
+    S.usePresetRadio := S.gui.Add("Radio", "xs Checked", "Use data input for Run")
     S.usePresetRadio.OnEvent("Click", (*) => SetInputSourceMode(C.inputSourcePreset))
     S.addPresetButton := S.gui.Add(
         "Button",
         "x+" UI.btnGap " w" UI.presetAddBtnWidth " h" hTool
         " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Add preset"
+        "Add Data Input"
     )
     S.addPresetButton.OnEvent("Click", ShowPresetEditor.Bind(true))
 
@@ -808,23 +913,23 @@ CreateManageGui() {
     S.editButton := S.gui.Add(
         "Button",
         "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Edit Preset"
+        "Edit Data Input"
     )
     S.editButton.OnEvent("Click", ShowPresetEditor)
 
     S.deletePresetButton := S.gui.Add(
         "Button",
         "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Delete Preset"
+        "Delete Data Input"
     )
     S.deletePresetButton.OnEvent("Click", DeleteSelectedPreset)
 
-    ; --- CSV Bulk Inputs tab ---
+    ; --- Bulk Inputs tab ---
     S.mainTab.UseTab(3)
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
     S.gui.Add("Text", "Section c" UI.textMuted, "Run input source")
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-    S.useCsvRadio := S.gui.Add("Radio", "xs", "Use CSV bulk inputs for Run")
+    S.useCsvRadio := S.gui.Add("Radio", "xs", "Use bulk inputs for Run")
     S.useCsvRadio.OnEvent("Click", (*) => SetInputSourceMode(C.inputSourceCsv))
 
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
@@ -910,6 +1015,57 @@ CreateManageGui() {
         "x+16" (!C.defaultHumanTyping ? " Checked" : ""),
         "Instant"
     )
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add("Text", "xs Section c" UI.textMuted, "Timing & pauses")
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Click pause (ms)")
+    S.clickPauseEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultClickPauseMs)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Step pause (ms)")
+    S.segmentPauseEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultSegmentPauseMs)
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add(
+        "Text",
+        "xs w" UI.tabListWidth " c" UI.textHint,
+        "Click pause: after move, before click. Step pause: after each target before the next."
+    )
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Between steps")
+    S.fixedPausesRadio := S.gui.Add(
+        "Radio",
+        "xs" (!C.defaultUseRecordedTiming ? " Checked" : ""),
+        "Fixed pauses only"
+    )
+    S.recordedGapsRadio := S.gui.Add(
+        "Radio",
+        "x+16" (C.defaultUseRecordedTiming ? " Checked" : ""),
+        "Recorded gaps"
+    )
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add(
+        "Text",
+        "xs w" UI.tabListWidth " c" UI.textHint,
+        "Recorded gaps replay seconds between steps from Record. Fixed pauses only ignores those."
+    )
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+
+    ; --- Speed Settings tab ---
+    S.mainTab.UseTab(5)
+    S.speedSettingsInfoButton := AddManageTabSectionLabel("Speed settings", ShowSpeedSettingsTabHelp)
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Run speed")
+    S.playbackSpeedEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultPlaybackSpeed)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Typing speed")
+    S.typingSpeedEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultTypingSpeed)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Move speed")
+    S.moveSpeedEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultMoveSpeed)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Initial delay (ms)")
+    S.initialDelayEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultInitialDelayMs)
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add(
+        "Text",
+        "xs w" UI.tabListWidth " c" UI.textHint,
+        "Higher speed values run faster. Initial delay waits before playback starts."
+    )
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
 
     S.mainTab.UseTab()
@@ -934,11 +1090,13 @@ CreateManageGui() {
     S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textHint,
-        "Record captures clicks, scrolls, and keys. Esc saves (Cancel on the dialog discards). Esc stops Run."
+        "Record: Esc saves, hold Caps Lock for delay, type any char (a,b,c) to add Var. Run: Esc stops."
     )
+    AddManageAuthorFooter(S.gui)
 
     S.gui.Show()
     ApplyManageAppIcon(S.gui)
+    SyncRunSettingsFromGui()
     RefreshAllLists(true)
 }
 
@@ -966,8 +1124,11 @@ SetInteractiveState(enabled) {
         S.editCsvButton, S.renameCsvButton, S.deleteCsvButton,
         S.usePresetRadio, S.useCsvRadio,
         S.recordingInfoButton, S.presetInfoButton, S.csvBatchInfoButton, S.runOptionsInfoButton,
+        S.speedSettingsInfoButton,
         S.csvAskNextLineRadio, S.csvRunAllRowsRadio,
         S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
+        S.playbackSpeedEdit, S.typingSpeedEdit, S.moveSpeedEdit, S.initialDelayEdit,
+        S.clickPauseEdit, S.segmentPauseEdit, S.fixedPausesRadio, S.recordedGapsRadio,
         S.mainTab] {
         if ctrl
             ctrl.Enabled := enabled
@@ -978,7 +1139,7 @@ SetInteractiveState(enabled) {
 }
 
 /**
- * Clears the selected input preset.
+ * Clears the selected data input.
  */
 ClearPresetSelection() {
     global S
@@ -1016,9 +1177,6 @@ SetInputSourceMode(mode, persist := true) {
         ClearPresetSelection()
 
     ApplyInputSourceControlState()
-
-    if mode = C.inputSourcePreset
-        LoadSelectedPresetPlaybackOptions()
 
     if persist {
         RememberSelections()
@@ -1100,7 +1258,6 @@ OnPresetListChange(*) {
         SetInputSourceMode(C.inputSourcePreset, false)
 
     ClearCsvSelection()
-    LoadSelectedPresetPlaybackOptions()
     RememberSelections()
     UpdateSelectionStatus()
 }
@@ -1159,32 +1316,73 @@ ReadPlaybackOptionsFromGui() {
  * Copies main-window playback option radios into session state.
  */
 SyncPlaybackOptionsFromGui() {
-    global S
-
-    opts := ReadPlaybackOptionsFromGui()
-    S.smoothMouse := opts.smooth_mouse
-    S.humanTyping := opts.human_typing
+    SyncRunSettingsFromGui()
 }
 
 /**
- * Loads playback options from the selected preset into radios and session state.
+ * Reads speed fields from the Speed Settings tab and pause/timing fields from the Run Options tab.
+ * @returns {{playback_speed: Float, typing_speed: Float, move_speed: Float, initial_delay: Integer,
+ *     click_pause_ms: Integer, segment_pause_ms: Integer, use_recorded_timing: Boolean}}
  */
-LoadSelectedPresetPlaybackOptions() {
+ReadRunTimingSettingsFromGui() {
     global C, S
 
-    presetPath := GetSelectedPresetPath()
-
-    if presetPath != "" && FileExist(presetPath) {
-        settings := ParsePresetFile(presetPath)
-        SetPlaybackOptionRadios(settings.smooth_mouse, settings.human_typing)
-        S.smoothMouse := settings.smooth_mouse
-        S.humanTyping := settings.human_typing
-        return
+    return {
+        playback_speed: SafeFloat(S.playbackSpeedEdit ? S.playbackSpeedEdit.Value : "", C.defaultPlaybackSpeed),
+        typing_speed: SafeFloat(S.typingSpeedEdit ? S.typingSpeedEdit.Value : "", C.defaultTypingSpeed),
+        move_speed: SafeFloat(S.moveSpeedEdit ? S.moveSpeedEdit.Value : "", C.defaultMoveSpeed),
+        initial_delay: SafeInteger(S.initialDelayEdit ? S.initialDelayEdit.Value : "", C.defaultInitialDelayMs),
+        click_pause_ms: SafeInteger(S.clickPauseEdit ? S.clickPauseEdit.Value : "", C.defaultClickPauseMs),
+        segment_pause_ms: SafeInteger(S.segmentPauseEdit ? S.segmentPauseEdit.Value : "", C.defaultSegmentPauseMs),
+        use_recorded_timing: S.recordedGapsRadio ? S.recordedGapsRadio.Value = 1 : C.defaultUseRecordedTiming
     }
+}
 
-    SetPlaybackOptionRadios(C.defaultSmoothMouse, C.defaultHumanTyping)
-    S.smoothMouse := C.defaultSmoothMouse
-    S.humanTyping := C.defaultHumanTyping
+/**
+ * Merges data-input variable values with global Run Options and Speed Settings tabs.
+ * @param {String} presetPath Path to a saved data input file, or "" for empty variables.
+ * @returns {Object} Full settings object for ApplySettings.
+ */
+BuildRunSettings(presetPath := "") {
+    global C
+
+    presetSettings := presetPath != "" && FileExist(presetPath)
+        ? ParsePresetFile(presetPath)
+        : DefaultSettings()
+    timing := ReadRunTimingSettingsFromGui()
+    playback := ReadPlaybackOptionsFromGui()
+
+    return {
+        playback_speed: timing.playback_speed,
+        typing_speed: timing.typing_speed,
+        move_speed: timing.move_speed,
+        initial_delay: timing.initial_delay,
+        click_pause_ms: timing.click_pause_ms,
+        segment_pause_ms: timing.segment_pause_ms,
+        use_recorded_timing: timing.use_recorded_timing,
+        smooth_mouse: playback.smooth_mouse,
+        human_typing: playback.human_typing,
+        variables: presetSettings.variables
+    }
+}
+
+/**
+ * Copies all run-related GUI controls into session state (timing, playback style; not variables).
+ */
+SyncRunSettingsFromGui() {
+    global S
+
+    timing := ReadRunTimingSettingsFromGui()
+    playback := ReadPlaybackOptionsFromGui()
+    S.playbackSpeed := Max(0.05, timing.playback_speed)
+    S.typingSpeed := Max(0.05, timing.typing_speed)
+    S.moveSpeed := Max(0.05, timing.move_speed)
+    S.initialDelayMs := Max(0, timing.initial_delay)
+    S.clickPauseMs := Max(0, timing.click_pause_ms)
+    S.segmentPauseMs := Max(0, timing.segment_pause_ms)
+    S.useRecordedTiming := timing.use_recorded_timing
+    S.smoothMouse := playback.smooth_mouse
+    S.humanTyping := playback.human_typing
 }
 
 SetRecordingGuiState(recording) {
@@ -1274,6 +1472,8 @@ RestoreRecordingStatusTip() {
 
     if S.leftHoldActive
         RefreshRecordingLeftMouseHoldTip()
+    else if S.capsLockHoldActive
+        RefreshRecordingCapsLockDelayTip()
     else
         ShowRecordingTip()
 }
@@ -1295,6 +1495,8 @@ HideRecordingTip() {
     SetTimer RestoreRecordingTip, 0
     SetTimer RefreshRecordingLeftMouseHoldTip, 0
     SetTimer CheckLeftMouseHoldRecording, 0
+    SetTimer RefreshRecordingCapsLockDelayTip, 0
+    SetTimer CheckCapsLockHoldRecording, 0
     ToolTip
 }
 
@@ -1450,7 +1652,7 @@ ShowRecordingsTabHelp(*) {
 }
 
 /**
- * Shows help for the Input Presets tab.
+ * Shows help for the Data Inputs tab.
  */
 ShowPresetsTabHelp(*) {
     global C
@@ -1477,6 +1679,15 @@ ShowRunOptionsTabHelp(*) {
 }
 
 /**
+ * Shows help for the Speed Settings tab.
+ */
+ShowSpeedSettingsTabHelp(*) {
+    global C
+
+    ShowManageHelpMessage(C.speedSettingsTabHelpMessage, C.speedSettingsTabHelpTitle)
+}
+
+/**
  * Shows help for the recording events table in Edit Log.
  */
 ShowRecordingLogEventsHelp(*) {
@@ -1486,7 +1697,7 @@ ShowRecordingLogEventsHelp(*) {
 }
 
 /**
- * Shows help for preset variable inputs in Edit Preset.
+ * Shows help for data input variable inputs in Edit Data Input.
  */
 ShowPresetVariablesHelp(*) {
     global C
@@ -1876,7 +2087,6 @@ RestoreSelections() {
     S.inputSourceMode := saved.csv != "" ? C.inputSourceCsv : C.inputSourcePreset
     if S.inputSourceMode = C.inputSourcePreset {
         ClearCsvSelection()
-        LoadSelectedPresetPlaybackOptions()
     } else {
         ClearPresetSelection()
     }
@@ -1913,7 +2123,7 @@ UpdateSelectionStatus() {
     }
 
     if preset = "" {
-        SetStatus("Select an input preset.")
+        SetStatus("Select a data input.")
         return
     }
 
@@ -2029,7 +2239,7 @@ ApplyFromGui(*) {
     }
 
     if presetPath = "" {
-        SetStatus("Select an input preset.")
+        SetStatus("Select a data input.")
         return
     }
 
@@ -2320,7 +2530,7 @@ DeleteSelectedRecording(*) {
 }
 
 /**
- * Deletes the selected input preset after confirmation.
+ * Deletes the selected data input after confirmation.
  */
 DeleteSelectedPreset(*) {
     global C, S
@@ -2330,12 +2540,12 @@ DeleteSelectedPreset(*) {
 
     path := GetSelectedPresetPath()
     if path = "" {
-        SetStatus("Select a preset to delete.")
+        SetStatus("Select a data input to delete.")
         return
     }
 
     label := FormatPresetName(path)
-    if !ConfirmDeleteItem(label, "preset")
+    if !ConfirmDeleteItem(label, "data input")
         return
 
     deletedBase := FileBaseName(path)
@@ -2343,8 +2553,8 @@ DeleteSelectedPreset(*) {
     try {
         DeleteManagedFile(path)
     } catch as err {
-        ShowManageMsgBox "Could not delete preset:`n" err.Message, "Delete Preset", "Icon!"
-        SetStatus("Could not delete preset.")
+        ShowManageMsgBox "Could not delete data input:`n" err.Message, "Delete Data Input", "Icon!"
+        SetStatus("Could not delete data input.")
         return
     }
 
@@ -2356,7 +2566,7 @@ DeleteSelectedPreset(*) {
 
     RememberSelections()
     UpdateSelectionStatus()
-    SetStatus("Deleted preset — " label)
+    SetStatus("Deleted data input — " label)
 }
 
 /**
@@ -3269,7 +3479,7 @@ ShowRecordingLogEditor(*) {
 }
 
 /**
- * Returns an unused preset file base name for Add preset.
+ * Returns an unused data input file base name for Add Data Input.
  * @returns {String}
  */
 SuggestNewPresetName() {
@@ -3285,7 +3495,7 @@ SuggestNewPresetName() {
 }
 
 /**
- * Opens the tabbed preset editor for the selected preset or a new preset.
+ * Opens the data input editor for the selected data input or a new data input.
  * @param {Boolean} createNew When true, opens a blank editor with a suggested name.
  */
 ShowPresetEditor(createNew := false, *) {
@@ -3311,27 +3521,21 @@ ShowPresetEditor(createNew := false, *) {
     if S.gui
         S.gui.Hide()
 
-    editor := Gui("+ToolWindow", "Edit Preset")
+    editor := Gui("+ToolWindow", "Edit Data Input")
     BindManageChildGui(editor)
+    editor.MarginX := UI.marginX
+    editor.MarginY := UI.marginY
     editor.SetFont("s10", "Segoe UI")
     editor.BackColor := "FFFFFF"
 
-    editorTab := editor.Add(
-        "Tab3",
-        "xm w" UI.presetEditorWidth " h" UI.presetEditorTabHeight,
-        ["Details", "Speed settings", "Advanced"]
-    )
-
-    editorTab.UseTab(1)
-    editor.Add("Text", "Section c1A1A1A", "Details")
-    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A", "Preset name")
+    editor.Add("Text", "xm w" UI.presetEditorWidth " c1A1A1A", "Data input name")
     nameEdit := editor.Add(
         "Edit",
         "xs w" UI.presetEditorWidth,
         createNew ? SuggestNewPresetName()
             : (selectedPreset ? FormatPresetName(selectedPreset) : "default")
     )
-    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A", "Variable inputs")
+    editor.Add("Text", "Section c1A1A1A", "Variable inputs")
     presetVariablesInfoButton := AddManageChildInfoButton(editor, "x+2")
     presetVariablesInfoButton.OnEvent("Click", ShowPresetVariablesHelp)
     editor.Add(
@@ -3339,13 +3543,6 @@ ShowPresetEditor(createNew := false, *) {
         "xs w" UI.presetEditorWidth " c555555",
         "Click Label or Value to edit inline, or use Selected row below. Add row / Delete row adjust variable slots."
     )
-    variablesList := editor.Add(
-        "ListView",
-        "xs w" UI.presetEditorWidth " h" UI.presetEditorListHeight " -Multi +Background" UI.listBg,
-        ["#", "Slot", "Label", "Value"]
-    )
-    PopulatePresetVariablesList(variablesList, editorVariableRows)
-    inlineEditCtrl := editor.Add("Edit", "Hidden w10 h22")
     addRowBtn := editor.Add(
         "Button",
         "xs w100 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
@@ -3356,6 +3553,13 @@ ShowPresetEditor(createNew := false, *) {
         "x+8 w100 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Delete row"
     )
+    variablesList := editor.Add(
+        "ListView",
+        "xs w" UI.presetEditorWidth " h" UI.presetEditorListHeight " -Multi +Background" UI.listBg,
+        ["#", "Slot", "Label", "Value"]
+    )
+    PopulatePresetVariablesList(variablesList, editorVariableRows)
+    inlineEditCtrl := editor.Add("Edit", "Hidden w10 h22")
 
     editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A", "Selected row")
     editor.Add("Text", "xs w" UI.presetEditorDetailLabelWidth " c555555", "Slot:")
@@ -3364,59 +3568,13 @@ ShowPresetEditor(createNew := false, *) {
     labelEdit := editor.Add("Edit", "x+0 w" UI.presetEditorDetailValueWidth, "")
     editor.Add("Text", "xs w" UI.presetEditorDetailLabelWidth " c555555", "Value:")
     valueEdit := editor.Add("Edit", "x+0 w" UI.presetEditorDetailValueWidth, "")
+
     applyRowBtn := editor.Add(
         "Button",
-        "xs w120 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "xm w120 h32 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Apply row"
     )
-
-    editorTab.UseTab(2)
-    editor.Add("Text", "Section c1A1A1A", "Speed settings")
-    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Run speed:")
-    playbackEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.playback_speed)
-    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Typing speed:")
-    typingEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.typing_speed)
-    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Move speed:")
-    moveEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.move_speed)
-    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Initial delay (ms):")
-    delayEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.initial_delay)
-    editor.Add(
-        "Text",
-        "xs w" UI.presetEditorFieldWidth " c555555",
-        "Higher speed values run faster. Initial delay waits before playback starts."
-    )
-
-    editorTab.UseTab(3)
-    editor.Add("Text", "Section c1A1A1A", "Advanced settings")
-    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Click pause (ms):")
-    clickPauseEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.click_pause_ms)
-    editor.Add("Text", "xs w" UI.presetEditorLabelWidth, "Step pause (ms):")
-    segmentPauseEdit := editor.Add("Edit", "x+0 w" UI.presetEditorValueWidth, existingSettings.segment_pause_ms)
-    editor.Add(
-        "Text",
-        "xs w" UI.presetEditorFieldWidth " c555555",
-        "Click pause: after move, before click. Step pause: after each target before the next."
-    )
-    editor.Add("Text", "xs w" UI.presetEditorFieldWidth " c555555", "Between steps:")
-    presetPausesRadio := editor.Add(
-        "Radio",
-        "xs" (!existingSettings.use_recorded_timing ? " checked" : ""),
-        "Preset pauses only"
-    )
-    recordedGapsRadio := editor.Add(
-        "Radio",
-        "x+12" (existingSettings.use_recorded_timing ? " checked" : ""),
-        "Recorded gaps"
-    )
-    editor.Add(
-        "Text",
-        "xs w" UI.presetEditorFieldWidth " c555555",
-        "Recorded gaps replay seconds between steps from Record. Preset pauses only ignores those."
-    )
-
-    editorTab.UseTab()
-
-    saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
+    saveBtn := editor.Add("Button", "x+8 w130 h32 Default", "Save")
     closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
 
     selectedRowIndex := 0
@@ -3535,7 +3693,7 @@ ShowPresetEditor(createNew := false, *) {
         row.label := Trim(labelEdit.Value)
         row.value := Trim(valueEdit.Value)
         RefreshPresetVariableListRow(variablesList, selectedRowIndex, row)
-        SetStatus(Format("Updated preset row {} — {}", selectedRowIndex, FormatPresetVariableSlot(selectedRowIndex)))
+        SetStatus(Format("Updated data input row {} — {}", selectedRowIndex, FormatPresetVariableSlot(selectedRowIndex)))
     }
 
     SyncSelectedVariableRowFromDetailPanel() {
@@ -3558,7 +3716,7 @@ ShowPresetEditor(createNew := false, *) {
         PopulatePresetVariablesList(variablesList, editorVariableRows)
         SelectManageListViewDataRow(variablesList, insertIndex)
         LoadVariableDetailPanel(insertIndex)
-        SetStatus(Format("Added preset row {} — {}", insertIndex, FormatPresetVariableSlot(insertIndex)))
+        SetStatus(Format("Added data input row {} — {}", insertIndex, FormatPresetVariableSlot(insertIndex)))
     }
 
     DeletePresetVariableRow(*) {
@@ -3566,7 +3724,7 @@ ShowPresetEditor(createNew := false, *) {
         SyncSelectedVariableRowFromDetailPanel()
 
         if editorVariableRows.Length <= 1 {
-            ShowManageMsgBox "At least one variable row is required.", "Edit Preset", "Icon!"
+            ShowManageMsgBox "At least one variable row is required.", "Edit Data Input", "Icon!"
             return
         }
 
@@ -3582,7 +3740,7 @@ ShowPresetEditor(createNew := false, *) {
         nextRowIndex := Min(rowIndex, editorVariableRows.Length)
         SelectManageListViewDataRow(variablesList, nextRowIndex)
         LoadVariableDetailPanel(nextRowIndex)
-        SetStatus(Format("Deleted preset row {} — {} row(s) remain", rowIndex, editorVariableRows.Length))
+        SetStatus(Format("Deleted data input row {} — {} row(s) remain", rowIndex, editorVariableRows.Length))
     }
 
     OnVariablesListSelect(*) {
@@ -3624,23 +3782,12 @@ ShowPresetEditor(createNew := false, *) {
 
         presetName := SafePresetName(nameEdit.Value)
         if presetName = "" {
-            ShowManageMsgBox "Enter a preset name.", "Edit Preset", "Icon!"
+            ShowManageMsgBox "Enter a data input name.", "Edit Data Input", "Icon!"
             return
         }
 
-        playbackOpts := ReadPlaybackOptionsFromGui()
-        settings := {
-            playback_speed: SafeFloat(playbackEdit.Value, C.defaultPlaybackSpeed),
-            typing_speed: SafeFloat(typingEdit.Value, C.defaultTypingSpeed),
-            move_speed: SafeFloat(moveEdit.Value, C.defaultMoveSpeed),
-            initial_delay: SafeInteger(delayEdit.Value, C.defaultInitialDelayMs),
-            click_pause_ms: SafeInteger(clickPauseEdit.Value, C.defaultClickPauseMs),
-            segment_pause_ms: SafeInteger(segmentPauseEdit.Value, C.defaultSegmentPauseMs),
-            use_recorded_timing: recordedGapsRadio.Value = 1,
-            smooth_mouse: playbackOpts.smooth_mouse,
-            human_typing: playbackOpts.human_typing,
-            variables: []
-        }
+        settings := BuildRunSettings()
+        settings.variables := []
 
         for row in editorVariableRows
             settings.variables.Push(FormatManageVariableStorage(row.label, row.value))
@@ -3658,17 +3805,17 @@ ShowPresetEditor(createNew := false, *) {
                 DeleteManagedFile(originalPresetPath)
 
             ApplySettings(settings)
-            SyncPlaybackOptionsFromGui()
+            SyncRunSettingsFromGui()
             RefreshPresetList()
             SelectByBaseName(S.presetList, S.presetPaths, FileBaseName(presetPath))
             RememberSelections()
             UpdateSelectionStatus()
             SetStatus(originalPresetPath != "" && StrLower(originalPresetPath) = StrLower(presetPath)
-                ? "Updated preset — " presetName
-                : "Saved preset — " presetName)
+                ? "Updated data input — " presetName
+                : "Saved data input — " presetName)
             CloseEditor()
         } catch as err {
-            ShowManageMsgBox "Could not save inputs:`n" err.Message, "Edit Preset", "Icon!"
+            ShowManageMsgBox "Could not save inputs:`n" err.Message, "Edit Data Input", "Icon!"
         }
     }
 
@@ -3770,7 +3917,7 @@ StartRecording() {
     SetTimer FlushLog, C.flushIntervalMs
 
     ShowRecordingTip()
-    ShowTransientRecordingTip("Recording... Quick click = click. Hold or drag left-click = mouse hold. Ctrl/Shift/Alt shortcuts supported.")
+    ShowTransientRecordingTip("Recording... Click = click. Hold Caps Lock = delay. Hold/drag left-click = mouse hold. Ctrl/Shift/Alt shortcuts supported.")
     SetTimer MaintainRecordingTip, C.recordingTipRefreshMs
 }
 
@@ -3793,7 +3940,7 @@ SaveRecording(*) {
  * @param {Boolean} shouldSave When true, prompts to rename and keep the log.
  */
 EndRecordingSession(shouldSave) {
-    global S
+    global C, S
 
     if !S.recording
         return
@@ -3805,6 +3952,14 @@ EndRecordingSession(shouldSave) {
             CommitRecordingLeftMouseHold()
         else
             CancelRecordingLeftMouseHoldState()
+    }
+
+    if S.capsLockHoldPending || S.capsLockHoldActive {
+        if shouldSave && (S.capsLockHoldActive || (S.capsLockHoldDownAt > 0
+            && (A_TickCount - S.capsLockHoldDownAt) >= C.minRecordedDelayMs))
+            CommitRecordingCapsLockDelay(Max(0, A_TickCount - S.capsLockHoldDownAt))
+        else
+            CancelRecordingCapsLockDelayState()
     }
 
     if shouldSave
@@ -3861,6 +4016,9 @@ ResetRecordingState() {
     S.leftHoldDownY := 0
     S.leftHoldEndX := 0
     S.leftHoldEndY := 0
+    S.capsLockHoldPending := false
+    S.capsLockHoldActive := false
+    S.capsLockHoldDownAt := 0
     ClearRecordedModifierState()
 }
 
@@ -4092,6 +4250,121 @@ CommitRecordingLeftMouseHold(*) {
 
     seconds := Round(durationMs / 1000, 1)
     ShowTransientRecordingTip(Format("HOLD saved: {1} s", seconds), endX, endY)
+}
+
+/**
+ * Returns true for the Caps Lock virtual-key code.
+ * @param {Integer} vk Virtual-key code.
+ * @returns {Boolean}
+ */
+IsCapsLockVirtualKey(vk) {
+    global C
+
+    return vk = C.VK_CAPITAL
+}
+
+/**
+ * Marks Caps Lock delay recording active and shows the DELAY cursor indicator.
+ */
+ActivateRecordingCapsLockDelay() {
+    global S, C
+
+    if S.capsLockHoldActive
+        return
+
+    S.capsLockHoldActive := true
+    SetTimer CheckCapsLockHoldRecording, 0
+    SetTimer RefreshRecordingCapsLockDelayTip, C.mouseHoldTipRefreshMs
+    RefreshRecordingCapsLockDelayTip()
+}
+
+/**
+ * Shows the DELAY indicator once Caps Lock has been held long enough.
+ */
+CheckCapsLockHoldRecording(*) {
+    global S, C
+
+    if !S.recording || !S.capsLockHoldPending || S.capsLockHoldActive
+        return
+
+    if !GetKeyState("CapsLock", "P") {
+        CancelRecordingCapsLockDelayState()
+        return
+    }
+
+    if (A_TickCount - S.capsLockHoldDownAt) >= C.minRecordedDelayMs
+        ActivateRecordingCapsLockDelay()
+}
+
+/**
+ * Updates the active Caps Lock delay indicator beside the cursor.
+ */
+RefreshRecordingCapsLockDelayTip(*) {
+    global S, C
+
+    if !S.recording || !S.capsLockHoldActive || S.capsLockHoldDownAt = 0 {
+        SetTimer RefreshRecordingCapsLockDelayTip, 0
+        return
+    }
+
+    heldSec := Round((A_TickCount - S.capsLockHoldDownAt) / 1000, 1)
+    ShowCursorToolTip(C.recordingDelayIndicatorText " " heldSec "s")
+}
+
+/**
+ * Clears Caps Lock delay tracking without writing to the log.
+ */
+CancelRecordingCapsLockDelayState() {
+    global S
+
+    SetTimer CheckCapsLockHoldRecording, 0
+    SetTimer RefreshRecordingCapsLockDelayTip, 0
+    S.capsLockHoldPending := false
+    S.capsLockHoldActive := false
+    S.capsLockHoldDownAt := 0
+
+    if IsRecording()
+        RestoreRecordingStatusTip()
+    else
+        ToolTip
+}
+
+/**
+ * Writes a recorded Caps Lock hold as a meta delay line.
+ * @param {Integer} durationMs Hold duration in milliseconds.
+ */
+CommitRecordingCapsLockDelay(durationMs) {
+    global S, C
+
+    durationMs := Max(0, durationMs)
+    S.capsLockHoldPending := false
+    S.capsLockHoldActive := false
+    S.capsLockHoldDownAt := 0
+    SetTimer RefreshRecordingCapsLockDelayTip, 0
+
+    if !S.recording {
+        ToolTip
+        return
+    }
+
+    if durationMs < C.minRecordedDelayMs {
+        RestoreRecordingStatusTip()
+        return
+    }
+
+    ArmKeyCapture()
+    WriteRecordingDelayLine(durationMs)
+
+    seconds := Round(durationMs / 1000, 1)
+    ShowTransientRecordingTip(Format("Delay saved: {1} s", seconds))
+}
+
+/**
+ * Writes a manual delay marker to the recording log.
+ * @param {Integer} durationMs Delay duration in milliseconds.
+ */
+WriteRecordingDelayLine(durationMs) {
+    WriteLine(Format("{}|meta|delay|{}`n", Elapsed(), durationMs))
 }
 
 /**
@@ -4333,6 +4606,20 @@ KeyboardHookProc(nCode, wParam, lParam) {
         sc := NumGet(lParam, 4, "UInt")
         isKeyDown := (wParam = C.WM_KEYDOWN || wParam = C.WM_SYSKEYDOWN)
         isKeyUp := (wParam = C.WM_KEYUP || wParam = C.WM_SYSKEYUP)
+
+        if IsCapsLockVirtualKey(vk) {
+            if isKeyDown {
+                if !S.capsLockHoldPending && !S.capsLockHoldActive {
+                    S.capsLockHoldPending := true
+                    S.capsLockHoldDownAt := A_TickCount
+                    SetTimer CheckCapsLockHoldRecording, -C.minRecordedDelayMs
+                }
+            } else if isKeyUp && (S.capsLockHoldPending || S.capsLockHoldActive) {
+                SetTimer CheckCapsLockHoldRecording, 0
+                CommitRecordingCapsLockDelay(Max(0, A_TickCount - S.capsLockHoldDownAt))
+            }
+            return 1
+        }
 
         if IsModifierVirtualKey(vk) {
             if isKeyDown
@@ -4872,22 +5159,22 @@ RunApply(logPath, presetPath) {
     }
 
     if !FileExist(presetPath) {
-        SetStatus("Preset file not found.")
-        ShowManageMsgBox "Preset file not found:`n" presetPath, "Data Entry Autonoma", "Icon!"
+        SetStatus("Data input file not found.")
+        ShowManageMsgBox "Data input file not found:`n" presetPath, "Data Entry Autonoma", "Icon!"
         return false
     }
 
-    settings := ParsePresetFile(presetPath)
+    settings := BuildRunSettings(presetPath)
     ApplySettings(settings)
-    SyncPlaybackOptionsFromGui()
+    SyncRunSettingsFromGui()
 
     parsed := PrepareApplyLog(logPath)
     if parsed = ""
         return false
 
     if RecordingNeedsVariableValues(parsed) && S.variables.Length = 0 {
-        SetStatus("No variables in selected preset.")
-        ShowManageMsgBox "This recording expects typed variable values.`n`nUse Edit Preset to add them.", "Data Entry Autonoma", "Icon!"
+        SetStatus("No variables in selected data input.")
+        ShowManageMsgBox "This recording expects typed variable values.`n`nUse Edit Data Input to add them.", "Data Entry Autonoma", "Icon!"
         return false
     }
 
@@ -4938,11 +5225,9 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
     csvVariableLabels := rows.variableLabels
     csvRowLabelHeader := rows.rowLabelHeader
 
-    settings := presetPath != "" && FileExist(presetPath)
-        ? ParsePresetFile(presetPath)
-        : DefaultSettings()
+    settings := BuildRunSettings(presetPath)
     ApplySettings(settings)
-    SyncPlaybackOptionsFromGui()
+    SyncRunSettingsFromGui()
 
     parsed := PrepareApplyLog(logPath)
     if parsed = ""
