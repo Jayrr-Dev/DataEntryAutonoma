@@ -8,7 +8,7 @@
 
 Show the app what to do once. It remembers your mouse clicks, scrolls, and keypresses and repeats those same actions for you automatically, including typing text into fields for you.
 
-Record mouse clicks, scrolls, and keyboard input once. Click **Run** to replay that exact sequence. The app can **automatically type text** into the fields you marked during recording, using values from a data input or CSV file so each run can enter different names, numbers, and notes without you typing them again. No scripting required.
+**Record** captures mouse clicks, scrolls, and keyboard input as a replayable sequence. **Run** replays that exact sequence. The app can **automatically type text** into the fields you marked during recording, using values from a data input or CSV file so each run can enter different names, numbers, and notes without you typing them again. No scripting required.
 
 **End users:** run `DataEntryAutonoma.exe`. **AutoHotkey does not need to be installed** on your PC. The exe is a standalone Windows app.
 
@@ -196,7 +196,7 @@ If you already extracted the release zip (or cloned the repo for development), y
    - Shows install type (fresh or upgrade), version (including upgrade from/to), and target folder before you click **Install**
    - If the app files are not already in the folder, the wizard downloads them automatically when you click **Next**
    - Default install folder: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`
-4. Click **Install**. When setup completes, click **Close**.
+4. Use **Install** to apply setup; **Close** dismisses the wizard.
 
 **Standalone only:** The wizard installs `DataEntryAutonoma.exe`. **AutoHotkey is not required** on the PC where you install or run the app.
 
@@ -215,7 +215,7 @@ To remove the app, shortcuts, and optional user data:
 1. Run **`runUninstallWizard.bat`** from the install folder (or from an extracted release zip / repo clone).
 2. Choose the install folder (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`). The wizard title and confirm step show the installed version when `VERSION` is present.
 3. Select what to remove (application files including VERSION/CHANGELOG/wizards, recordings, data inputs, CSV bulk inputs, `apply-state.ini`, shortcuts).
-4. On the summary step, confirm your choices and click **Uninstall**.
+4. On the summary step, click **Uninstall** to apply the selected removals.
 
 If you run the uninstaller from inside the install folder, remaining files (including the uninstaller itself) are deleted automatically after the wizard closes.
 
@@ -335,7 +335,7 @@ For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 w
    ```powershell
    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
    ```
-   After that, run `.\compile.ps1` again. Only do this if you trust this project's scripts.
+   Rerun `.\compile.ps1` with the updated execution policy. Only do this if you trust this project's scripts.
 
 More build and packaging notes: [BUILD.md](BUILD.md).
 
@@ -373,10 +373,10 @@ After [installation](#installation):
 
 1. Run `dataEntryAutonoma.ahk` or `DataEntryAutonoma.exe`
 2. Click **Record**, perform your workflow (clicks, scrolls, keys where needed)
-3. Press **Esc** to save; enter a name or click **Cancel** to discard
+3. Press **Esc** to open the save dialog (name the recording or **Cancel** to discard)
 4. On **Data Inputs**, click **Add Data Input** or **Edit Data Input** to set variable values, **or** on **Bulk Inputs**, create or pick a CSV for many rows
 5. Adjust **Run Options** and **Speed Settings** if needed
-6. Select a recording, choose **Use data input for Run** or **Use bulk inputs for Run**, and click **Run**
+6. Click **Run** with a recording and run input source selected (see [Run workflow](#run-workflow))
 7. Click **i** on any tab if you need help with that section
 
 For many rows, use **Bulk Inputs** instead of typing variables into a data input. Use **Config** on that tab to choose step-by-step prompts or automatic batch run.
@@ -387,9 +387,9 @@ For many rows, use **Bulk Inputs** instead of typing variables into a data input
 2. Click targets in your app. After each click you may type a character to mark typed input for that field, or skip typing for click-only navigation.
 3. Scroll when needed; wheel actions are captured at the cursor.
 4. **Hold Caps Lock** to record a manual delay between steps.
-5. **Drag** or **hold left-click** to record a mouse hold (for example to select cells in Excel). Release to save it. Quick clicks stay normal clicks.
+5. **Drag** or **hold left-click** to record a mouse hold (for example to select cells in Excel). The hold is saved on release. Quick clicks stay normal clicks.
 6. Press **Ctrl**, **Shift**, or **Alt** with another key to record keyboard shortcuts (for example Ctrl+C).
-7. Press **Esc** when finished. Name the recording in the dialog or click **Cancel** to throw it away.
+7. Press **Esc** when finished. The save dialog lets you name the recording (**Cancel** discards it).
 8. Close the app window while recording to cancel without saving.
 
 Corner tooltip while recording: **Esc = Save · Click = click · Hold Caps Lock = delay · Hold/drag LMB = hold**
@@ -397,7 +397,7 @@ Corner tooltip while recording: **Esc = Save · Click = click · Hold Caps Lock 
 ## Run workflow
 
 1. Select a recording on the **Recordings** tab.
-2. On **Data Inputs**, choose **Use data input for Run** and pick a data input, **or** on **Bulk Inputs**, choose **Use bulk inputs for Run** and pick a CSV file.
+2. Pick a run input source: a data input on **Data Inputs** or a CSV on **Bulk Inputs** (mutually exclusive).
 3. Adjust **Run Options** (mouse, typing, pauses) and **Speed Settings** (speed multipliers, initial delay) if needed.
 4. Click **Run**. The app moves the mouse, clicks, scrolls, and types according to the recording and your selected input source.
 5. Press **Esc** to stop.
@@ -564,7 +564,7 @@ See [BUILD.md](BUILD.md) for distribution layout and advanced compile options.
 |-----|-----------------|---------------------------|
 | **Esc** | Save (opens name dialog) | Stop run or batch |
 | **Caps Lock** (hold) | Record manual delay | N/A |
-| **Left-click** (hold or drag) | Record mouse hold/drag, release to save | Replays button down, drag or wait, button up |
+| **Left-click** (hold or drag) | Record mouse hold/drag (saved on release) | Replays button down, drag or wait, button up |
 | **Ctrl/Shift/Alt + key** | Record shortcut | Replays shortcut |
 
 Cancel on the save dialog discards the recording. Closing the app window while recording also cancels without saving.
