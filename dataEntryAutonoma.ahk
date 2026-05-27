@@ -355,6 +355,7 @@ UI := {
     csvColLineWidth: 54,
     csvColVarCountWidth: 90,
     recordingListHeight: 300,
+    presetListHeight: 285,
     marginX: 18,
     marginY: 4,
     btnGap: 10,
@@ -385,11 +386,14 @@ UI := {
     csvBatchTableHeight: 180,
     csvBatchPromptDetailsLines: 5,
     csvBatchPromptBtnWidth: 118,
-    presetEditorWidth: 720,
-    presetEditorFieldWidth: 720,
+    presetEditorWidth: 690,
+    presetEditorFieldWidth: 690,
     presetEditorLabelWidth: 180,
     presetEditorValueWidth: 220,
-    presetEditorListHeight: 260,
+    presetEditorListHeight: 270,
+    ; Variable-inputs block height (header → Save/Close). 0 = auto from parts; >0 scales ListView too.
+    presetEditorTabHeight: 300,
+    presetEditorApplyRowHeight: 32,
     presetEditorDetailLabelWidth: 108,
     presetEditorDetailValueWidth: 600,
     presetEditorHelpHeight: 40,
@@ -401,7 +405,7 @@ UI := {
     presetEditorOuterPad: 32,
     presetEditorSafetyPad: 24,
     recordingLogEditorWidth: 580,
-    recordingLogEditorTabHeight: 580,
+    recordingLogEditorTabHeight: 520,
     recordingLogEditorListHeight: 240,
     recordingLogEditorDetailLabelWidth: 108,
     recordingLogEditorDetailValueWidth: 432,
@@ -835,13 +839,14 @@ GetManageInputTabMetrics() {
         + (UI.tabLabelHeight + UI.tabRowGap + 24) * 4 + UI.tabRowGap + 36
 
     recordingTabContentH := recordingChrome + UI.recordingListHeight
-    autoTabContentH := Max(csvChrome + UI.listMinH, runOptionsChrome, speedChrome, recordingTabContentH)
+    presetTabContentH := presetChrome + UI.presetListHeight
+    autoTabContentH := Max(csvChrome + UI.listMinH, runOptionsChrome, speedChrome, recordingTabContentH, presetTabContentH)
     tabChromeH := UI.tabStripHeight + UI.tabInnerPad + UI.tabPanelSafetyPad + 8
     tabContentH := UI.manageTabPanelHeight > 0
         ? Max(UI.listMinH, UI.manageTabPanelHeight - tabChromeH)
         : autoTabContentH
     listRecordingH := UI.recordingListHeight
-    listPresetH := Max(UI.listMinH, tabContentH - presetChrome)
+    listPresetH := UI.presetListHeight
     listCsvH := Max(UI.listMinH, tabContentH - csvChrome)
 
     return {
@@ -866,7 +871,48 @@ GetManageTabPanelHeight() {
 }
 
 /**
- * Returns Edit Data Input dialog height (content + button row + padding).
+ * Vertical chrome in Edit Data Input from "Variable inputs" through Save/Close (excludes ListView).
+ * @returns {Integer}
+ */
+GetPresetEditorVariableSectionChromeHeight() {
+    global UI
+
+    editRowH := UI.presetEditorEditRowHeight
+    return UI.presetEditorSectionRowHeight + UI.tabRowGap
+        + UI.presetEditorHelpHeight + UI.tabRowGap
+        + UI.btnHeightTool + UI.tabRowGap
+        + UI.tabLabelHeight + UI.tabRowGap
+        + (editRowH + UI.tabRowGap) * 3
+        + UI.presetEditorApplyRowHeight + UI.tabRowGap
+        + UI.presetEditorSaveSectionGap + UI.presetEditorButtonRowHeight
+}
+
+/**
+ * ListView height for Edit Data Input. When UI.presetEditorTabHeight > 0, grows/shrinks with that knob.
+ * @returns {Integer}
+ */
+GetPresetEditorListHeightForShow() {
+    global UI
+
+    if UI.presetEditorTabHeight > 0
+        return Max(UI.listMinH, UI.presetEditorTabHeight - GetPresetEditorVariableSectionChromeHeight())
+    return UI.presetEditorListHeight
+}
+
+/**
+ * Variable-inputs section height for Edit Data Input (matches recordingLogEditorTabHeight role).
+ * @returns {Integer}
+ */
+GetPresetEditorVariableSectionHeight() {
+    global UI
+
+    if UI.presetEditorTabHeight > 0
+        return UI.presetEditorTabHeight
+    return GetPresetEditorVariableSectionChromeHeight() + UI.presetEditorListHeight + UI.tabRowGap
+}
+
+/**
+ * Returns Edit Data Input dialog height (name + description + variable section + padding).
  * @returns {Integer}
  */
 GetPresetEditorWindowHeight() {
@@ -875,18 +921,9 @@ GetPresetEditorWindowHeight() {
     editRowH := UI.presetEditorEditRowHeight
     nameBlock := UI.tabLabelHeight + UI.tabRowGap + editRowH + UI.tabRowGap
     descBlock := UI.presetEditorDescLabelH + UI.tabRowGap + UI.presetEditorDescEditH + UI.tabRowGap
-    varHeader := UI.presetEditorSectionRowHeight + UI.tabRowGap
-    varHelp := UI.presetEditorHelpHeight + UI.tabRowGap
-    varTools := UI.btnHeightTool + UI.tabRowGap
-    varList := UI.presetEditorListHeight + UI.tabRowGap
-    detailHeader := UI.tabLabelHeight + UI.tabRowGap
-    detailRows := (editRowH + UI.tabRowGap) * 3
-    saveBlock := UI.presetEditorSaveSectionGap + UI.presetEditorButtonRowHeight
-    contentH := nameBlock + descBlock + varHeader + varHelp + varTools + varList
-        + detailHeader + detailRows + saveBlock
 
-    return contentH + UI.presetEditorBottomPad + UI.presetEditorOuterPad + UI.presetEditorSafetyPad
-        + (UI.marginY * 2)
+    return nameBlock + descBlock + GetPresetEditorVariableSectionHeight()
+        + UI.presetEditorBottomPad + UI.presetEditorOuterPad + UI.presetEditorSafetyPad + (UI.marginY * 2)
 }
 
 /**
@@ -4054,7 +4091,7 @@ ShowPresetEditor(createNew := false, *) {
     )
     variablesList := editor.Add(
         "ListView",
-        "xs w" UI.presetEditorWidth " h" UI.presetEditorListHeight " -Multi +Background" UI.listBg,
+        "xs w" UI.presetEditorWidth " h" GetPresetEditorListHeightForShow() " -Multi +Background" UI.listBg,
         ["#", "Slot", "Label", "Value"]
     )
     PopulatePresetVariablesList(variablesList, editorVariableRows)
@@ -4070,7 +4107,7 @@ ShowPresetEditor(createNew := false, *) {
 
     applyRowBtn := editor.Add(
         "Button",
-        "xm w120 h32 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "xm w120 h" UI.presetEditorApplyRowHeight " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Apply row"
     )
     saveBtn := editor.Add("Button", "x+8 w130 h32 Default", "Save")
