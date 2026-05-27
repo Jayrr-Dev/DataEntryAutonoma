@@ -67,14 +67,11 @@ C := {
 One row per variable in the table. Row 1 = variable-1, row 2 = variable-2, and so on.
 
 Columns: Slot (variable-N), Label (optional note, stripped at run time), and Value (typed text).
-Click Label or Value in the table to edit inline, or use Selected row below.
+Click Label or Value in the table to edit inline.
+Commas and backslashes in values are escaped automatically when you Save.
 Add row inserts after the selected row; Delete row removes the selected row (at least one row required).
 
 Labels can include spaces (Label Drawing Number, Value 281435 types 281435).
-
-Escape a comma in a value with backslash:
-  Label Developed_By, Value I\, LEE types I, LEE
-  Use \\ for a literal backslash
     )",
     recordingLogEventsHelpTitle: "Recording events help",
     recordingLogEventsHelpMessage: "
@@ -166,7 +163,7 @@ Edit Data Input
 Edit the name, optional description, and variable values.
 - Table: one row per variable (row 1 = variable-1, row 2 = variable-2, ...).
 - Columns: Slot, Label (optional note), Value (typed text).
-- Click Label or Value to edit inline, or use Selected row and Apply row.
+- Click Label or Value to edit inline.
 - Add row / Delete row adjust slots (at least one row required).
 
 Delete Data Input
@@ -175,9 +172,7 @@ Remove the selected data input.
 Variable values
 Label is for your notes only and is stripped at run time. Values are what Run types.
 Labels can include spaces (Label Drawing Number, Value 281435 types 281435).
-Comma in a value: use backslash (Value I\, LEE types I, LEE).
-Use \\ for a literal backslash.
-Plain values with no label still work.
+Type commas in values normally (Value I, LEE). They are escaped automatically when you Save.
 
 Other tabs
 Speed Settings: speed multipliers and initial delay.
@@ -203,8 +198,11 @@ Config
 Saved CSV files
 Stored in csv-batches\. List columns: Name, Line, Var Count.
 
-Edit CSV
-Table editor for the selected file (or a new file). Row 1 is the header. Click a cell to edit inline. Add row / Delete row / Add col / Delete col. Commas and backslashes in values are escaped automatically on Save.
+Edit
+Opens the table editor for the selected CSV file. Row 1 is the header. Click a cell to edit inline. Add row / Delete row / Add col / Delete col. Commas and backslashes in values are escaped automatically on Save.
+
+Create CSV
+Opens the table editor with a blank file and a suggested name. Same inline editing and row/column controls as Edit.
 
 Rename
 Change the selected file name.
@@ -490,20 +488,17 @@ UI := {
     presetEditorValueWidth: 220,
     presetEditorInlineLabelMaxWidth: 160,
     presetEditorInlineValueMaxWidth: 220,
-    presetEditorListHeight: 270,
+    presetEditorListHeight: 320,
     ; Variable-inputs block height (header → Save/Close). 0 = auto from parts; >0 scales ListView too.
-    presetEditorTabHeight: 300,
-    presetEditorApplyRowHeight: 32,
-    presetEditorDetailLabelWidth: 80,
-    presetEditorDetailValueWidth: 400,
+    presetEditorTabHeight: 700,
     presetEditorHelpHeight: 40,
     presetEditorSectionRowHeight: 28,
     presetEditorEditRowHeight: 28,
-    presetEditorSaveSectionGap: 14,
-    presetEditorButtonRowHeight: 44,
-    presetEditorBottomPad: 20,
-    presetEditorOuterPad: 32,
-    presetEditorSafetyPad: 24,
+    presetEditorSaveSectionGap: 6,
+    presetEditorButtonRowHeight: 32,
+    presetEditorBottomPad: 4,
+    presetEditorOuterPad: 0,
+    presetEditorSafetyPad: 0,
     recordingLogEditorWidth: 580,
     recordingLogEditorTabHeight: 520,
     recordingLogEditorListHeight: 240,
@@ -625,6 +620,7 @@ S := {
     refreshCsvButton: "",
     deletePresetButton: "",
     editCsvButton: "",
+    createCsvButton: "",
     renameCsvButton: "",
     deleteCsvButton: "",
     usePresetRadio: "",
@@ -921,6 +917,15 @@ GetManageThreeButtonWidth() {
 }
 
 /**
+ * Width for four equal buttons in one row (tab list width minus gaps).
+ * @returns {Integer}
+ */
+GetManageFourButtonWidth() {
+    global UI
+    return Floor((UI.tabListWidth - UI.btnGap * 3 - UI.tabButtonRowInset) / 4)
+}
+
+/**
  * Width for two equal primary action buttons (full content width minus gap).
  * @returns {Integer}
  */
@@ -992,13 +997,9 @@ GetManageTabPanelHeight() {
 GetPresetEditorVariableSectionChromeHeight() {
     global UI
 
-    editRowH := UI.presetEditorEditRowHeight
     return UI.presetEditorSectionRowHeight + UI.tabRowGap
         + UI.presetEditorHelpHeight + UI.tabRowGap
         + UI.btnHeightTool + UI.tabRowGap
-        + UI.tabLabelHeight + UI.tabRowGap
-        + (editRowH + UI.tabRowGap) * 3
-        + UI.presetEditorApplyRowHeight + UI.tabRowGap
         + UI.presetEditorSaveSectionGap + UI.presetEditorButtonRowHeight
 }
 
@@ -1036,9 +1037,9 @@ GetPresetEditorWindowHeight() {
     editRowH := UI.presetEditorEditRowHeight
     nameBlock := UI.tabLabelHeight + UI.tabRowGap + editRowH + UI.tabRowGap
     descBlock := UI.presetEditorDescLabelH + UI.tabRowGap + UI.presetEditorDescEditH + UI.tabRowGap
+    variableBlock := GetPresetEditorVariableSectionChromeHeight() + GetPresetEditorListHeightForShow()
 
-    return nameBlock + descBlock + GetPresetEditorVariableSectionHeight()
-        + UI.presetEditorBottomPad + UI.presetEditorOuterPad + UI.presetEditorSafetyPad + (UI.marginY * 2)
+    return nameBlock + descBlock + variableBlock + UI.marginY * 2 + UI.presetEditorBottomPad
 }
 
 /**
@@ -1061,6 +1062,7 @@ CreateManageGui() {
     global C, S, UI
 
     threeBtnW := GetManageThreeButtonWidth()
+    fourBtnW := GetManageFourButtonWidth()
     primaryBtnW := GetManagePrimaryButtonWidth()
     btnGap := UI.btnGap
     hSec := UI.btnHeightSecondary
@@ -1213,23 +1215,30 @@ CreateManageGui() {
     S.csvList.OnEvent("ItemSelect", OnCsvListChange)
     ApplyManageCsvListColumns()
 
+    S.createCsvButton := S.gui.Add(
+        "Button",
+        "xs w" fourBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Create CSV"
+    )
+    S.createCsvButton.OnEvent("Click", (*) => ShowCsvEditor(true))
+
     S.editCsvButton := S.gui.Add(
         "Button",
-        "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Edit CSV"
+        "x+" btnGap " w" fourBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Edit"
     )
-    S.editCsvButton.OnEvent("Click", ShowCsvEditor)
+    S.editCsvButton.OnEvent("Click", (*) => ShowCsvEditor(false))
 
     S.renameCsvButton := S.gui.Add(
         "Button",
-        "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "x+" btnGap " w" fourBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Rename"
     )
     S.renameCsvButton.OnEvent("Click", RenameSelectedCsv)
 
     S.deleteCsvButton := S.gui.Add(
         "Button",
-        "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "x+" btnGap " w" fourBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Delete"
     )
     S.deleteCsvButton.OnEvent("Click", DeleteSelectedCsv)
@@ -1391,7 +1400,7 @@ SetInteractiveState(enabled) {
         S.addPresetButton, S.refreshCsvButton, S.editButton,
         S.renameRecordingButton, S.editRecordingButton, S.deleteRecordingButton,
         S.deletePresetButton, S.recordingList, S.presetList, S.csvList, S.csvEdit, S.browseCsvButton,
-        S.editCsvButton, S.renameCsvButton, S.deleteCsvButton,
+        S.editCsvButton, S.createCsvButton, S.renameCsvButton, S.deleteCsvButton,
         S.usePresetRadio, S.useCsvRadio,
         S.recordingInfoButton, S.presetInfoButton, S.csvBatchInfoButton, S.runOptionsInfoButton,
         S.speedSettingsInfoButton,
@@ -1481,7 +1490,7 @@ ApplyInputSourceControlState() {
             ctrl.Enabled := presetMode
 
     for ctrl in [
-        S.csvList, S.csvEdit, S.browseCsvButton, S.editCsvButton, S.renameCsvButton,
+        S.csvList, S.csvEdit, S.browseCsvButton, S.createCsvButton, S.editCsvButton, S.renameCsvButton,
         S.deleteCsvButton, S.refreshCsvButton, S.csvAskNextLineRadio, S.csvRunAllRowsRadio,
         S.useCsvRadio
     ]
@@ -3131,20 +3140,34 @@ SerializeCsvEditorRows(rows) {
 
 /**
  * Opens the CSV batch editor to create or update a saved CSV file.
+ * @param {Boolean} createNew When true, opens a blank editor with a suggested name.
  */
-ShowCsvEditor(*) {
+ShowCsvEditor(createNew := false, *) {
     global C, S, UI
 
-    selectedPath := GetSelectedManagedCsvPath()
-    if selectedPath = "" {
-        currentPath := GetSelectedCsvPath()
-        selectedPath := IsManagedCsvPath(currentPath) ? currentPath : ""
-    }
+    csvEditorDialogTitle := createNew ? "Create CSV" : "Edit CSV"
 
-    originalPath := selectedPath
-    existingContent := selectedPath && FileExist(selectedPath)
-        ? ReadTextFile(selectedPath)
-        : DefaultCsvTemplate()
+    if createNew {
+        selectedPath := ""
+        originalPath := ""
+        existingContent := DefaultCsvTemplate()
+        defaultCsvName := SuggestNewCsvName()
+    } else {
+        selectedPath := GetSelectedManagedCsvPath()
+        if selectedPath = "" {
+            currentPath := GetSelectedCsvPath()
+            selectedPath := IsManagedCsvPath(currentPath) ? currentPath : ""
+        }
+
+        if selectedPath = "" {
+            ShowManageMsgBox "Select a CSV file first, then click Edit.", "Edit CSV", "Icon!"
+            return
+        }
+
+        originalPath := selectedPath
+        existingContent := ReadTextFile(selectedPath)
+        defaultCsvName := FormatCsvName(selectedPath)
+    }
 
     csvEditorMaxCols := UI.csvEditorMaxCols
     csvEditorRows := ParseCsvEditorRows(existingContent, csvEditorMaxCols)
@@ -3153,7 +3176,7 @@ ShowCsvEditor(*) {
     if S.gui
         S.gui.Hide()
 
-    editor := Gui("+ToolWindow", "Edit CSV")
+    editor := Gui("+ToolWindow", csvEditorDialogTitle)
     BindManageChildGui(editor)
     editor.MarginX := UI.csvEditorMarginX
     editor.MarginY := UI.csvEditorMarginY
@@ -3167,7 +3190,7 @@ ShowCsvEditor(*) {
     nameEdit := editor.Add(
         "Edit",
         "w" listW " h" UI.csvEditorNameEditH,
-        selectedPath ? FormatCsvName(selectedPath) : "batch-1"
+        defaultCsvName
     )
     editor.Add(
         "Text",
@@ -3323,7 +3346,7 @@ ShowCsvEditor(*) {
         CommitCsvInlineEdit()
         if csvEditorColCount >= csvEditorMaxCols {
             ShowManageMsgBox "The CSV editor supports up to column "
-                FormatSpreadsheetColumnName(csvEditorMaxCols) ".", "Edit CSV", "Icon!"
+                FormatSpreadsheetColumnName(csvEditorMaxCols) ".", csvEditorDialogTitle, "Icon!"
             return
         }
 
@@ -3346,13 +3369,13 @@ ShowCsvEditor(*) {
     DeleteCsvEditorColumn(*) {
         CommitCsvInlineEdit()
         if csvEditorColCount <= 1 {
-            ShowManageMsgBox "At least one column is required.", "Edit CSV", "Icon!"
+            ShowManageMsgBox "At least one column is required.", csvEditorDialogTitle, "Icon!"
             return
         }
 
         confirm := ShowManageMsgBox(
             "Delete column " FormatSpreadsheetColumnName(csvEditorColCount) " from every row?",
-            "Edit CSV",
+            csvEditorDialogTitle,
             "YesNo Icon?"
         )
         if confirm != "Yes"
@@ -3373,7 +3396,7 @@ ShowCsvEditor(*) {
         if selectedCsvRowIndex < 1 || selectedCsvRowIndex > csvEditorRows.Length
             return
         if selectedCsvRowIndex = 1 {
-            ShowManageMsgBox "Row 1 is the header row and cannot be deleted.", "Edit CSV", "Icon!"
+            ShowManageMsgBox "Row 1 is the header row and cannot be deleted.", csvEditorDialogTitle, "Icon!"
             return
         }
 
@@ -3391,7 +3414,7 @@ ShowCsvEditor(*) {
 
         csvName := SafeCsvName(nameEdit.Value)
         if csvName = "" {
-            ShowManageMsgBox "Enter a CSV name.", "Edit CSV", "Icon!"
+            ShowManageMsgBox "Enter a CSV name.", csvEditorDialogTitle, "Icon!"
             return
         }
 
@@ -3399,7 +3422,7 @@ ShowCsvEditor(*) {
         content := SerializeCsvEditorRows(csvEditorRows)
 
         if content = "" {
-            ShowManageMsgBox "Enter at least one CSV row.", "Edit CSV", "Icon!"
+            ShowManageMsgBox "Enter at least one CSV row.", csvEditorDialogTitle, "Icon!"
             return
         }
 
@@ -3410,7 +3433,7 @@ ShowCsvEditor(*) {
             if originalPath != "" && StrLower(originalPath) != StrLower(csvPath) && FileExist(originalPath)
                 DeleteManagedFile(originalPath)
         } catch as err {
-            ShowManageMsgBox "Could not save CSV:`n" err.Message, "Edit CSV", "Icon!"
+            ShowManageMsgBox "Could not save CSV:`n" err.Message, csvEditorDialogTitle, "Icon!"
             return
         }
 
@@ -4622,6 +4645,27 @@ FormatManageVariableStorage(label, value) {
 }
 
 /**
+ * Parses one stored preset variable field for the editor (plain label/value text).
+ * @param {String} rawValue Stored preset variable text from ParsePresetFile.
+ * @returns {{label: String, value: String}}
+ */
+ParseManageVariablePartsForEditor(rawValue) {
+    parts := ParseManageVariableParts(rawValue)
+    parts.label := UnescapeManageDelimitedField(parts.label)
+    parts.value := UnescapeManageDelimitedField(parts.value)
+    return parts
+}
+
+/**
+ * Normalizes inline editor text to plain label/value (no manual comma escaping).
+ * @param {String} text User-entered label or value.
+ * @returns {String}
+ */
+NormalizeManageVariableEditorField(text) {
+    return UnescapeManageDelimitedField(Trim(text))
+}
+
+/**
  * Populates the preset variables ListView.
  * @param {Gui.ListView} listView Target ListView control.
  * @param {Array<Object>} variableRows Parsed variable rows.
@@ -4905,6 +4949,22 @@ SuggestNewPresetName() {
 }
 
 /**
+ * Returns an unused CSV file base name for Create CSV.
+ * @returns {String}
+ */
+SuggestNewCsvName() {
+    global C
+
+    if !FileExist(C.csvBatchesDir "\batch-1" C.csvExt)
+        return "batch-1"
+
+    csvNumber := 2
+    while FileExist(C.csvBatchesDir "\batch-" csvNumber C.csvExt)
+        csvNumber++
+    return "batch-" csvNumber
+}
+
+/**
  * Top-level Enter handler for preset editor inline edit.
  * Hotkey must not target nested editor functions (AHK v2 .Call errors).
  */
@@ -4970,7 +5030,7 @@ ShowPresetEditor(createNew := false, *) {
     variableCount := Max(existingSettings.variables.Length, CountVariablesInLog(selectedRecording), 1)
     editorVariableRows := []
     for variableValue in existingSettings.variables
-        editorVariableRows.Push(ParseManageVariableParts(variableValue))
+        editorVariableRows.Push(ParseManageVariablePartsForEditor(variableValue))
     while editorVariableRows.Length < variableCount
         editorVariableRows.Push({ label: "", value: "" })
 
@@ -5003,7 +5063,7 @@ ShowPresetEditor(createNew := false, *) {
     editor.Add(
         "Text",
         "xs w" UI.presetEditorWidth " c555555",
-        "Click Label or Value to edit inline, or use Selected row below. Add row / Delete row adjust variable slots."
+        "Click Label or Value to edit inline. Commas are escaped automatically on Save. Add row / Delete row adjust variable slots."
     )
     addRowBtn := editor.Add(
         "Button",
@@ -5023,21 +5083,16 @@ ShowPresetEditor(createNew := false, *) {
     PopulatePresetVariablesList(variablesList, editorVariableRows)
     inlineEditCtrl := editor.Add("Edit", "Hidden w10 h22")
 
-    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A", "Selected row")
-    editor.Add("Text", "xs w" UI.presetEditorDetailLabelWidth " c555555", "Slot:")
-    slotEdit := editor.Add("Edit", "x+0 w120 ReadOnly", "")
-    editor.Add("Text", "xs w" UI.presetEditorDetailLabelWidth " c555555", "Label:")
-    labelEdit := editor.Add("Edit", "x+0 w" UI.presetEditorDetailValueWidth, "")
-    editor.Add("Text", "xs w" UI.presetEditorDetailLabelWidth " c555555", "Value:")
-    valueEdit := editor.Add("Edit", "x+0 w" UI.presetEditorDetailValueWidth, "")
-
-    applyRowBtn := editor.Add(
+    saveBtn := editor.Add(
         "Button",
-        "xm w120 h" UI.presetEditorApplyRowHeight " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Apply row"
+        "xm y+" UI.presetEditorSaveSectionGap " w130 h" UI.presetEditorButtonRowHeight " Default",
+        "Save"
     )
-    saveBtn := editor.Add("Button", "x+8 w130 h32 Default", "Save")
-    closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
+    closeBtn := editor.Add(
+        "Button",
+        "x+8 w130 h" UI.presetEditorButtonRowHeight,
+        "Close"
+    )
 
     selectedRowIndex := 0
     inlineEditRow := 0
@@ -5064,7 +5119,7 @@ ShowPresetEditor(createNew := false, *) {
             return
         }
 
-        newText := Trim(inlineEditCtrl.Value)
+        newText := NormalizeManageVariableEditorField(inlineEditCtrl.Value)
         inlineEditCtrl.Visible := false
 
         if inlineEditRow >= 1 && inlineEditRow <= editorVariableRows.Length {
@@ -5073,11 +5128,6 @@ ShowPresetEditor(createNew := false, *) {
             else if inlineEditCol = presetVarColValue
                 editorVariableRows[inlineEditRow].value := newText
             RefreshPresetVariableListRow(variablesList, inlineEditRow, editorVariableRows[inlineEditRow])
-
-            if selectedRowIndex = inlineEditRow {
-                labelEdit.Value := editorVariableRows[inlineEditRow].label
-                valueEdit.Value := editorVariableRows[inlineEditRow].value
-            }
         }
 
         inlineEditRow := 0
@@ -5133,48 +5183,14 @@ ShowPresetEditor(createNew := false, *) {
         EnablePresetEditorInlineEnterHotkey(CommitVariableInlineEdit)
     }
 
-    LoadVariableDetailPanel(rowIndex) {
+    SetSelectedVariableRow(rowIndex) {
         if !(inlineEditCtrl.Visible && rowIndex = inlineEditRow)
             CommitVariableInlineEdit()
         selectedRowIndex := rowIndex
-
-        if rowIndex < 1 || rowIndex > editorVariableRows.Length {
-            slotEdit.Value := ""
-            labelEdit.Value := ""
-            valueEdit.Value := ""
-            return
-        }
-
-        row := editorVariableRows[rowIndex]
-        slotEdit.Value := FormatPresetVariableSlot(rowIndex)
-        labelEdit.Value := row.label
-        valueEdit.Value := row.value
-    }
-
-    ApplySelectedVariableRow(*) {
-        CommitVariableInlineEdit()
-        if selectedRowIndex < 1 || selectedRowIndex > editorVariableRows.Length
-            return
-
-        row := editorVariableRows[selectedRowIndex]
-        row.label := Trim(labelEdit.Value)
-        row.value := Trim(valueEdit.Value)
-        RefreshPresetVariableListRow(variablesList, selectedRowIndex, row)
-        SetStatus(Format("Updated data input row {} — {}", selectedRowIndex, FormatPresetVariableSlot(selectedRowIndex)))
-    }
-
-    SyncSelectedVariableRowFromDetailPanel() {
-        if selectedRowIndex < 1 || selectedRowIndex > editorVariableRows.Length
-            return
-
-        row := editorVariableRows[selectedRowIndex]
-        row.label := Trim(labelEdit.Value)
-        row.value := Trim(valueEdit.Value)
     }
 
     AddPresetVariableRow(*) {
         CommitVariableInlineEdit()
-        SyncSelectedVariableRowFromDetailPanel()
 
         insertIndex := selectedRowIndex >= 1
             ? Min(selectedRowIndex + 1, editorVariableRows.Length + 1)
@@ -5182,13 +5198,12 @@ ShowPresetEditor(createNew := false, *) {
         editorVariableRows.InsertAt(insertIndex, { label: "", value: "" })
         PopulatePresetVariablesList(variablesList, editorVariableRows)
         SelectManageListViewDataRow(variablesList, insertIndex)
-        LoadVariableDetailPanel(insertIndex)
+        SetSelectedVariableRow(insertIndex)
         SetStatus(Format("Added data input row {} — {}", insertIndex, FormatPresetVariableSlot(insertIndex)))
     }
 
     DeletePresetVariableRow(*) {
         CommitVariableInlineEdit()
-        SyncSelectedVariableRowFromDetailPanel()
 
         if editorVariableRows.Length <= 1 {
             ShowManageMsgBox "At least one variable row is required.", "Edit Data Input", "Icon!"
@@ -5206,12 +5221,12 @@ ShowPresetEditor(createNew := false, *) {
 
         nextRowIndex := Min(rowIndex, editorVariableRows.Length)
         SelectManageListViewDataRow(variablesList, nextRowIndex)
-        LoadVariableDetailPanel(nextRowIndex)
+        SetSelectedVariableRow(nextRowIndex)
         SetStatus(Format("Deleted data input row {} — {} row(s) remain", rowIndex, editorVariableRows.Length))
     }
 
     OnVariablesListSelect(*) {
-        LoadVariableDetailPanel(GetManageListViewSelectedDataRowIndex(variablesList))
+        SetSelectedVariableRow(GetManageListViewSelectedDataRowIndex(variablesList))
     }
 
     OnVariablesListClick(ctl, item, *) {
@@ -5233,18 +5248,13 @@ ShowPresetEditor(createNew := false, *) {
             return
 
         variablesList.Modify(hit.row, "Select Focus")
-        LoadVariableDetailPanel(dataRowIndex)
+        SetSelectedVariableRow(dataRowIndex)
         StartVariableInlineEdit(hit.row, hit.col)
     }
 
     SaveEditor(*) {
         CommitVariableInlineEdit()
         DisablePresetEditorInlineEnterHotkey()
-        SyncSelectedVariableRowFromDetailPanel()
-
-        if selectedRowIndex >= 1 && selectedRowIndex <= editorVariableRows.Length
-            RefreshPresetVariableListRow(variablesList, selectedRowIndex, editorVariableRows[selectedRowIndex])
-
         presetName := SafePresetName(nameEdit.Value)
         if presetName = "" {
             ShowManageMsgBox "Enter a data input name.", "Edit Data Input", "Icon!"
@@ -5326,15 +5336,14 @@ ShowPresetEditor(createNew := false, *) {
     variablesList.OnEvent("Click", OnVariablesListClick)
     variablesList.OnEvent("DoubleClick", OnVariablesListClick)
     inlineEditCtrl.OnEvent("LoseFocus", CommitVariableInlineEdit)
-    applyRowBtn.OnEvent("Click", ApplySelectedVariableRow)
     addRowBtn.OnEvent("Click", AddPresetVariableRow)
     deleteRowBtn.OnEvent("Click", DeletePresetVariableRow)
 
     if editorVariableRows.Length {
         SelectManageListViewDataRow(variablesList, 1)
-        LoadVariableDetailPanel(1)
+        SetSelectedVariableRow(1)
     } else {
-        LoadVariableDetailPanel(0)
+        SetSelectedVariableRow(0)
     }
 
     editor.Show("w" (UI.presetEditorWidth + 24) " h" GetPresetEditorWindowHeight())
@@ -8254,7 +8263,7 @@ SerializePreset(settings) {
         presetBody .= "`n# optional description shown as tooltip on the Data Inputs list row`ndescription="
             . desc . "`n"
 
-    presetBody .= "`n# variable-1, variable-2, variable-3 ... (optional note labels; escape commas with \\,)`n"
+    presetBody .= "`n# variable-1, variable-2, variable-3 ... (optional note labels; commas escaped on save)`n"
         . JoinManageDelimitedFields(settings.variables) . "`n"
     return presetBody
 }
