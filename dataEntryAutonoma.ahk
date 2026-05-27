@@ -43,6 +43,10 @@ C := {
     bundleCsvZipName: "batch.csv",
     bundleImportTempPrefix: "dea-import-",
     bundleStagingTempPrefix: "dea-bundle-stage-",
+    shareBundleIntroText: "Email or share your automation with colleagues or friends.",
+    shareBundleNameFormatText: "{recording}-{data input or CSV}-{PC}-{date}",
+    shareBundleNamePromptText: "Use a name below, or keep the suggestion.",
+    shareBundleSaveModePromptText: "How do you want to save this bundle?",
 
     bundlePowerShellExe: A_WinDir "\System32\WindowsPowerShell\v1.0\powershell.exe",
     bundleTarExe: A_WinDir "\System32\tar.exe",
@@ -317,7 +321,7 @@ Higher speed values run faster.
 
     defaultPlaybackSpeed: 1.0,
     defaultTypingSpeed: 1.0,
-    defaultMoveSpeed: 1.5,
+    defaultMoveSpeed: 3,
     defaultInitialDelayMs: 1000,
     defaultClickPauseMs: 150,
     defaultSegmentPauseMs: 200,
@@ -8775,12 +8779,11 @@ ShowShareBundleDialog(defaultFullLabel) {
     dlg.BackColor := UI.bg
     dlg.SetFont("s" UI.fontSizeBody, UI.fontFamily)
 
-    dlg.Add(
-        "Text",
-        "xm w" dlgInnerW,
-        "Use a name below, or keep the suggestion.`n`nHow do you want to save this bundle?"
-    )
+    dlg.Add("Text", "xm w" dlgInnerW, C.shareBundleIntroText)
+    dlg.Add("Text", "xm w" dlgInnerW, C.shareBundleNamePromptText)
     nameEdit := dlg.Add("Edit", "xm w" dlgInnerW, defaultFullLabel)
+    dlg.Add("Text", "xm w" dlgInnerW " c555555", C.shareBundleNameFormatText)
+    dlg.Add("Text", "xm w" dlgInnerW, C.shareBundleSaveModePromptText)
 
     rFolder := dlg.Add(
         "Radio",
