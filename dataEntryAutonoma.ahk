@@ -455,14 +455,16 @@ UI := {
     csvColVarCount: "Var Count",
     statusHeight: 30,
     csvEditWidth: 300,
-    csvEditorWidth: 600,
-    csvEditorListWidth: 560,
-    csvEditorListHeight: 250,
+    csvEditorWidth: 720,
+    csvEditorListWidth: 720,
+    csvEditorListHeight: 400,
     csvEditorMaxCols: 1000,
     csvEditorRowNumberColWidth: 40,
-    csvEditorDataColWidth: 72,
+    csvEditorDataColWidth: 96,
+    csvEditorDataColMinWidth: 80,
     csvEditorInlineMinWidth: 40,
-    csvEditorInlineMaxWidth: 140,
+    csvEditorInlineEditPadX: 4,
+    csvEditorInlineEditPadY: 2,
     csvEditorMarginX: 12,
     csvEditorMarginY: 4,
     csvEditorNameEditH: 24,
@@ -476,27 +478,29 @@ UI := {
     csvEditorSaveButtonWidth: 120,
     csvEditorSaveButtonHeight: 28,
     csvEditorSaveButtonGap: 6,
-    csvEditorBottomPad: 10,
-    csvEditorOuterPad: 14,
+    csvEditorBottomPad: 4,
+    csvEditorOuterPad: 0,
     csvBatchTableWidth: 560,
     csvBatchTableHeight: 190,
     csvBatchPromptDetailsLines: 5,
     csvBatchPromptBtnWidth: 118,
     presetEditorWidth: 690,
     presetEditorFieldWidth: 690,
-    presetEditorLabelWidth: 180,
-    presetEditorValueWidth: 220,
-    presetEditorInlineLabelMaxWidth: 160,
-    presetEditorInlineValueMaxWidth: 220,
+    presetEditorColIndexWidth: 40,
+    presetEditorColSlotWidth: 100,
+    presetEditorColLabelWidth: 190,
+    presetEditorColValueMinWidth: 350,
+    presetEditorInlineEditPadX: 4,
+    presetEditorInlineEditPadY: 2,
     presetEditorListHeight: 320,
     ; Variable-inputs block height (header → Save/Close). 0 = auto from parts; >0 scales ListView too.
     presetEditorTabHeight: 700,
     presetEditorHelpHeight: 40,
-    presetEditorSectionRowHeight: 28,
+    presetEditorSectionRowHeight: 24,
     presetEditorEditRowHeight: 28,
-    presetEditorSaveSectionGap: 6,
-    presetEditorButtonRowHeight: 32,
-    presetEditorBottomPad: 4,
+    presetEditorSaveSectionGap: 2,
+    presetEditorButtonRowHeight: 28,
+    presetEditorBottomPad: 2,
     presetEditorOuterPad: 0,
     presetEditorSafetyPad: 0,
     recordingLogEditorWidth: 580,
@@ -991,15 +995,25 @@ GetManageTabPanelHeight() {
 }
 
 /**
+ * Vertical chrome above the variable ListView in Edit Data Input.
+ * @returns {Integer}
+ */
+GetPresetEditorVariableHeaderChromeHeight() {
+    global UI
+
+    return UI.presetEditorSectionRowHeight + UI.tabRowGap
+        + UI.presetEditorHelpHeight + UI.tabRowGap
+        + UI.btnHeightTool + UI.tabRowGap
+}
+
+/**
  * Vertical chrome in Edit Data Input from "Variable inputs" through Save/Close (excludes ListView).
  * @returns {Integer}
  */
 GetPresetEditorVariableSectionChromeHeight() {
     global UI
 
-    return UI.presetEditorSectionRowHeight + UI.tabRowGap
-        + UI.presetEditorHelpHeight + UI.tabRowGap
-        + UI.btnHeightTool + UI.tabRowGap
+    return GetPresetEditorVariableHeaderChromeHeight()
         + UI.presetEditorSaveSectionGap + UI.presetEditorButtonRowHeight
 }
 
@@ -1011,7 +1025,7 @@ GetPresetEditorListHeightForShow() {
     global UI
 
     if UI.presetEditorTabHeight > 0
-        return Max(UI.listMinH, UI.presetEditorTabHeight - GetPresetEditorVariableSectionChromeHeight())
+        return Max(UI.listMinH, UI.presetEditorTabHeight - GetPresetEditorVariableHeaderChromeHeight())
     return UI.presetEditorListHeight
 }
 
@@ -1901,6 +1915,18 @@ BindManageChildGui(childGui) {
     ApplyManageAppIcon(childGui)
     if S.gui
         childGui.Opt("+Owner" S.gui.Hwnd)
+}
+
+/**
+ * Client height for a child GUI from its bottom control (avoids empty footer gap).
+ * @param {Gui} gui Child dialog.
+ * @param {Gui.Control} bottomControl Lowest control in the layout.
+ * @param {Integer} extraPad Optional pixels below the control.
+ * @returns {Integer}
+ */
+GetManageChildGuiClientHeight(gui, bottomControl, extraPad := 0) {
+    ControlGetPos &_, &y, &_, &h, bottomControl
+    return y + h + gui.MarginY + extraPad
 }
 
 BrowseCsvFile(*) {
@@ -3068,6 +3094,27 @@ BuildCsvEditorListColumns(colCount) {
 }
 
 /**
+ * Sizes Edit CSV ListView columns to fill the table width.
+ * @param {Gui.ListView} listView Target ListView.
+ * @param {Integer} colCount Number of editable data columns.
+ */
+ApplyCsvEditorListColumns(listView, colCount) {
+    global UI
+
+    listView.ModifyCol(1, UI.csvEditorRowNumberColWidth)
+    if colCount <= 1 {
+        listView.ModifyCol(2, -UI.csvEditorDataColMinWidth)
+        SetManageListViewColumnIntegerSort(listView, 1)
+        return
+    }
+
+    Loop colCount - 1
+        listView.ModifyCol(A_Index + 1, UI.csvEditorDataColWidth)
+    listView.ModifyCol(colCount + 1, -UI.csvEditorDataColMinWidth)
+    SetManageListViewColumnIntegerSort(listView, 1)
+}
+
+/**
  * Populates the CSV editor ListView from editable row arrays.
  * @param {Gui.ListView} listView Target ListView.
  * @param {Array<Array<String>>} rows Editable rows.
@@ -3081,10 +3128,7 @@ PopulateCsvEditorList(listView, rows, colCount) {
     Loop rows.Length
         RefreshCsvEditorListRow(listView, A_Index, rows[A_Index], colCount, true)
 
-    listView.ModifyCol(1, UI.csvEditorRowNumberColWidth)
-    Loop colCount
-        listView.ModifyCol(A_Index + 1, UI.csvEditorDataColWidth)
-    SetManageListViewColumnIntegerSort(listView, 1)
+    ApplyCsvEditorListColumns(listView, colCount)
 }
 
 /**
@@ -3287,13 +3331,15 @@ ShowCsvEditor(createNew := false, *) {
 
         ControlGetPos &listX, &listY, , , csvList
         rect := GetManageListViewSubItemRect(csvList, visualRowIndex, colIndex)
-        editW := Min(Max(rect.right - rect.left, UI.csvEditorInlineMinWidth), UI.csvEditorInlineMaxWidth)
-        editH := Max(rect.bottom - rect.top, 22)
+        cellW := rect.right - rect.left
+        cellH := rect.bottom - rect.top
+        editW := Max(cellW - UI.csvEditorInlineEditPadX, UI.csvEditorInlineMinWidth)
+        editH := Max(cellH - UI.csvEditorInlineEditPadY, 22)
 
         csvInlineRow := dataRowIndex
         csvInlineCol := colIndex
         csvInlineOriginal := csvList.GetText(visualRowIndex, colIndex)
-        csvInlineEdit.Move(listX + rect.left, listY + rect.top, editW, editH)
+        csvInlineEdit.Move(listX + rect.left + 1, listY + rect.top + 1, editW, editH)
         csvInlineEdit.Value := csvInlineOriginal
         csvInlineEdit.Visible := true
         csvInlineEdit.Focus()
@@ -3478,7 +3524,11 @@ ShowCsvEditor(createNew := false, *) {
         LoadCsvEditorRow(1)
     }
 
-    editor.Show("w" editorW " h" GetCsvEditorWindowHeight())
+    editor.Show(
+        "w" (UI.csvEditorWidth + 24)
+        " h" GetManageChildGuiClientHeight(editor, closeBtn, UI.csvEditorBottomPad)
+    )
+    ApplyCsvEditorListColumns(csvList, csvEditorColCount)
     csvList.Focus()
 }
 
@@ -4666,6 +4716,20 @@ NormalizeManageVariableEditorField(text) {
 }
 
 /**
+ * Sizes Edit Data Input variable columns to fill the ListView width.
+ * @param {Gui.ListView} listView Target ListView control.
+ */
+ApplyPresetEditorVariablesListColumns(listView) {
+    global UI
+
+    listView.ModifyCol(1, UI.presetEditorColIndexWidth)
+    listView.ModifyCol(2, UI.presetEditorColSlotWidth)
+    listView.ModifyCol(3, UI.presetEditorColLabelWidth)
+    listView.ModifyCol(4, -UI.presetEditorColValueMinWidth)
+    SetManageListViewColumnIntegerSort(listView, 1)
+}
+
+/**
  * Populates the preset variables ListView.
  * @param {Gui.ListView} listView Target ListView control.
  * @param {Array<Object>} variableRows Parsed variable rows.
@@ -4678,11 +4742,7 @@ PopulatePresetVariablesList(listView, variableRows) {
         listView.Add("", A_Index, FormatPresetVariableSlot(A_Index), row.label, row.value)
     }
 
-    listView.ModifyCol(1, 40)
-    listView.ModifyCol(2, 100)
-    listView.ModifyCol(3, 180)
-    listView.ModifyCol(4, 340)
-    SetManageListViewColumnIntegerSort(listView, 1)
+    ApplyPresetEditorVariablesListColumns(listView)
 }
 
 /**
@@ -5051,18 +5111,16 @@ ShowPresetEditor(createNew := false, *) {
         createNew ? SuggestNewPresetName()
             : (selectedPreset ? FormatPresetName(selectedPreset) : "default")
     )
-    editor.Add("Text", "xs w" UI.presetEditorWidth " c555555 Section", "Description (optional)")
+    editor.Add("Text", "xs w" UI.presetEditorWidth " c555555", "Description (optional)")
     descEdit := editor.Add(
         "Edit",
         "xs w" UI.presetEditorWidth " h" UI.presetEditorDescEditH " Multi +Background" UI.editBg,
         Trim(existingSettings.description)
     )
-    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A Section", "Variable inputs")
-    presetVariablesInfoButton := AddManageChildInfoButton(editor, "x+2")
-    presetVariablesInfoButton.OnEvent("Click", ShowPresetVariablesHelp)
+    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A", "Variable inputs")
     editor.Add(
         "Text",
-        "xs w" UI.presetEditorWidth " c555555",
+        "xs w" UI.presetEditorWidth " h" UI.presetEditorHelpHeight " c555555",
         "Click Label or Value to edit inline. Commas are escaped automatically on Save. Add row / Delete row adjust variable slots."
     )
     addRowBtn := editor.Add(
@@ -5085,7 +5143,7 @@ ShowPresetEditor(createNew := false, *) {
 
     saveBtn := editor.Add(
         "Button",
-        "xm y+" UI.presetEditorSaveSectionGap " w130 h" UI.presetEditorButtonRowHeight " Default",
+        "xs y+" UI.presetEditorSaveSectionGap " w130 h" UI.presetEditorButtonRowHeight " Default",
         "Save"
     )
     closeBtn := editor.Add(
@@ -5167,16 +5225,15 @@ ShowPresetEditor(createNew := false, *) {
 
         ControlGetPos &listX, &listY, , , variablesList
         rect := GetManageListViewSubItemRect(variablesList, visualRowIndex, colIndex)
-        maxEditW := colIndex = presetVarColLabel
-            ? UI.presetEditorInlineLabelMaxWidth
-            : UI.presetEditorInlineValueMaxWidth
-        editW := Min(Max(rect.right - rect.left, 40), maxEditW)
-        editH := Max(rect.bottom - rect.top, 22)
+        cellW := rect.right - rect.left
+        cellH := rect.bottom - rect.top
+        editW := Max(cellW - UI.presetEditorInlineEditPadX, 40)
+        editH := Max(cellH - UI.presetEditorInlineEditPadY, 22)
 
         inlineEditRow := dataRowIndex
         inlineEditCol := colIndex
         inlineEditOriginal := variablesList.GetText(visualRowIndex, colIndex)
-        inlineEditCtrl.Move(listX + rect.left, listY + rect.top, editW, editH)
+        inlineEditCtrl.Move(listX + rect.left + 1, listY + rect.top + 1, editW, editH)
         inlineEditCtrl.Value := inlineEditOriginal
         inlineEditCtrl.Visible := true
         inlineEditCtrl.Focus()
@@ -5346,7 +5403,11 @@ ShowPresetEditor(createNew := false, *) {
         SetSelectedVariableRow(0)
     }
 
-    editor.Show("w" (UI.presetEditorWidth + 24) " h" GetPresetEditorWindowHeight())
+    editor.Show(
+        "w" (UI.presetEditorWidth + 24)
+        " h" GetManageChildGuiClientHeight(editor, closeBtn, UI.presetEditorBottomPad)
+    )
+    ApplyPresetEditorVariablesListColumns(variablesList)
     if editorVariableRows.Length
         variablesList.Focus()
     else
