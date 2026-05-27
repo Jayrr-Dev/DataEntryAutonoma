@@ -81,6 +81,26 @@ Edit Recording Log, Events tab (top to bottom)
 (i) next to Recording events
 Opens this help.
 
+Global adjustment (all clicks)
+Above the events table. Use when clicks land in the wrong place on another PC, monitor, or RDP/Citrix window.
+
+Offset X / Offset Y (px)
+Pixel nudge applied to every click at Run. Saved in the log header when you Save. Does not rewrite table rows by itself.
+
+Ref client W / H
+The client-area size the recording was made against. Defaults from the first click in the log (or from saved header values).
+
+Target W / H
+The client size you want coordinates scaled toward (e.g. a smaller RDP window than 1920×1080).
+
+Apply to all clicks
+Rescales every click, scroll, and mouse-hold coordinate in the table from Ref → Target, then adds Offset into those stored values. After Apply, Offset fields reset to 0 so Run does not double-apply. Ref fields update to match Target.
+
+Typical fixes
+• Clicks slightly off: set Offset X/Y, Save, Run (no Apply needed).
+• Clicks too high/low on RDP: lower Target H vs Ref H, Apply to all clicks, Save.
+• Permanent edit: Apply to all clicks, then Save.
+
 Recording events table
 One row per logged event. Columns: #, Ms (elapsed ms), Type, Label, Summary.
 
@@ -102,7 +122,7 @@ Description (top of window)
 Free-form notes in the log header. Hover the recording on the main Recordings list to preview as a tooltip.
 
 Save / Close
-Save updates the recording file. Close leaves the file unchanged if you did not save.
+Save updates the recording file (including Offset and Ref client size in the header). Close leaves the file unchanged if you did not save.
     )",
     recordingsTabHelpMessage: "
     (
@@ -504,8 +524,9 @@ UI := {
     presetEditorOuterPad: 0,
     presetEditorSafetyPad: 0,
     recordingLogEditorWidth: 580,
-    recordingLogEditorTabHeight: 520,
-    recordingLogEditorListHeight: 240,
+    recordingLogEditorTabHeight: 596,
+    recordingLogEditorListHeight: 200,
+    recordingLogEditorGlobalAdjustHeight: 76,
     recordingLogEditorDetailLabelWidth: 108,
     recordingLogEditorDetailValueWidth: 432,
     recordingLogEditorButtonRowHeight: 40,
@@ -523,6 +544,12 @@ RECORDING_LOG_NOTE_FIELD := "note"
 RECORDING_LOG_DESC_DISPLAY_SEP := " · "
 /** Stable prefix matched when reading or rewriting description header lines (no trailing space). */
 RECORDING_LOG_DESC_HEADER_LINE_PREFIX := "# description: "
+/** Playback pixel offset applied at Run (client-space nudge after coordinate resolve). */
+RECORDING_LOG_PLAYBACK_OFFSET_X_PREFIX := "# playback_offset_x: "
+RECORDING_LOG_PLAYBACK_OFFSET_Y_PREFIX := "# playback_offset_y: "
+/** Reference client size used when rescaling all click coordinates in the log editor. */
+RECORDING_LOG_PLAYBACK_REF_CLIENT_W_PREFIX := "# playback_reference_client_w: "
+RECORDING_LOG_PLAYBACK_REF_CLIENT_H_PREFIX := "# playback_reference_client_h: "
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
 APP_GUI_TITLE := "Data Entry Autonoma v" C.appVersion
@@ -551,6 +578,8 @@ S := {
     hasOrigin: false,
     originX: 0,
     originY: 0,
+    playbackOffsetX: 0,
+    playbackOffsetY: 0,
     lastTargetX: 0,
     lastTargetY: 0,
     leftHoldPending: false,
@@ -3828,6 +3857,186 @@ InjectRecordingDescriptionIntoHeader(&headerLines, rawDescription) {
 }
 
 /**
+ * Reads playback offset and reference client size from recording header comment lines.
+ * @param {Array<String>} headerLines Recording header lines (pass with & at call site).
+ * @returns {{offsetX: Integer, offsetY: Integer, refClientW: Integer, refClientH: Integer}}
+ */
+PeelRecordingPlaybackGlobalsFromHeader(&headerLines) {
+    global RECORDING_LOG_PLAYBACK_OFFSET_X_PREFIX, RECORDING_LOG_PLAYBACK_OFFSET_Y_PREFIX
+        , RECORDING_LOG_PLAYBACK_REF_CLIENT_W_PREFIX, RECORDING_LOG_PLAYBACK_REF_CLIENT_H_PREFIX
+
+    globals := { offsetX: 0, offsetY: 0, refClientW: 0, refClientH: 0 }
+    kept := []
+
+    for line in headerLines {
+        trimmed := Trim(line)
+        matched := false
+
+        if RegExMatch(trimmed, "i)^" EscapeRecordingLogHeaderPrefix(RECORDING_LOG_PLAYBACK_OFFSET_X_PREFIX) "(-?\d+)\s*$", &m) {
+            globals.offsetX := Integer(m[1])
+            matched := true
+        } else if RegExMatch(trimmed, "i)^" EscapeRecordingLogHeaderPrefix(RECORDING_LOG_PLAYBACK_OFFSET_Y_PREFIX) "(-?\d+)\s*$", &m) {
+            globals.offsetY := Integer(m[1])
+            matched := true
+        } else if RegExMatch(trimmed, "i)^" EscapeRecordingLogHeaderPrefix(RECORDING_LOG_PLAYBACK_REF_CLIENT_W_PREFIX) "(\d+)\s*$", &m) {
+            globals.refClientW := Integer(m[1])
+            matched := true
+        } else if RegExMatch(trimmed, "i)^" EscapeRecordingLogHeaderPrefix(RECORDING_LOG_PLAYBACK_REF_CLIENT_H_PREFIX) "(\d+)\s*$", &m) {
+            globals.refClientH := Integer(m[1])
+            matched := true
+        }
+
+        if !matched
+            kept.Push(line)
+    }
+
+    headerLines := kept
+    return globals
+}
+
+/**
+ * Escapes a literal `# playback_...` prefix for use inside RegExMatch.
+ * @param {String} prefix Header line prefix including `# `.
+ * @returns {String}
+ */
+EscapeRecordingLogHeaderPrefix(prefix) {
+    return RegExReplace(prefix, "([\\.*+?^${}()|\[\]])", "\$1")
+}
+
+/**
+ * Writes playback globals into the recording header (replaces any existing lines).
+ * @param {Array<String>} headerLines Recording header lines (pass with & at call site).
+ * @param {Integer} offsetX Pixel offset at Run.
+ * @param {Integer} offsetY Pixel offset at Run.
+ * @param {Integer} refClientW Reference client width for the editor (0 omits).
+ * @param {Integer} refClientH Reference client height for the editor (0 omits).
+ */
+InjectRecordingPlaybackGlobalsIntoHeader(&headerLines, offsetX, offsetY, refClientW, refClientH) {
+    global RECORDING_LOG_PLAYBACK_OFFSET_X_PREFIX, RECORDING_LOG_PLAYBACK_OFFSET_Y_PREFIX
+        , RECORDING_LOG_PLAYBACK_REF_CLIENT_W_PREFIX, RECORDING_LOG_PLAYBACK_REF_CLIENT_H_PREFIX
+
+    PeelRecordingPlaybackGlobalsFromHeader(&headerLines)
+
+    if offsetX != 0
+        headerLines.Push(RECORDING_LOG_PLAYBACK_OFFSET_X_PREFIX offsetX)
+    if offsetY != 0
+        headerLines.Push(RECORDING_LOG_PLAYBACK_OFFSET_Y_PREFIX offsetY)
+    if refClientW > 0
+        headerLines.Push(RECORDING_LOG_PLAYBACK_REF_CLIENT_W_PREFIX refClientW)
+    if refClientH > 0
+        headerLines.Push(RECORDING_LOG_PLAYBACK_REF_CLIENT_H_PREFIX refClientH)
+}
+
+/**
+ * Returns client W/H from the first rich click in a parsed recording log.
+ * @param {Array<Object>} events Parsed event rows.
+ * @returns {{w: Integer, h: Integer}}
+ */
+DetectRecordingReferenceClientSize(events) {
+    for event in events {
+        parts := event.parts
+        if parts.Length >= 3 && parts[2] = "click" && parts.Length >= 11 {
+            w := SafeInteger(parts[10], 0)
+            h := SafeInteger(parts[11], 0)
+            if w > 0 && h > 0
+                return { w: w, h: h }
+        }
+    }
+
+    return { w: 1920, h: 1080 }
+}
+
+/**
+ * Rescales and offsets rich coordinate fields on one recording log event row.
+ * @param {Array} parts Pipe-delimited log fields (mutated).
+ * @param {Integer} coordStartIndex Index of screenX in parts (4 for click, 6 for scroll/hold).
+ * @param {Integer} refW Reference client width.
+ * @param {Integer} refH Reference client height.
+ * @param {Integer} targetW Target client width.
+ * @param {Integer} targetH Target client height.
+ * @param {Integer} offsetX Client-space pixel offset.
+ * @param {Integer} offsetY Client-space pixel offset.
+ * @returns {Boolean} True when coordinates were updated.
+ */
+AdjustRecordingLogRichCoordinatesInParts(parts, coordStartIndex, refW, refH, targetW, targetH, offsetX, offsetY) {
+    minLen := coordStartIndex + 11
+    if parts.Length < minLen
+        return false
+
+    if !IsNumericText(parts[coordStartIndex]) || !IsNumericText(parts[coordStartIndex + 1])
+        return false
+
+    refW := Max(1, refW)
+    refH := Max(1, refH)
+    targetW := Max(1, targetW)
+    targetH := Max(1, targetH)
+    scaleX := targetW / refW
+    scaleY := targetH / refH
+
+    clientX := SafeInteger(parts[coordStartIndex + 2], 0)
+    clientY := SafeInteger(parts[coordStartIndex + 3], 0)
+    winX := SafeInteger(parts[coordStartIndex + 8], 0)
+    winY := SafeInteger(parts[coordStartIndex + 9], 0)
+
+    newClientX := Round(clientX * scaleX) + offsetX
+    newClientY := Round(clientY * scaleY) + offsetY
+    newScreenX := winX + newClientX
+    newScreenY := winY + newClientY
+    newPctX := Round(newClientX / targetW, 6)
+    newPctY := Round(newClientY / targetH, 6)
+
+    parts[coordStartIndex] := newScreenX
+    parts[coordStartIndex + 1] := newScreenY
+    parts[coordStartIndex + 2] := newClientX
+    parts[coordStartIndex + 3] := newClientY
+    parts[coordStartIndex + 4] := newPctX
+    parts[coordStartIndex + 5] := newPctY
+    parts[coordStartIndex + 6] := targetW
+    parts[coordStartIndex + 7] := targetH
+
+    return true
+}
+
+/**
+ * Applies global offset and client-size rescale to all coordinate-bearing events.
+ * @param {Array<Object>} events Parsed event rows (mutated).
+ * @param {Integer} offsetX Client-space pixel offset.
+ * @param {Integer} offsetY Client-space pixel offset.
+ * @param {Integer} refW Reference client width.
+ * @param {Integer} refH Reference client height.
+ * @param {Integer} targetW Target client width.
+ * @param {Integer} targetH Target client height.
+ * @returns {Integer} Number of rows updated.
+ */
+ApplyRecordingLogGlobalCoordinateAdjust(events, offsetX, offsetY, refW, refH, targetW, targetH) {
+    updated := 0
+
+    for event in events {
+        parts := event.parts
+        if parts.Length < 3
+            continue
+
+        coordStart := 0
+        switch parts[2] {
+            case "click":
+                if parts.Length >= 19
+                    coordStart := 4
+            case "scroll":
+                if parts.Length >= 21
+                    coordStart := 6
+            case "mouse_hold":
+                if parts.Length >= 20
+                    coordStart := 5
+        }
+
+        if coordStart > 0 && AdjustRecordingLogRichCoordinatesInParts(parts, coordStart, refW, refH, targetW, targetH, offsetX, offsetY)
+            updated += 1
+    }
+
+    return updated
+}
+
+/**
  * Reads `# description:` from the top-of-file recording header comment block (fast scan for tooltips).
  * @param {String} filePath Path to `.log`.
  * @returns {String}
@@ -3862,8 +4071,19 @@ ReadRecordingDescriptionQuick(filePath) {
  * @param {String} rawDescription Text from the Description edit control.
  * @returns {String}
  */
-BuildRecordingLogEditorSerializedPreview(headerLines, events, rawDescription) {
+BuildRecordingLogEditorSerializedPreview(headerLines, events, rawDescription, playbackGlobals := "") {
     copy := CloneRecordingLogHeaderLines(headerLines)
+
+    if IsObject(playbackGlobals) {
+        InjectRecordingPlaybackGlobalsIntoHeader(
+            &copy,
+            playbackGlobals.offsetX,
+            playbackGlobals.offsetY,
+            playbackGlobals.refClientW,
+            playbackGlobals.refClientH
+        )
+    }
+
     InjectRecordingDescriptionIntoHeader(&copy, rawDescription)
     return SerializeRecordingLogFromEditor(copy, events)
 }
@@ -4789,6 +5009,10 @@ ShowRecordingLogEditor(*) {
     headerLines := parsedLog.headerLines
     events := parsedLog.events
     logDesc := PeelRecordingDescriptionFromHeader(&headerLines)
+    playbackGlobals := PeelRecordingPlaybackGlobalsFromHeader(&headerLines)
+    detectedRefSize := DetectRecordingReferenceClientSize(events)
+    defaultRefW := playbackGlobals.refClientW > 0 ? playbackGlobals.refClientW : detectedRefSize.w
+    defaultRefH := playbackGlobals.refClientH > 0 ? playbackGlobals.refClientH : detectedRefSize.h
 
     CloseRecordingLogEditor()
 
@@ -4820,6 +5044,29 @@ ShowRecordingLogEditor(*) {
     editor.Add("Text", "Section c1A1A1A", "Recording events")
     recordingLogEventsInfoButton := AddManageChildInfoButton(editor, "x+2")
     recordingLogEventsInfoButton.OnEvent("Click", ShowRecordingLogEventsHelp)
+    editor.Add("Text", "xs w" UI.recordingLogEditorWidth " c555555 Section", "Global adjustment (all clicks)")
+    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Offset X (px):")
+    globalOffsetXEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, playbackGlobals.offsetX)
+    editor.Add("Text", "x+8 w20 c555555", "Y:")
+    globalOffsetYEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, playbackGlobals.offsetY)
+    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Ref client W:")
+    refClientWEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, defaultRefW)
+    editor.Add("Text", "x+4 w14 c555555", "H:")
+    refClientHEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, defaultRefH)
+    editor.Add("Text", "x+8 w16 c555555", "→ W:")
+    targetClientWEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, defaultRefW)
+    editor.Add("Text", "x+4 w14 c555555", "H:")
+    targetClientHEdit := editor.Add("Edit", "x+0 w72 +Background" UI.editBg, defaultRefH)
+    applyGlobalBtn := editor.Add(
+        "Button",
+        "xs w180 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Apply to all clicks"
+    )
+    editor.Add(
+        "Text",
+        "xs w" UI.recordingLogEditorWidth " c888888",
+        "Offset is saved for Run. Apply rescales coordinates from ref to target and bakes offset into the table."
+    )
     logList := editor.Add(
         "ListView",
         "xs w" UI.recordingLogEditorWidth " h" UI.recordingLogEditorListHeight " -Multi +Background" UI.listBg,
@@ -4854,7 +5101,7 @@ ShowRecordingLogEditor(*) {
     rawPreview := editor.Add(
         "Edit",
         "xs w" UI.recordingLogEditorWidth " r14 Multi ReadOnly -TabStop +Background" UI.statusBg,
-        BuildRecordingLogEditorSerializedPreview(headerLines, events, descEdit.Value)
+        BuildRecordingLogEditorSerializedPreview(headerLines, events, descEdit.Value, playbackGlobals)
     )
 
     editorTab.UseTab()
@@ -4867,8 +5114,22 @@ ShowRecordingLogEditor(*) {
     selectedRowIndex := 0
     detailFieldDefs := []
 
+    GetPlaybackGlobalsFromEditorControls() {
+        return {
+            offsetX: SafeInteger(globalOffsetXEdit.Value, 0),
+            offsetY: SafeInteger(globalOffsetYEdit.Value, 0),
+            refClientW: SafeInteger(refClientWEdit.Value, 0),
+            refClientH: SafeInteger(refClientHEdit.Value, 0)
+        }
+    }
+
     UpdateRawPreview(*) {
-        rawPreview.Value := BuildRecordingLogEditorSerializedPreview(headerLines, events, descEdit.Value)
+        rawPreview.Value := BuildRecordingLogEditorSerializedPreview(
+            headerLines,
+            events,
+            descEdit.Value,
+            GetPlaybackGlobalsFromEditorControls()
+        )
     }
 
     SyncSelectedLogRowFromDetailPanel() {
@@ -4939,6 +5200,51 @@ ShowRecordingLogEditor(*) {
         SetStatus(Format("Updated log row {} — {}", selectedRowIndex, BuildRecordingLogEditorSummary(events[selectedRowIndex].parts)))
     }
 
+    ApplyGlobalAdjust(*) {
+        SyncSelectedLogRowFromDetailPanel()
+
+        offX := SafeInteger(globalOffsetXEdit.Value, 0)
+        offY := SafeInteger(globalOffsetYEdit.Value, 0)
+        refW := SafeInteger(refClientWEdit.Value, 0)
+        refH := SafeInteger(refClientHEdit.Value, 0)
+        targetW := SafeInteger(targetClientWEdit.Value, 0)
+        targetH := SafeInteger(targetClientHEdit.Value, 0)
+        detected := DetectRecordingReferenceClientSize(events)
+
+        if refW <= 0
+            refW := detected.w
+        if refH <= 0
+            refH := detected.h
+        if targetW <= 0
+            targetW := refW
+        if targetH <= 0
+            targetH := refH
+
+        updated := ApplyRecordingLogGlobalCoordinateAdjust(events, offX, offY, refW, refH, targetW, targetH)
+        if updated = 0 {
+            SetStatus("No coordinate rows to adjust.")
+            return
+        }
+
+        PopulateRecordingLogEventsList(logList, events)
+        if selectedRowIndex >= 1 && selectedRowIndex <= events.Length {
+            SelectManageListViewDataRow(logList, selectedRowIndex)
+            LoadDetailPanel(selectedRowIndex)
+        }
+
+        if offX != 0 || offY != 0 {
+            globalOffsetXEdit.Value := "0"
+            globalOffsetYEdit.Value := "0"
+        }
+
+        refClientWEdit.Value := targetW
+        refClientHEdit.Value := targetH
+        targetClientWEdit.Value := targetW
+        targetClientHEdit.Value := targetH
+        UpdateRawPreview()
+        SetStatus(Format("Updated {} coordinate row(s).", updated))
+    }
+
     OnLogListSelect(*) {
         LoadDetailPanel(GetManageListViewSelectedDataRowIndex(logList))
     }
@@ -4952,6 +5258,14 @@ ShowRecordingLogEditor(*) {
                 throw Error("Could not open file for writing.")
             ; Clone before inject: ByRef from nested SaveLog into global Inject can fail to rebind outer headerLines in some cases.
             linesForFile := CloneRecordingLogHeaderLines(headerLines)
+            playbackToSave := GetPlaybackGlobalsFromEditorControls()
+            InjectRecordingPlaybackGlobalsIntoHeader(
+                &linesForFile,
+                playbackToSave.offsetX,
+                playbackToSave.offsetY,
+                playbackToSave.refClientW,
+                playbackToSave.refClientH
+            )
             InjectRecordingDescriptionIntoHeader(&linesForFile, descEdit.Value)
             logFile.Write(SerializeRecordingLogFromEditor(linesForFile, events))
             logFile.Close()
@@ -4975,11 +5289,16 @@ ShowRecordingLogEditor(*) {
     logList.OnEvent("ItemSelect", OnLogListSelect)
     logList.OnEvent("DoubleClick", ApplySelectedRow)
     applyRowBtn.OnEvent("Click", ApplySelectedRow)
+    applyGlobalBtn.OnEvent("Click", ApplyGlobalAdjust)
     saveBtn.OnEvent("Click", SaveLog)
     closeBtn.OnEvent("Click", CloseLogEditor)
     editor.OnEvent("Close", CloseLogEditor)
     editor.OnEvent("Escape", CloseLogEditor)
     descEdit.OnEvent("Change", UpdateRawPreview)
+    globalOffsetXEdit.OnEvent("Change", UpdateRawPreview)
+    globalOffsetYEdit.OnEvent("Change", UpdateRawPreview)
+    refClientWEdit.OnEvent("Change", UpdateRawPreview)
+    refClientHEdit.OnEvent("Change", UpdateRawPreview)
 
     if events.Length {
         SelectManageListViewDataRow(logList, 1)
@@ -6911,6 +7230,8 @@ PrepareApplyLog(logPath) {
 
     S.originX := parsed.originX
     S.originY := parsed.originY
+    S.playbackOffsetX := parsed.playbackOffsetX
+    S.playbackOffsetY := parsed.playbackOffsetY
     S.virtualBounds := GetVirtualScreenBounds()
     return parsed
 }
@@ -6943,6 +7264,8 @@ EndApplySession(restoreGui := true) {
     global S
 
     S.applying := false
+    S.playbackOffsetX := 0
+    S.playbackOffsetY := 0
     UninstallMouseBlock()
     ToolTip
 
@@ -7396,6 +7719,8 @@ ParseDetectLog(filePath) {
         clickCount: 0,
         keyCount: 0,
         usedClickOnlyFallback: false,
+        playbackOffsetX: 0,
+        playbackOffsetY: 0,
         clicks: [],
         actions: []
     }
@@ -7629,6 +7954,10 @@ ParseCommentLine(line, parsed) {
         parsed.originX := Integer(origin[1])
         parsed.originY := Integer(origin[2])
         parsed.hasOrigin := true
+    } else if RegExMatch(line, "i)#\s*playback_offset_x:\s*(-?\d+)", &m) {
+        parsed.playbackOffsetX := Integer(m[1])
+    } else if RegExMatch(line, "i)#\s*playback_offset_y:\s*(-?\d+)", &m) {
+        parsed.playbackOffsetY := Integer(m[1])
     }
 }
 
@@ -7867,18 +8196,32 @@ ResolveTargetPoint(target) {
             WinGetClientPos(&clientLeft, &clientTop, &clientW, &clientH, "ahk_id " hwnd)
 
             if clientW > 0 && clientH > 0 {
-                return ClampPoint(
+                return ApplyRecordingPlaybackPixelOffset(ClampPoint(
                     clientLeft + Round(target.pctX * clientW),
                     clientTop + Round(target.pctY * clientH)
-                )
+                ))
             }
         }
     }
 
     if target.mode = "relative"
-        return ClampPoint(S.originX + target.screenX, S.originY + target.screenY)
+        return ApplyRecordingPlaybackPixelOffset(ClampPoint(S.originX + target.screenX, S.originY + target.screenY))
 
-    return ClampPoint(target.screenX, target.screenY)
+    return ApplyRecordingPlaybackPixelOffset(ClampPoint(target.screenX, target.screenY))
+}
+
+/**
+ * Adds recording log playback offset pixels to a resolved screen point.
+ * @param {Array} point `{x, y}` from ClampPoint.
+ * @returns {Array}
+ */
+ApplyRecordingPlaybackPixelOffset(point) {
+    global S
+
+    if S.playbackOffsetX = 0 && S.playbackOffsetY = 0
+        return point
+
+    return ClampPoint(point.x + S.playbackOffsetX, point.y + S.playbackOffsetY)
 }
 
 FindTargetWindow(target) {
