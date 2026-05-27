@@ -89,11 +89,37 @@ Typical uses:
 - **Esc saves** the recording and opens a rename dialog; **Cancel** on that dialog discards the file
 - Recordings list shows **name** and **variable count** for each session; hover a row to preview its optional description
 - **Rename**, **Edit Log**, and **Delete** from the Recordings tab
-- **Edit Recording Log** opens Events (table + row editor), **Global Adjust** (bulk coordinates and target window), and Raw log preview
+
+### Edit Recording Log
+
+Open **Edit Log** on the Recordings tab to adjust a saved recording without re-recording.
+
+**Description (top of window)** — optional notes stored in the log header; shown as a tooltip when you hover the recording in the list.
+
+**Events tab**
+
+- Table of every logged step: elapsed ms, type, optional label, and summary
+- **Selected row** editor for timing and type-specific fields (click button, pct X/Y, variable name, scroll direction, and so on)
+- Rich click rows also expose **Window title** and **Exe**; changing them clears a stale hwnd so Run matches by title/exe/class
+- Optional row **Label** (`|note|…` in the file) is ignored during Run
+- **Apply row** or double-click a row to commit edits; **Save** writes the table back to the log file
+
+**Global Adjust tab**
+
+Bulk fixes when replay lands on the wrong pixel or the wrong window (common on another monitor, RDP, or Citrix):
+
+- **Offset (px): X / Y** — pixel nudge applied to every click at **Run**; saved in the log header when you **Save** (does not rewrite table rows by itself)
+- **Screen: w / h → w / h** — rescale all click, scroll, and mouse-hold coordinates from the recorded client size toward a new size; **Apply to all clicks** rewrites Events tab rows
+- **Target window** — set **title**, **exe**, and **class** for all events; pick from a dropdown of open windows (↻ refresh) or type manually; **Apply target window** updates every row and clears stale hwnd values
+- Separate **i** help on Events and Global Adjust tabs
+
+**Raw log tab** — read-only preview of the file that **Save** will write.
 
 ### Run (replay)
 
 - **Run** button replays the selected recording using either a data input **or** a bulk CSV batch (not both at once)
+- **Window matching** at replay uses title, exe, class, and hwnd from each click; percentage (client) coordinates scale when the target window is found
+- Optional **playback offset** (`# playback_offset_x` / `# playback_offset_y` in the log header) nudges every click — set in **Edit Log → Global Adjust**
 - **Smooth** or **Instant** mouse movement
 - **Human-like** or **Instant** typing with configurable speeds
 - **Fixed pauses only** or **Recorded gaps** for timing between steps
@@ -115,7 +141,7 @@ Typical uses:
 ### Bulk Inputs tab
 
 - Choose **Use bulk inputs for Run** as the run input source (mutually exclusive with data inputs)
-- Saved CSV files live in `csv-batches\`; **Edit CSV**, **Rename**, **Delete**, **Browse**, and **Refresh**
+- Saved CSV files live in `csv-batches\`; **Create CSV**, **Edit**, **Rename**, **Delete**, **Browse**, and **Refresh**
 - **Edit CSV** opens a table editor with inline cell edit, add/delete rows and columns, and Excel-style headers
 - **Browse** can load an external CSV; optional import copies it into `csv-batches\`
 - **Config** run mode: **Ask to run next line before each row** or **Run all rows automatically**
@@ -137,7 +163,7 @@ Typical uses:
 
 ### Speed Settings tab
 
-- **Run speed**, **Typing speed**, and **Move speed** multipliers (default move speed: 3)
+- **Run speed**, **Typing speed**, and **Move speed** multipliers (default move speed: 10)
 - **Initial delay (ms)** before playback starts
 - **i** button opens in-app help for speed fields
 - Values apply to the next Run and are saved with data input files when you use **Edit Data Input**
@@ -154,9 +180,11 @@ Typical uses:
 
 Each tab has an **i** button beside its section label. Click it for tab-specific guidance:
 
-| Tab | Help covers |
-|-----|-------------|
+| Tab / dialog | Help covers |
+|--------------|-------------|
 | **Recordings** | Selecting recordings, Rename / Edit Log / Delete, recording tips (Esc, clicks, Caps Lock delay, hold/drag, shortcuts) |
+| **Edit Log → Events** | Events table, selected row fields, labels, Apply row, Save |
+| **Edit Log → Global Adjust** | Offset at Run, Screen w/h rescale, target window picker, Apply buttons |
 | **Data Inputs** | Run input source, Add / Edit / Delete Data Input, variables, labels, data input vs bulk input exclusivity |
 | **Bulk Inputs** | CSV format, `csv-batches\`, Edit CSV table editor, Config run mode, batch rules |
 | **Run Options** | Smooth vs Instant mouse, Human-like vs Instant typing, click/step pauses, fixed vs recorded timing |
@@ -180,7 +208,7 @@ There is no separate Help button; use the **i** on the tab you are working in.
 |------|---------|
 | **Title row** | App name, version, **Import** and **Share** buttons |
 | **Status bar** | Current action, selection summary, batch progress |
-| **Recordings** tab | Pick, rename, edit log, or delete recordings; **i** for tab help |
+| **Recordings** tab | Pick, rename, **Edit Log** (Events / Global Adjust / Raw log), or delete recordings; **i** for tab help |
 | **Data Inputs** tab | Pick data inputs; add/edit/delete; choose data input as run source; **i** for tab help |
 | **Bulk Inputs** tab | Manage CSV files in `csv-batches\`; Config run mode; choose bulk input as run source; **i** for tab help |
 | **Run Options** tab | Mouse movement, typing style, and timing pauses for the next run; **i** for tab help |
@@ -505,9 +533,9 @@ Rules:
 
 ## Recording file format
 
-Recordings are UTF-8 log files in `recordings/` (default prefix `di-`). They store pipe-delimited events for clicks, scrolls, keys, metadata, and manual delays. Coordinates prefer window percentage positions so replay survives window resize when possible.
+Recordings are UTF-8 log files in `recordings/` (default prefix `di-`). They store pipe-delimited events for clicks, scrolls, keys, metadata, and manual delays. Coordinates prefer window percentage positions so replay survives window resize when possible. Optional header lines include `# description:`, `# playback_offset_x` / `# playback_offset_y`, and `# playback_reference_client_w` / `# playback_reference_client_h` (set from **Edit Log → Global Adjust**).
 
-You can inspect or edit a log with **Edit Log** on the Recordings tab (opens **Edit Recording Log**).
+You can inspect or edit a log with **Edit Log** on the Recordings tab (Events, **Global Adjust**, and Raw log tabs).
 
 ## Does the exe need AutoHotkey installed?
 
