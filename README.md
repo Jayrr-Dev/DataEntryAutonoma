@@ -72,6 +72,7 @@ Typical uses:
 - **Esc saves** the recording and opens a rename dialog; **Cancel** on that dialog discards the file
 - Recordings list shows **name** and **variable count** for each session
 - **Rename**, **Edit Log**, and **Delete** from the Recordings tab
+- **Share** / **Import** bundles: Share saves as a folder or zip; Import asks folder vs zip, then pulls in the bundle's recording plus data-input or CSV (listed in its info file)—not arbitrary extra files beside them
 - **Edit Log** opens a table of recording events (timing, variables, clicks, shortcuts) plus a raw log preview
 
 ### Run (replay)

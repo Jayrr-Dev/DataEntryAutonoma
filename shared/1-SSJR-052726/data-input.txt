@@ -1,0 +1,13 @@
+﻿# timing — ms pauses; speeds: higher = faster
+playback_speed=1.0
+typing_speed=1.0
+move_speed=20.0
+initial_delay=100
+click_pause_ms=10
+segment_pause_ms=20
+use_recorded_timing=0
+smooth_mouse=1
+human_typing=1
+
+# variable-1, variable-2, variable-3 ... (optional note labels; escape commas with \\,)
+Drawing Number:281435-1,Scale:1-500,Size:C,Title_1:COE PDC SERVICE NEW,Title_2:JASPER AVE - 119 ST NW,Developed_By:I\\\, LEE,Work_Order_No:281435,281435-1,New Proposals Drawing,Drawing Number = 281435,Sheet = 1

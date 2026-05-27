@@ -13,6 +13,7 @@ SetKeyDelay -1
 ; Recordings: recordings\di-*.log
 ; Presets: saved-inputs\*.txt
 ; CSV batches: csv-batches\*.csv
+; Bundles: Share as folder or optional ZIP; Import from manifest.json folder or .zip
 ; Esc saves recording (Cancel on the save dialog discards). Esc stops Run or a CSV batch.
 
 EnableDpiAwareness()
@@ -31,6 +32,20 @@ C := {
     stateFile: A_ScriptDir "\apply-state.ini",
     saveExt: ".txt",
     csvExt: ".csv",
+    ; Portable bundle (Share / Import ZIP)
+    bundleFormatId: "data-entry-autonoma-bundle",
+    bundleFormatVersion: 1,
+    bundleManifestFileName: "manifest.json",
+    bundleZipExt: ".dea.zip",
+    bundleRecordingZipName: "recording.log",
+    bundlePresetZipName: "data-input.txt",
+    bundleCsvZipName: "batch.csv",
+    bundleImportTempPrefix: "dea-import-",
+    bundleStagingTempPrefix: "dea-bundle-stage-",
+
+    bundlePowerShellExe: A_WinDir "\System32\WindowsPowerShell\v1.0\powershell.exe",
+    bundleTarExe: A_WinDir "\System32\tar.exe",
+
     prefix: "di-",
     diPrefix: "di-",
     wheelDelta: 120,
@@ -64,14 +79,18 @@ Select a row, edit the fields below, then click Apply row. Double-click a row to
 Columns: #, Ms, Type, Label (optional note, ignored during playback), and Summary.
 
 Label is stored as |note|your text at the end of the log line. It does not affect Run.
+
+Use Description (below the recording name) for free-form notes stored in the log header; hover the recording row on the main list to preview it as a tooltip.
     )",
     recordingsTabHelpMessage: "
     (
 Select a recording, then click Run.
 
 Rename: change the recording file name
-Edit Log: edit timing, optional row labels, and event values in a table, or preview the raw log
+Edit Log: timing, descriptions, optional row labels, events in a table, or preview the raw log
 Delete: remove the selected recording
+
+Optional description is saved in the log header and appears as a tooltip when you hover that recording's row.
 
 While recording:
 - Esc saves (Cancel on the save dialog discards)
@@ -84,7 +103,8 @@ While recording:
     (
 Choose Use data input for Run, then pick a data input from the list.
 
-Edit Data Input opens an editor for the name and variable values (table with Label and Value columns).
+Edit Data Input opens an editor for the name, optional description, and variable values (table).
+Optional description appears as a tooltip when you hover that data input's row.
 Speed multipliers and initial delay are on the Speed Settings tab.
 Mouse movement, typing style, and timing pauses are on the Run Options tab.
 Delete Data Input: remove the selected data input
@@ -193,6 +213,9 @@ Higher speed values run faster.
     hotkeyTipPrefix: "Hotkey:",
     recordingTipRefreshMs: 1000,
     recordingTransientTipMs: 3000,
+    ; Main window list hover tooltips for recording / data input descriptions (Edit dialogs).
+    manageListTooltipPollMs: 350,
+    manageListTooltipMaxLen: 420,
     minRecordedDelayMs: 200,
     mouseHoldDragThresholdPx: 5,
     mouseHoldTipRefreshMs: 100,
@@ -324,8 +347,13 @@ UI := {
     tabContentWidth: 404,
     tabListWidth: 378,
     tabButtonRowInset: 4,
-    recordingColNameWidth: 248,
+    recordingColNameWidth: 255,
     recordingColVarCountWidth: 118,
+    presetColNameWidth: 255,
+    presetColVarCountWidth: 118,
+    csvColNameWidth: 230,
+    csvColLineWidth: 54,
+    csvColVarCountWidth: 90,
     recordingListHeight: 300,
     marginX: 18,
     marginY: 4,
@@ -346,9 +374,13 @@ UI := {
     tabPanelSafetyPad: 12,
     recordingColName: "Name",
     recordingColVarCount: "Variable count",
+    presetColName: "Name",
+    presetColVarCount: "Variable count",
+    csvColName: "Name",
+    csvColLine: "Line",
+    csvColVarCount: "Var Count",
     statusHeight: 30,
     csvEditWidth: 300,
-    presetAddBtnWidth: 118,
     csvBatchTableWidth: 560,
     csvBatchTableHeight: 180,
     csvBatchPromptDetailsLines: 5,
@@ -374,8 +406,20 @@ UI := {
     recordingLogEditorDetailLabelWidth: 108,
     recordingLogEditorDetailValueWidth: 432,
     recordingLogEditorButtonRowHeight: 40,
-    recordingLogEditorOuterPad: 32
+    recordingLogEditorOuterPad: 32,
+    recordingLogEditorDescLabelH: 16,
+    recordingLogEditorDescEditH: 52,
+    presetEditorDescLabelH: 16,
+    presetEditorDescEditH: 52,
 }
+
+; Recording log header / event format (must initialize before CreateManageGui → RefreshRecordingList).
+/** Trailing log field marker for optional editor note labels (ignored during playback). */
+RECORDING_LOG_NOTE_FIELD := "note"
+/** Stored in one header line instead of newline characters (`PeelRecordingDescriptionFromHeader`). */
+RECORDING_LOG_DESC_DISPLAY_SEP := " · "
+/** Stable prefix matched when reading or rewriting description header lines (no trailing space). */
+RECORDING_LOG_DESC_HEADER_LINE_PREFIX := "# description: "
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
 APP_GUI_TITLE := "Data Entry Autonoma v" C.appVersion
@@ -454,6 +498,8 @@ S := {
     csvEdit: "",
     detectButton: "",
     applyButton: "",
+    importBundleButton: "",
+    shareBundleButton: "",
     editButton: "",
     addPresetButton: "",
     browseCsvButton: "",
@@ -495,7 +541,12 @@ S := {
     presetInfoButton: "",
     runOptionsInfoButton: "",
     speedSettingsInfoButton: "",
-    mainTab: ""
+    mainTab: "",
+    listTooltipShownText: "",
+    listTooltipRecordingRow: 0,
+    listTooltipPresetRow: 0,
+    recordingDescCache: Map(),
+    presetDescCache: Map()
 }
 
 ActivateExistingManageInstance()
@@ -694,6 +745,39 @@ ApplyManageRecordingListColumns() {
 }
 
 /**
+ * Applies ListView column widths and formats for the data inputs list.
+ */
+ApplyManagePresetListColumns() {
+    global UI, S
+
+    if !S.presetList
+        return
+
+    S.presetList.ModifyCol(1, UI.presetColNameWidth)
+    S.presetList.ModifyCol(2, UI.presetColVarCountWidth)
+    S.presetList.ModifyCol(2, "Integer")
+    SetManageListViewColumnIntegerSort(S.presetList, 2)
+}
+
+/**
+ * Applies ListView column widths and formats for the bulk CSV file list.
+ */
+ApplyManageCsvListColumns() {
+    global UI, S
+
+    if !S.csvList
+        return
+
+    S.csvList.ModifyCol(1, UI.csvColNameWidth)
+    S.csvList.ModifyCol(2, UI.csvColLineWidth)
+    S.csvList.ModifyCol(3, UI.csvColVarCountWidth)
+    S.csvList.ModifyCol(2, "Integer")
+    S.csvList.ModifyCol(3, "Integer")
+    SetManageListViewColumnIntegerSort(S.csvList, 2)
+    SetManageListViewColumnIntegerSort(S.csvList, 3)
+}
+
+/**
  * Adds a muted section header label.
  * @param {Gui} gui Target window.
  * @param {String} title Section title text.
@@ -790,6 +874,7 @@ GetPresetEditorWindowHeight() {
 
     editRowH := UI.presetEditorEditRowHeight
     nameBlock := UI.tabLabelHeight + UI.tabRowGap + editRowH + UI.tabRowGap
+    descBlock := UI.presetEditorDescLabelH + UI.tabRowGap + UI.presetEditorDescEditH + UI.tabRowGap
     varHeader := UI.presetEditorSectionRowHeight + UI.tabRowGap
     varHelp := UI.presetEditorHelpHeight + UI.tabRowGap
     varTools := UI.btnHeightTool + UI.tabRowGap
@@ -797,7 +882,7 @@ GetPresetEditorWindowHeight() {
     detailHeader := UI.tabLabelHeight + UI.tabRowGap
     detailRows := (editRowH + UI.tabRowGap) * 3
     saveBlock := UI.presetEditorSaveSectionGap + UI.presetEditorButtonRowHeight
-    contentH := nameBlock + varHeader + varHelp + varTools + varList
+    contentH := nameBlock + descBlock + varHeader + varHelp + varTools + varList
         + detailHeader + detailRows + saveBlock
 
     return contentH + UI.presetEditorBottomPad + UI.presetEditorOuterPad + UI.presetEditorSafetyPad
@@ -835,8 +920,24 @@ CreateManageGui() {
     ApplyManageGuiTheme(S.gui)
     S.gui.OnEvent("Close", GuiClosed)
 
+    bundleBtnW := 76
+    titleRowW := UI.contentWidth - (bundleBtnW * 2) - (UI.btnGap * 2)
+
     S.gui.SetFont("s" UI.fontSizeTitle, UI.fontFamily)
-    S.gui.Add("Text", "xm w" UI.contentWidth " c" UI.textPrimary, "Data Entry Autonoma")
+    S.gui.Add("Text", "xm w" titleRowW " c" UI.textPrimary . " Section", "Data Entry Autonoma")
+    S.importBundleButton := S.gui.Add(
+        "Button",
+        "x+" UI.btnGap " yp w" bundleBtnW " h" hSec " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Import"
+    )
+    S.importBundleButton.OnEvent("Click", ImportDataEntryBundle)
+    S.shareBundleButton := S.gui.Add(
+        "Button",
+        "x+" UI.btnGap " yp w" bundleBtnW " h" hSec " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Share"
+    )
+    S.shareBundleButton.OnEvent("Click", ShareDataEntryBundle)
+
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.gui.Add(
         "Text",
@@ -899,20 +1000,25 @@ CreateManageGui() {
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.usePresetRadio := S.gui.Add("Radio", "xs Checked", "Use data input for Run")
     S.usePresetRadio.OnEvent("Click", (*) => SetInputSourceMode(C.inputSourcePreset))
+
+    S.presetList := S.gui.Add(
+        "ListView",
+        BuildManageTabListOptions(tabMetrics.listPresetH),
+        [UI.presetColName, UI.presetColVarCount]
+    )
+    S.presetList.OnEvent("ItemSelect", OnPresetListChange)
+    ApplyManagePresetListColumns()
+
     S.addPresetButton := S.gui.Add(
         "Button",
-        "x+" UI.btnGap " w" UI.presetAddBtnWidth " h" hTool
-        " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Add Data Input"
     )
     S.addPresetButton.OnEvent("Click", ShowPresetEditor.Bind(true))
 
-    S.presetList := S.gui.Add("ListBox", BuildManageTabListOptions(tabMetrics.listPresetH))
-    S.presetList.OnEvent("Change", OnPresetListChange)
-
     S.editButton := S.gui.Add(
         "Button",
-        "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Edit Data Input"
     )
     S.editButton.OnEvent("Click", ShowPresetEditor)
@@ -945,8 +1051,13 @@ CreateManageGui() {
     S.csvBatchInfoButton := AddManageTabInfoButton("x+2")
     S.csvBatchInfoButton.OnEvent("Click", ShowCsvBatchHelp)
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-    S.csvList := S.gui.Add("ListBox", BuildManageTabListOptions(tabMetrics.listCsvH))
-    S.csvList.OnEvent("Change", OnCsvListChange)
+    S.csvList := S.gui.Add(
+        "ListView",
+        BuildManageTabListOptions(tabMetrics.listCsvH),
+        [UI.csvColName, UI.csvColLine, UI.csvColVarCount]
+    )
+    S.csvList.OnEvent("ItemSelect", OnCsvListChange)
+    ApplyManageCsvListColumns()
 
     S.editCsvButton := S.gui.Add(
         "Button",
@@ -1097,6 +1208,7 @@ CreateManageGui() {
     S.gui.Show()
     ApplyManageAppIcon(S.gui)
     SyncRunSettingsFromGui()
+    SetManageMainListTooltipPolling(true)
     RefreshAllLists(true)
 }
 
@@ -1107,8 +1219,10 @@ GuiClosed(*) {
         CancelRecording()
     else if S.applying || S.batchRunning
         RequestStop()
-    else
+    else {
+        SetManageMainListTooltipPolling(false)
         ExitApp()
+    }
 }
 
 /**
@@ -1118,7 +1232,8 @@ GuiClosed(*) {
 SetInteractiveState(enabled) {
     global S
 
-    for ctrl in [S.detectButton, S.applyButton, S.addPresetButton, S.refreshCsvButton, S.editButton,
+    for ctrl in [S.detectButton, S.applyButton, S.importBundleButton, S.shareBundleButton,
+        S.addPresetButton, S.refreshCsvButton, S.editButton,
         S.renameRecordingButton, S.editRecordingButton, S.deleteRecordingButton,
         S.deletePresetButton, S.recordingList, S.presetList, S.csvList, S.csvEdit, S.browseCsvButton,
         S.editCsvButton, S.renameCsvButton, S.deleteCsvButton,
@@ -1144,7 +1259,12 @@ SetInteractiveState(enabled) {
 ClearPresetSelection() {
     global S
 
-    if S.presetList
+    if !S.presetList
+        return
+
+    if HasMethod(S.presetList, "Modify")
+        S.presetList.Modify(0, "-Select -Focus")
+    else
         S.presetList.Value := 0
 }
 
@@ -1154,8 +1274,12 @@ ClearPresetSelection() {
 ClearCsvSelection() {
     global S
 
-    if S.csvList
-        S.csvList.Value := 0
+    if S.csvList {
+        if HasMethod(S.csvList, "Modify")
+            S.csvList.Modify(0, "-Select -Focus")
+        else
+            S.csvList.Value := 0
+    }
     if S.csvEdit
         S.csvEdit.Value := ""
 }
@@ -1251,7 +1375,7 @@ OnCsvBatchRunModeChange(*) {
 OnPresetListChange(*) {
     global C, S
 
-    if !S.presetList || !S.presetList.Value
+    if !S.presetList || !GetListControlSelectedIndex(S.presetList)
         return
 
     if S.inputSourceMode != C.inputSourcePreset
@@ -1268,7 +1392,7 @@ OnPresetListChange(*) {
 OnCsvListChange(*) {
     global C, S
 
-    if !S.csvList || !S.csvList.Value
+    if !S.csvList || !GetListControlSelectedIndex(S.csvList)
         return
 
     if S.inputSourceMode != C.inputSourceCsv
@@ -1339,9 +1463,9 @@ ReadRunTimingSettingsFromGui() {
 }
 
 /**
- * Merges data-input variable values with global Run Options and Speed Settings tabs.
- * @param {String} presetPath Path to a saved data input file, or "" for empty variables.
- * @returns {Object} Full settings object for ApplySettings.
+ * Merges data-input variables and optional description with Run Options and Speed Settings tab values.
+ * @param {String} presetPath Path to a saved data input file, or "" for timing-only defaults.
+ * @returns {Object} Full settings object for ApplySettings and WritePresetFile (`description` may be "").
  */
 BuildRunSettings(presetPath := "") {
     global C
@@ -1362,6 +1486,7 @@ BuildRunSettings(presetPath := "") {
         use_recorded_timing: timing.use_recorded_timing,
         smooth_mouse: playback.smooth_mouse,
         human_typing: playback.human_typing,
+        description: presetSettings.description,
         variables: presetSettings.variables
     }
 }
@@ -1626,7 +1751,7 @@ BrowseCsvFile(*) {
     S.csvEdit.Value := selected
 
     if !SelectCsvListByPath(selected) && S.csvList
-        S.csvList.Value := 0
+        S.csvList.Modify(0, "-Select -Focus")
 
     if !IsManagedCsvPath(selected) {
         importAnswer := ShowManageMsgBox(
@@ -2013,12 +2138,17 @@ RefreshRecordingList() {
 
     S.recordingList.Delete()
 
+    S.recordingDescCache := Map()
+
     for path in S.recordingPaths {
         S.recordingList.Add(
             "",
             FormatRecordingName(path),
             CountRecordingVariableSlots(path)
         )
+        quickDesc := Trim(ReadRecordingDescriptionQuick(path))
+        if quickDesc != ""
+            S.recordingDescCache[path] := quickDesc
     }
 
     ApplyManageRecordingListColumns()
@@ -2029,16 +2159,22 @@ RefreshPresetList() {
 
     EnsureDir(C.savesDir)
     S.presetPaths := ListFiles(C.savesDir, "*" C.saveExt)
-    names := []
+    S.presetDescCache := Map()
 
-    for path in S.presetPaths
-        names.Push(FormatPresetName(path))
+    if !S.presetList
+        return
 
-    if S.presetList {
-        S.presetList.Delete()
-        if names.Length
-            S.presetList.Add(names)
+    S.presetList.Delete()
+
+    for path in S.presetPaths {
+        parsedPreset := ParsePresetFile(path)
+        S.presetList.Add("", FormatPresetName(path), parsedPreset.variables.Length)
+        pd := Trim(parsedPreset.description)
+        if pd != ""
+            S.presetDescCache[path] := pd
     }
+
+    ApplyManagePresetListColumns()
 }
 
 /**
@@ -2049,16 +2185,23 @@ RefreshCsvList() {
 
     EnsureDir(C.csvBatchesDir)
     S.csvPaths := ListFiles(C.csvBatchesDir, "*" C.csvExt)
-    names := []
 
-    for path in S.csvPaths
-        names.Push(FormatCsvName(path))
+    if !S.csvList
+        return
 
-    if S.csvList {
-        S.csvList.Delete()
-        if names.Length
-            S.csvList.Add(names)
+    S.csvList.Delete()
+
+    for path in S.csvPaths {
+        parsed := ParseCsvFile(path)
+        S.csvList.Add(
+            "",
+            FormatCsvName(path),
+            parsed.rows.Length,
+            parsed.variableLabels.Length
+        )
     }
+
+    ApplyManageCsvListColumns()
 }
 
 RestoreSelections() {
@@ -2074,8 +2217,8 @@ RestoreSelections() {
 
     if S.presetPaths.Length && saved.csv = "" {
         SelectByBaseName(S.presetList, S.presetPaths, saved.preset)
-        if !S.presetList.Value
-            S.presetList.Value := 1
+        if !GetListControlSelectedIndex(S.presetList)
+            SelectListControlRow(S.presetList, 1)
     }
 
     if saved.csv != "" {
@@ -2153,7 +2296,7 @@ GetSelectedRecordingPath() {
 GetSelectedPresetPath() {
     global S
 
-    index := S.presetList ? S.presetList.Value : 0
+    index := S.presetList ? GetListControlSelectedIndex(S.presetList) : 0
     return index && index <= S.presetPaths.Length ? S.presetPaths[index] : ""
 }
 
@@ -2170,7 +2313,7 @@ GetSelectedCsvPath() {
 GetSelectedManagedCsvPath() {
     global S
 
-    index := S.csvList ? S.csvList.Value : 0
+    index := S.csvList ? GetListControlSelectedIndex(S.csvList) : 0
     return index && index <= S.csvPaths.Length ? S.csvPaths[index] : ""
 }
 
@@ -2826,11 +2969,21 @@ RenameSelectedRecording(*) {
 GetRecordingLogEditorWindowHeight() {
     global UI
 
-    return UI.recordingLogEditorTabHeight + UI.recordingLogEditorButtonRowHeight + UI.recordingLogEditorOuterPad
+    return UI.recordingLogEditorDescLabelH + UI.tabRowGap + UI.recordingLogEditorDescEditH + UI.tabRowGap
+        + UI.recordingLogEditorTabHeight + UI.recordingLogEditorButtonRowHeight + UI.recordingLogEditorOuterPad
 }
 
-/** Trailing log field marker for optional editor note labels (ignored during playback). */
-RECORDING_LOG_NOTE_FIELD := "note"
+/**
+ * Restores editor/tooltip description from one stored header fragment (CR stripped; display sep → LF).
+ * @param {String} stored Text after `# description:` on disk.
+ * @returns {String}
+ */
+DecodeRecordingLogDescriptionStoredFragment(stored) {
+    global RECORDING_LOG_DESC_DISPLAY_SEP
+
+    t := Trim(StrReplace(stored, "`r", ""))
+    return StrReplace(t, RECORDING_LOG_DESC_DISPLAY_SEP, "`n")
+}
 
 /**
  * Returns the optional note label stored on one recording log event row.
@@ -2838,6 +2991,8 @@ RECORDING_LOG_NOTE_FIELD := "note"
  * @returns {String}
  */
 GetRecordingLogEventNote(parts) {
+    global RECORDING_LOG_NOTE_FIELD
+
     if parts.Length >= 3 && parts[parts.Length - 2] = RECORDING_LOG_NOTE_FIELD
         return parts[parts.Length]
     return ""
@@ -2850,6 +3005,8 @@ GetRecordingLogEventNote(parts) {
  * @returns {Array}
  */
 SetRecordingLogEventNote(parts, noteLabel) {
+    global RECORDING_LOG_NOTE_FIELD
+
     noteLabel := Trim(noteLabel)
     if parts.Length >= 3 && parts[parts.Length - 2] = RECORDING_LOG_NOTE_FIELD
         parts.Length -= 2
@@ -2995,6 +3152,101 @@ SerializeRecordingLogFromEditor(headerLines, events) {
 }
 
 /**
+ * Copies header lines so preview serialization can safely inject without mutating the editor array.
+ * @param {Array<String>} headerLines Source header lines from the recording editor.
+ * @returns {Array<String>}
+ */
+CloneRecordingLogHeaderLines(headerLines) {
+    copy := []
+
+    for line in headerLines
+        copy.Push(line)
+
+    return copy
+}
+
+/**
+ * Removes `# description:` lines from the header block and restores the editable description text.
+ * @param {Array<String>} headerLines Recording header lines (pass with & at call site).
+ * @returns {String} Multi-line description for the Description field (may be "").
+ */
+PeelRecordingDescriptionFromHeader(&headerLines) {
+    desc := ""
+    kept := []
+
+    for line in headerLines {
+        t := Trim(line)
+        if RegExMatch(t, "i)^#\s*description:\s*(.*)$", &m) {
+            frag := DecodeRecordingLogDescriptionStoredFragment(m[1])
+            if frag != ""
+                desc .= (desc = "" ? frag : "`n" frag)
+            continue
+        }
+        kept.Push(line)
+    }
+
+    headerLines := kept
+    return desc
+}
+
+/**
+ * Writes `# description:` into headers as one line (` · ` substitutes for newlines), replacing any existing block.
+ * @param {Array<String>} headerLines Recording header lines (pass with & at call site).
+ * @param {String} rawDescription Text from the Description edit control.
+ */
+InjectRecordingDescriptionIntoHeader(&headerLines, rawDescription) {
+    global RECORDING_LOG_DESC_HEADER_LINE_PREFIX, RECORDING_LOG_DESC_DISPLAY_SEP
+
+    PeelRecordingDescriptionFromHeader(&headerLines)
+    txt := Trim(StrReplace(rawDescription, "`r", ""))
+    if txt = ""
+        return
+
+    headerLines.Push(RECORDING_LOG_DESC_HEADER_LINE_PREFIX StrReplace(txt, "`n", RECORDING_LOG_DESC_DISPLAY_SEP))
+}
+
+/**
+ * Reads `# description:` from the top-of-file recording header comment block (fast scan for tooltips).
+ * @param {String} filePath Path to `.log`.
+ * @returns {String}
+ */
+ReadRecordingDescriptionQuick(filePath) {
+    if filePath = "" || !FileExist(filePath)
+        return ""
+
+    desc := ""
+
+    Loop Read filePath {
+        trimmed := Trim(A_LoopReadLine)
+
+        if trimmed = ""
+            continue
+        if SubStr(trimmed, 1, 1) != "#"
+            break
+        if RegExMatch(trimmed, "i)^#\s*description:\s*(.*)$", &m) {
+            frag := DecodeRecordingLogDescriptionStoredFragment(m[1])
+            if frag != ""
+                desc .= (desc = "" ? frag : "`n" frag)
+        }
+    }
+
+    return desc
+}
+
+/**
+ * Builds serialized log text reflecting the Events table plus the Description field (for Raw log tab).
+ * @param {Array<String>} headerLines Non-description header lines maintained by the Events editor.
+ * @param {Array<Object>} events Event rows from the Events table.
+ * @param {String} rawDescription Text from the Description edit control.
+ * @returns {String}
+ */
+BuildRecordingLogEditorSerializedPreview(headerLines, events, rawDescription) {
+    copy := CloneRecordingLogHeaderLines(headerLines)
+    InjectRecordingDescriptionIntoHeader(&copy, rawDescription)
+    return SerializeRecordingLogFromEditor(copy, events)
+}
+
+/**
  * Populates the recording log events ListView.
  * @param {Gui.ListView} listView Target ListView control.
  * @param {Array<Object>} events Parsed event rows.
@@ -3074,6 +3326,233 @@ GetManageListViewHitSubItem(listView, clientX, clientY) {
         return { row: 0, col: 0 }
 
     return { row: rowIndex, col: colIndex }
+}
+
+/**
+ * Returns one-based ListBox item index under client coordinates, or 0 when none / outside list.
+ * @param {Integer} hwnd ListBox HWND.
+ * @param {Integer} clientX Mouse X relative to the ListBox client area.
+ * @param {Integer} clientY Mouse Y relative to the ListBox client area.
+ * @returns {Integer}
+ */
+ManageListBoxHitItem1Based(hwnd, clientX, clientY) {
+    static LB_ITEMFROMPOINT := 0x1A9
+
+    packed := ((clientY & 0xFFFF) << 16) | (clientX & 0xFFFF)
+    r := DllCall(
+        "SendMessage",
+        "Ptr", hwnd,
+        "UInt", LB_ITEMFROMPOINT,
+        "Ptr", 0,
+        "Ptr", packed,
+        "Ptr"
+    )
+    idx := r & 0xFFFF
+    dist := (r >> 16) & 0xFFFF
+    if idx = 0xFFFF
+        return 0
+    if dist != 0
+        return 0
+
+    return idx + 1
+}
+
+/**
+ * Converts screen MouseGetPos coords to window client-space coordinates for hit testing child controls.
+ * @param {Integer} hwnd Target window hwnd.
+ * @param {Integer} screenX Screen X.
+ * @param {Integer} screenY Screen Y.
+ * @returns {Boolean} False when ScreenToClient fails.
+ */
+ManageScreenCoordsToClient(hwnd, screenX, screenY, &clientXOut, &clientYOut) {
+    pt := Buffer(8, 0)
+    NumPut("int", screenX, pt, 0)
+    NumPut("int", screenY, pt, 4)
+    if !DllCall("ScreenToClient", "Ptr", hwnd, "Ptr", pt)
+        return false
+
+    clientXOut := NumGet(pt, 0, "int")
+    clientYOut := NumGet(pt, 4, "int")
+    return true
+}
+
+/**
+ * Returns the root HWND for nested child controls inside a Gui.
+ * @param {Integer} hwnd Any hwnd in that tree.
+ * @returns {Integer} Root window hwnd (typically the top-level Gui).
+ */
+GetManageWindowRootHwnd(hwnd) {
+    return DllCall("GetAncestor", "Ptr", hwnd, "UInt", 2, "Ptr")
+}
+
+/**
+ * Truncates long tooltip text before passing to ToolTip().
+ * @param {String} text Tooltip body.
+ * @param {Integer} limit Max grapheme roughly by StrLen().
+ * @returns {String}
+ */
+ManageTruncateTooltipText(text, limit := 0) {
+    global C
+
+    if limit = 0
+        limit := C.manageListTooltipMaxLen
+
+    text := Trim(text)
+    if StrLen(text) <= limit
+        return text
+
+    return SubStr(text, 1, Max(limit - 1, 3)) Chr(8230)
+}
+
+/**
+ * Hides hover tooltips for main list controls and resets tracking state.
+ */
+ManageHideMainListTooltips(*) {
+    global S
+
+    ToolTip()
+    if S.HasProp("listTooltipShownText")
+        S.listTooltipShownText := ""
+    if S.HasProp("listTooltipRecordingRow")
+        S.listTooltipRecordingRow := 0
+    if S.HasProp("listTooltipPresetRow")
+        S.listTooltipPresetRow := 0
+}
+
+/**
+ * Periodic poll: ToolTip beside cursor when hovering a recording row or preset row with optional description text.
+ */
+ManagePollMainWindowListTooltips(*) {
+    global C, S
+
+    CoordMode("Mouse", "Screen")
+    ; Flag 2: OutputVarControl is HWND (not ClassNN); required for GetManageWindowRootHwnd / DllCall.
+    MouseGetPos(&mx, &my, , &hoverHw, 2)
+
+    try mainHw := S.gui.Hwnd
+    catch {
+        ManageHideMainListTooltips()
+        return
+    }
+
+    if !mainHw || !WinExist("ahk_id " mainHw) {
+        ManageHideMainListTooltips()
+        return
+    }
+
+    if !WinActive("ahk_id " mainHw) {
+        ManageHideMainListTooltips()
+        return
+    }
+
+    if !hoverHw || GetManageWindowRootHwnd(hoverHw) != mainHw {
+        ManageHideMainListTooltips()
+        return
+    }
+
+    recHw := 0
+
+    try recHw := S.recordingList.Hwnd
+    catch {
+        ManageHideMainListTooltips()
+        return
+    }
+
+    presHw := 0
+
+    try presHw := S.presetList.Hwnd
+    catch {
+        presHw := 0
+    }
+
+    if recHw && hoverHw = recHw {
+        tip := ""
+        clx := 0
+        cly := 0
+        if !ManageScreenCoordsToClient(recHw, mx, my, &clx, &cly) {
+            ManageHideMainListTooltips()
+            return
+        }
+
+        hit := GetManageListViewHitSubItem(S.recordingList, clx, cly)
+        row := hit.row
+
+        if row >= 1 && row <= S.recordingPaths.Length {
+            path := S.recordingPaths[row]
+            if path != "" && S.recordingDescCache.Has(path)
+                tip := Trim(S.recordingDescCache[path])
+        }
+
+        shown := Trim(tip) != ""
+
+        if !shown || row < 1 {
+            ManageHideMainListTooltips()
+            return
+        }
+
+        if row = S.listTooltipRecordingRow && tip = S.listTooltipShownText {
+            ToolTip(ManageTruncateTooltipText(tip), mx + C.cursorTipOffsetX, my + C.cursorTipOffsetY)
+            return
+        }
+
+        S.listTooltipShownText := tip
+        S.listTooltipRecordingRow := row
+        S.listTooltipPresetRow := 0
+        ToolTip(ManageTruncateTooltipText(tip), mx + C.cursorTipOffsetX, my + C.cursorTipOffsetY)
+        return
+    }
+
+    if presHw && hoverHw = presHw {
+        clxb := 0
+        clyb := 0
+        if !ManageScreenCoordsToClient(presHw, mx, my, &clxb, &clyb) {
+            ManageHideMainListTooltips()
+            return
+        }
+
+        hit := GetManageListViewHitSubItem(S.presetList, clxb, clyb)
+        prow := hit.row
+        ptip := ""
+
+        if prow >= 1 && prow <= S.presetPaths.Length {
+            pp := S.presetPaths[prow]
+            if pp != "" && S.presetDescCache.Has(pp)
+                ptip := Trim(S.presetDescCache[pp])
+        }
+
+        if prow < 1 || Trim(ptip) = "" {
+            ManageHideMainListTooltips()
+            return
+        }
+
+        if prow = S.listTooltipPresetRow && ptip = S.listTooltipShownText {
+            ToolTip(ManageTruncateTooltipText(ptip), mx + C.cursorTipOffsetX, my + C.cursorTipOffsetY)
+            return
+        }
+
+        S.listTooltipShownText := ptip
+        S.listTooltipPresetRow := prow
+        S.listTooltipRecordingRow := 0
+        ToolTip(ManageTruncateTooltipText(ptip), mx + C.cursorTipOffsetX, my + C.cursorTipOffsetY)
+        return
+    }
+
+    ManageHideMainListTooltips()
+}
+
+/**
+ * Enables or disables the main-window list Tooltip timer.
+ * @param {Boolean} enabled When false, hides any visible hover tooltip immediately.
+ */
+SetManageMainListTooltipPolling(enabled) {
+    global C
+
+    if enabled
+        SetTimer(ManagePollMainWindowListTooltips, C.manageListTooltipPollMs)
+    else {
+        SetTimer(ManagePollMainWindowListTooltips, 0)
+        ManageHideMainListTooltips()
+    }
 }
 
 /**
@@ -3284,6 +3763,7 @@ ShowRecordingLogEditor(*) {
 
     headerLines := parsedLog.headerLines
     events := parsedLog.events
+    logDesc := PeelRecordingDescriptionFromHeader(&headerLines)
 
     CloseRecordingLogEditor()
 
@@ -3298,6 +3778,12 @@ ShowRecordingLogEditor(*) {
     editor.BackColor := "FFFFFF"
 
     editor.Add("Text", "xm w" UI.recordingLogEditorWidth " c1A1A1A", FormatRecordingName(path))
+    editor.Add("Text", "xm w" UI.recordingLogEditorWidth " c555555 Section", "Description (optional)")
+    descEdit := editor.Add(
+        "Edit",
+        "xs w" UI.recordingLogEditorWidth " h" UI.recordingLogEditorDescEditH " Multi +Background" UI.editBg,
+        logDesc
+    )
 
     editorTab := editor.Add(
         "Tab3",
@@ -3343,7 +3829,7 @@ ShowRecordingLogEditor(*) {
     rawPreview := editor.Add(
         "Edit",
         "xs w" UI.recordingLogEditorWidth " r14 Multi ReadOnly -TabStop +Background" UI.statusBg,
-        SerializeRecordingLogFromEditor(headerLines, events)
+        BuildRecordingLogEditorSerializedPreview(headerLines, events, descEdit.Value)
     )
 
     editorTab.UseTab()
@@ -3357,7 +3843,7 @@ ShowRecordingLogEditor(*) {
     detailFieldDefs := []
 
     UpdateRawPreview(*) {
-        rawPreview.Value := SerializeRecordingLogFromEditor(headerLines, events)
+        rawPreview.Value := BuildRecordingLogEditorSerializedPreview(headerLines, events, descEdit.Value)
     }
 
     LoadDetailPanel(rowIndex) {
@@ -3443,11 +3929,17 @@ ShowRecordingLogEditor(*) {
             logFile := FileOpen(path, "w", "UTF-8-RAW")
             if !logFile
                 throw Error("Could not open file for writing.")
-            logFile.Write(SerializeRecordingLogFromEditor(headerLines, events))
+            ; Clone before inject: ByRef from nested SaveLog into global Inject can fail to rebind outer headerLines in some cases.
+            linesForFile := CloneRecordingLogHeaderLines(headerLines)
+            InjectRecordingDescriptionIntoHeader(&linesForFile, descEdit.Value)
+            logFile.Write(SerializeRecordingLogFromEditor(linesForFile, events))
             logFile.Close()
+            headerLines := linesForFile
             UpdateRawPreview()
             RefreshAllLists(false)
             SetStatus("Saved log — " FormatRecordingName(path))
+            CloseLogEditor()
+            return
         } catch as err {
             ShowManageMsgBox "Could not save log:`n" err.Message, "Edit Log", "Icon!"
         }
@@ -3466,6 +3958,7 @@ ShowRecordingLogEditor(*) {
     closeBtn.OnEvent("Click", CloseLogEditor)
     editor.OnEvent("Close", CloseLogEditor)
     editor.OnEvent("Escape", CloseLogEditor)
+    descEdit.OnEvent("Change", UpdateRawPreview)
 
     if events.Length {
         SelectManageListViewDataRow(logList, 1)
@@ -3502,7 +3995,7 @@ ShowPresetEditor(createNew := false, *) {
     global C, S, UI
 
     if createNew && S.presetList
-        S.presetList.Value := 0
+        ClearPresetSelection()
 
     selectedPreset := createNew ? "" : GetSelectedPresetPath()
     originalPresetPath := selectedPreset
@@ -3535,7 +4028,13 @@ ShowPresetEditor(createNew := false, *) {
         createNew ? SuggestNewPresetName()
             : (selectedPreset ? FormatPresetName(selectedPreset) : "default")
     )
-    editor.Add("Text", "Section c1A1A1A", "Variable inputs")
+    editor.Add("Text", "xs w" UI.presetEditorWidth " c555555 Section", "Description (optional)")
+    descEdit := editor.Add(
+        "Edit",
+        "xs w" UI.presetEditorWidth " h" UI.presetEditorDescEditH " Multi +Background" UI.editBg,
+        Trim(existingSettings.description)
+    )
+    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A Section", "Variable inputs")
     presetVariablesInfoButton := AddManageChildInfoButton(editor, "x+2")
     presetVariablesInfoButton.OnEvent("Click", ShowPresetVariablesHelp)
     editor.Add(
@@ -3753,7 +4252,7 @@ ShowPresetEditor(createNew := false, *) {
 
         ControlGetPos &listX, &listY, , , variablesList
         CoordMode "Mouse", "Client"
-        MouseGetPos &mouseX, &mouseY, , &controlHwnd
+        MouseGetPos &mouseX, &mouseY, , &controlHwnd, 2
         if controlHwnd != variablesList.Hwnd
             return
 
@@ -3786,7 +4285,8 @@ ShowPresetEditor(createNew := false, *) {
             return
         }
 
-        settings := BuildRunSettings()
+        presetBasis := originalPresetPath != "" && FileExist(originalPresetPath) ? originalPresetPath : ""
+        settings := BuildRunSettings(presetBasis)
         settings.variables := []
 
         for row in editorVariableRows
@@ -3794,6 +4294,8 @@ ShowPresetEditor(createNew := false, *) {
 
         while settings.variables.Length && settings.variables[settings.variables.Length] = ""
             settings.variables.Pop()
+
+        settings.description := Trim(descEdit.Value)
 
         presetPath := C.savesDir "\" presetName C.saveExt
 
@@ -6304,6 +6806,18 @@ CountRecordingVariableSlots(filePath) {
     return CountVariablesInLog(filePath)
 }
 
+/**
+ * Returns how many variable values a data input file defines.
+ * @param {String} filePath Data input file path.
+ * @returns {Integer}
+ */
+CountPresetVariableSlots(filePath) {
+    if filePath = "" || !FileExist(filePath)
+        return 0
+
+    return ParsePresetFile(filePath).variables.Length
+}
+
 
 ; =============================================================================
 ; Apply — coordinate resolution
@@ -6668,6 +7182,7 @@ DefaultSettings() {
         use_recorded_timing: C.defaultUseRecordedTiming,
         smooth_mouse: C.defaultSmoothMouse,
         human_typing: C.defaultHumanTyping,
+        description: "",
         variables: []
     }
 }
@@ -6707,6 +7222,8 @@ ParsePresetFile(filePath) {
                     settings.smooth_mouse := SafeBool(value, settings.smooth_mouse)
                 case "human_typing":
                     settings.human_typing := SafeBool(value, settings.human_typing)
+                case "description":
+                    settings.description := Trim(value)
             }
 
             continue
@@ -6753,7 +7270,12 @@ WritePresetFile(settings, filePath) {
 }
 
 SerializePreset(settings) {
-    return ""
+    desc := Trim(settings.HasProp("description") ? settings.description : "")
+    desc := StrReplace(StrReplace(desc, "`r", ""), "`n", " ")
+    while InStr(desc, "  ")
+        desc := StrReplace(desc, "  ", " ")
+
+    presetBody := ""
         . "# timing — ms pauses; speeds: higher = faster`n"
         . "playback_speed=" settings.playback_speed "`n"
         . "typing_speed=" settings.typing_speed "`n"
@@ -6764,9 +7286,13 @@ SerializePreset(settings) {
         . "use_recorded_timing=" (settings.use_recorded_timing ? 1 : 0) "`n"
         . "smooth_mouse=" (settings.smooth_mouse ? 1 : 0) "`n"
         . "human_typing=" (settings.human_typing ? 1 : 0) "`n"
-        . "`n"
-        . "# variable-1, variable-2, variable-3 ... (optional note labels; escape commas with \\,)`n"
+    if desc != ""
+        presetBody .= "`n# optional description shown as tooltip on the Data Inputs list row`ndescription="
+            desc "`n"
+
+    presetBody .= "`n# variable-1, variable-2, variable-3 ... (optional note labels; escape commas with \\,)`n"
         . JoinManageDelimitedFields(settings.variables) "`n"
+    return presetBody
 }
 
 ResolveVariableText(variableName) {
@@ -6898,6 +7424,39 @@ SafeCsvName(name) {
 }
 
 /**
+ * Sanitizes a bundle folder name for Share (Windows path rules).
+ * @param {String} name User-facing bundle label.
+ * @returns {String}
+ */
+SafeBundleDirName(name) {
+    name := Trim(name)
+    name := RegExReplace(name, "[\\/:*?`"<>|]", "-")
+    name := RegExReplace(name, "^\.+", "")
+    name := RegExReplace(name, "\.+$", "")
+    name := Trim(RegExReplace(name, "-+", "-"), "-")
+    name := Trim(name)
+    return name != "" ? name : "dea-bundle"
+}
+
+/**
+ * Resolves `parentDir\folderStem`; when that folder exists, uses `-2`, `-3`, … suffixes.
+ * @param {String} parentDir Parent directory.
+ * @param {String} folderStem Sanitized bundle folder stem.
+ * @returns {String}
+ */
+ResolveUniqueBundleDirPath(parentDir, folderStem) {
+    cand := parentDir "\" folderStem
+    if !DirExist(cand)
+        return cand
+
+    suffix := 2
+    while DirExist(parentDir "\" folderStem "-" suffix)
+        suffix++
+
+    return parentDir "\" folderStem "-" suffix
+}
+
+/**
  * Returns true when a path points to a file in csv-batches\.
  * @param {String} filePath Full file path.
  * @returns {Boolean}
@@ -6948,6 +7507,837 @@ ImportCsvToLibrary(sourcePath) {
 
     SetInputSourceMode(C.inputSourceCsv)
     SetStatus("Imported CSV — " FormatCsvName(targetPath))
+}
+
+/**
+ * Escapes a string for JSON scalar output (double quotes, backslashes, CR/LF/tab).
+ * @param {String} value Raw string.
+ * @returns {String}
+ */
+EscapeJsonScalar(value) {
+    value := StrReplace(value, "\", "\\")
+    value := StrReplace(value, '"', '\"')
+    value := StrReplace(value, "`r", "\r")
+    value := StrReplace(value, "`n", "\n")
+    value := StrReplace(value, "`t", "\t")
+    return value
+}
+
+/**
+ * Extracts `"key": value` pairs from a portable bundle manifest JSON (minimal parser).
+ * @param {String} manifestText Full manifest file body.
+ * @returns {Map}
+ */
+ParseBundleManifest(manifestText) {
+
+    out := Map(
+        "format", "",
+        "formatVersion", "",
+        "appVersion", "",
+        "exportedAt", "",
+        "bundleName", "",
+        "inputMode", "",
+        "recordingFile", "",
+        "presetFile", "",
+        "csvFile", "",
+        "recordingDisplayName", "",
+        "presetDisplayName", "",
+        "csvDisplayName", "",
+        "variableSlotCount", "",
+        "presetVariableCount", "",
+        "presetSlotMismatchWarning", ""
+    )
+
+    for key, _ignored in out {
+        if key = "formatVersion" || key = "variableSlotCount" || key = "presetVariableCount" {
+            if RegExMatch(manifestText, '"\Q' key '\E"\s*:\s*(-?\d+)', &m)
+                out[key] := m[1]
+        } else {
+            if RegExMatch(manifestText, '"\Q' key '\E"\s*:\s*"((?:[^"\\]|\\.)*)"', &m)
+                out[key] := JsonUnescapeString(m[1])
+        }
+    }
+
+    return out
+}
+
+/**
+ * Unescapes `\"`, `\\`, and common JSON escapes inside a extracted JSON string literal.
+ * @param {String} raw Escaped substring (without surrounding quotes).
+ * @returns {String}
+ */
+JsonUnescapeString(raw) {
+    out := ""
+    i := 1
+    while i <= StrLen(raw) {
+        ch := SubStr(raw, i, 1)
+        if ch != "\" || i >= StrLen(raw) {
+            out .= ch
+            i++
+            continue
+        }
+
+        nx := SubStr(raw, i + 1, 1)
+        switch nx {
+            case '"', "\\":
+                out .= nx
+            case 'n':
+                out .= "`n"
+            case 'r':
+                out .= "`r"
+            case 't':
+                out .= "`t"
+            default:
+                out .= nx
+        }
+
+        i += 2
+    }
+
+    return out
+}
+
+/**
+ * Returns the destination path inside a directory using `-2`, `-3` suffixes when occupied.
+ * @param {String} dir Library directory path.
+ * @param {String} stem Base filename without extension.
+ * @param {String} ext File extension starting with '.'.
+ * @returns {String} Full destination path.
+ */
+ResolveUniqueStemPath(dir, stem, ext) {
+    cand := dir "\" stem ext
+    if !FileExist(cand)
+        return cand
+
+    suffix := 2
+    while FileExist(dir "\" stem "-" suffix ext)
+        suffix++
+
+    return dir "\" stem "-" suffix ext
+}
+
+/**
+ * Doubles single quotes for safe embedding in a PowerShell single-quoted string.
+ * @param {String} path File or directory path.
+ * @returns {String}
+ */
+EscapePowerShellSingleQuoted(path) {
+    return StrReplace(path, "'", "''")
+}
+
+/**
+ * Runs PowerShell 5+ Compress-Archive (bundle ZIP export).
+ * @param {String} folderSrc Staging directory (files at top level).
+ * @param {String} zipDest Output .zip path.
+ * @returns {Integer} Child process exit code (0 = success).
+ */
+RunPowerShellCompressArchiveFolder(folderSrc, zipDest) {
+    global C
+
+    if !FileExist(C.bundlePowerShellExe)
+        return 1
+
+    ps1 := A_Temp "\dea-compress-" A_TickCount ".ps1"
+    script := "$ErrorActionPreference = 'Stop'`r`n"
+        . "Compress-Archive -Path '" EscapePowerShellSingleQuoted(folderSrc) "\*' -DestinationPath '"
+        EscapePowerShellSingleQuoted(zipDest) "' -Force`r`n"
+
+    exitCode := 1
+    try {
+        WriteTextFile(script, ps1)
+        pwshLine := "`"" C.bundlePowerShellExe "`" -NoProfile -ExecutionPolicy Bypass -File `"" ps1 "`""
+        exitCode := RunWait(pwshLine, , "Hide")
+    } catch {
+        exitCode := 1
+    } finally {
+        if FileExist(ps1)
+            try FileDelete ps1
+    }
+    return exitCode
+}
+
+/**
+ * Runs PowerShell 5+ Expand-Archive (legacy bundle .zip import).
+ * @param {String} zipPath Source archive path.
+ * @param {String} folderDest Extraction folder.
+ * @returns {Integer} Child process exit code (use 0 as success).
+ */
+RunPowerShellExpandArchive(zipPath, folderDest) {
+    global C
+
+    if !FileExist(C.bundlePowerShellExe)
+        return 1
+
+    ps1 := A_Temp "\dea-expand-" A_TickCount ".ps1"
+    script := "$ErrorActionPreference = 'Stop'`r`n"
+        . "Expand-Archive -LiteralPath '" EscapePowerShellSingleQuoted(zipPath) "' -DestinationPath '"
+        EscapePowerShellSingleQuoted(folderDest) "' -Force`r`n"
+
+    exitCode := 1
+    try {
+        WriteTextFile(script, ps1)
+        pwshLine := "`"" C.bundlePowerShellExe "`" -NoProfile -ExecutionPolicy Bypass -File `"" ps1 "`""
+        exitCode := RunWait(pwshLine, , "Hide")
+    } catch {
+        exitCode := 1
+    } finally {
+        if FileExist(ps1)
+            try FileDelete ps1
+    }
+    return exitCode
+}
+
+/**
+ * Zips staging folder contents using Windows built-in tar (ZIP on Windows 10 1903+).
+ * @param {String} folderSrc Directory whose files become the archive root.
+ * @param {String} zipDest Output .zip path.
+ * @returns {Integer} Process exit code.
+ */
+RunTarCompressArchiveFolder(folderSrc, zipDest) {
+    global C
+
+    if folderSrc = "" || zipDest = "" || !DirExist(folderSrc)
+        return 1
+    if !FileExist(C.bundleTarExe)
+        return 1
+
+    cmd := "`"" C.bundleTarExe "`" -cf `"" zipDest "`" -C `"" folderSrc "`" ."
+    try
+        return RunWait(cmd, , "Hide")
+    catch
+        return 1
+}
+
+/**
+ * Extracts a .zip archive into an existing folder using Windows tar.
+ * @param {String} zipPath Archive path.
+ * @param {String} folderDest Destination folder.
+ * @returns {Integer} Process exit code.
+ */
+RunTarExpandArchive(zipPath, folderDest) {
+    global C
+
+    if zipPath = "" || folderDest = "" || !FileExist(zipPath)
+        return 1
+    if !DirExist(folderDest)
+        return 1
+    if !FileExist(C.bundleTarExe)
+        return 1
+
+    cmd := "`"" C.bundleTarExe "`" -xf `"" zipPath "`" -C `"" folderDest `""
+    try
+        return RunWait(cmd, , "Hide")
+    catch
+        return 1
+}
+
+/**
+ * Creates a ZIP of folderSrc: Compress-Archive when PowerShell is present, otherwise tar.exe.
+ * @param {String} folderSrc Staging directory.
+ * @param {String} zipDest Output .zip path.
+ * @returns {Integer} 0 on success with zip present, otherwise non-zero.
+ */
+RunManageCompressArchiveFolder(folderSrc, zipDest) {
+    global C
+
+    if FileExist(zipDest)
+        try FileDelete(zipDest)
+
+    if FileExist(C.bundlePowerShellExe) {
+        psCode := RunPowerShellCompressArchiveFolder(folderSrc, zipDest)
+        if psCode = 0 && FileExist(zipDest)
+            return 0
+    }
+
+    try FileDelete(zipDest)
+    tarCode := RunTarCompressArchiveFolder(folderSrc, zipDest)
+    return tarCode = 0 && FileExist(zipDest) ? 0 : (tarCode != 0 ? tarCode : 1)
+}
+
+/**
+ * Extracts ZIP to folderDest: Expand-Archive first, then tar xf if needed.
+ * @param {String} zipPath Source archive.
+ * @param {String} folderDest Empty or reusable folder path.
+ * @returns {Integer} 0 on success.
+ */
+RunManageExpandArchive(zipPath, folderDest) {
+    global C
+
+    if FileExist(C.bundlePowerShellExe) {
+        psCode := RunPowerShellExpandArchive(zipPath, folderDest)
+        if psCode = 0
+            return 0
+    }
+
+    RemoveDirTree(folderDest)
+    DirCreate(folderDest)
+
+    tarCode := RunTarExpandArchive(zipPath, folderDest)
+    return tarCode = 0 ? 0 : tarCode
+}
+
+/**
+ * Recursively removes a directory tree (best effort).
+ * @param {String} dirPath Directory to remove.
+ */
+RemoveDirTree(dirPath) {
+    if dirPath = "" || !DirExist(dirPath)
+        return
+
+    try {
+        DirDelete dirPath, 1
+    } catch {
+    }
+}
+
+/**
+ * Modal dialog: bundle label, Folder vs ZIP export.
+ * @param {String} defaultFullLabel Pre-filled suggested name when the edit is blank on OK.
+ * @returns {{ ok: Boolean, bundleLabel: String, useZip: Boolean }}
+ */
+ShowShareBundleDialog(defaultFullLabel) {
+    global S, UI
+
+    out := { ok: false, bundleLabel: "", useZip: false }
+    hidMain := false
+
+    if S.gui {
+        hidMain := true
+        try S.gui.Hide()
+    }
+
+    dlgInnerW := Min(UI.contentWidth, 436)
+
+    dlg := Gui("+ToolWindow", "Share bundle")
+    BindManageChildGui(dlg)
+    dlg.MarginX := UI.marginX
+    dlg.MarginY := UI.marginY
+    dlg.BackColor := UI.bg
+    dlg.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+
+    dlg.Add(
+        "Text",
+        "xm w" dlgInnerW,
+        "Use a name below, or keep the suggestion.`n`nHow do you want to save this bundle?"
+    )
+    nameEdit := dlg.Add("Edit", "xm w" dlgInnerW, defaultFullLabel)
+
+    rFolder := dlg.Add(
+        "Radio",
+        "xm Group Checked",
+        "Folder — a new folder with all the files inside (easiest to open or copy)"
+    )
+    rZip := dlg.Add(
+        "Radio",
+        "xm",
+        "One zip file — easier to email or move as a single file"
+    )
+
+    dlg.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    okBtn := dlg.Add("Button", "xm w92 Default", "OK")
+    cxBtn := dlg.Add("Button", "x+" UI.btnGap " w92", "Cancel")
+
+    closed := false
+
+    ShutdownShareBundleDlg(submitOk) {
+        global S
+
+        if closed
+            return
+        closed := true
+
+        if submitOk {
+            lbl := Trim(nameEdit.Value)
+            out.ok := true
+            out.bundleLabel := lbl != "" ? lbl : defaultFullLabel
+            out.useZip := (rFolder.Value = 2)
+        }
+
+        try dlg.Destroy()
+        if hidMain && S.gui
+            try S.gui.Show()
+    }
+
+    okBtn.OnEvent("Click", (*) => ShutdownShareBundleDlg(true))
+    cxBtn.OnEvent("Click", (*) => ShutdownShareBundleDlg(false))
+    dlg.OnEvent("Close", (*) => ShutdownShareBundleDlg(false))
+    dlg.OnEvent("Escape", (*) => ShutdownShareBundleDlg(false))
+
+    dlg.Show()
+    WinWaitClose("ahk_id " dlg.Hwnd)
+
+    return out
+}
+
+/**
+ * Prompts for bundle label and Folder vs ZIP, then writes bundle output.
+ */
+ShareDataEntryBundle(*) {
+    global C, S
+
+    if S.recording || S.applying || S.batchRunning {
+        SetStatus("Wait until recording or Run has finished before sharing.")
+        return
+    }
+
+    logPath := GetSelectedRecordingPath()
+    if logPath = "" || !FileExist(logPath) {
+        SetStatus("Choose a recording in the list first.")
+        ShowManageMsgBox "Choose a recording in the list, then try Share again.", "Share bundle", "Icon!"
+        return
+    }
+
+    presetMode := S.inputSourceMode != C.inputSourceCsv
+
+    presetPath := ""
+    csvPath := ""
+
+    if presetMode {
+        presetPath := GetSelectedPresetPath()
+        if presetPath = "" || !FileExist(presetPath) {
+            SetStatus("Pick a data input first, or switch to CSV mode if you meant to share a CSV batch.")
+            ShowManageMsgBox "Pick a data input in the list first (Bulk Inputs tab if you need a CSV).", "Share bundle", "Icon!"
+            return
+        }
+    } else {
+        csvPath := GetSelectedCsvPath()
+        if csvPath = "" {
+            SetStatus("Pick a CSV batch file first.")
+            ShowManageMsgBox "Pick a CSV batch file, then try Share again.", "Share bundle", "Icon!"
+            return
+        }
+
+        if !FileExist(csvPath) {
+            SetStatus("That CSV file is missing.")
+            ShowManageMsgBox "That CSV path no longer exists:`n" csvPath, "Share bundle", "Icon!"
+            return
+        }
+    }
+
+    defaultName := FormatRecordingName(logPath)
+    bundlePcStem := RegExReplace(StrReplace(A_ComputerName, " ", "-"), "[\\/:*?`"<>|]", "-")
+    bundlePcStem := RegExReplace(bundlePcStem, "i)^desktop-+", "")
+    bundlePcStem := RegExReplace(bundlePcStem, "i)^desktop$", "")
+    bundlePcStem := Trim(RegExReplace(bundlePcStem, "-+", "-"), "-")
+    if bundlePcStem = ""
+        bundlePcStem := "unknown-pc"
+    bundleDateSuffix := "-" bundlePcStem "-" FormatTime(A_Now, "MMddyy")
+    defaultFullLabel := defaultName bundleDateSuffix
+    bundleOpts := ShowShareBundleDialog(defaultFullLabel)
+    if !bundleOpts.ok {
+        SetStatus("Share cancelled.")
+        return
+    }
+    bundleLabel := bundleOpts.bundleLabel
+    useZip := bundleOpts.useZip
+
+    variableSlots := CountRecordingVariableSlots(logPath)
+    recordingDisplay := FormatRecordingName(logPath)
+
+    presetDisplay := ""
+    csvDisplay := ""
+    presetVarCount := ""
+    mismatchWarning := ""
+
+    inputMode := presetMode ? "preset" : "csv"
+    presetFileKey := ""
+    csvFileKey := ""
+
+    if presetMode {
+        presetDisplay := FormatPresetName(presetPath)
+        parsed := ParsePresetFile(presetPath)
+        presetVarCount := parsed.variables.Length
+
+        if variableSlots != presetVarCount && variableSlots > 0
+            mismatchWarning := Format(
+                "Recording declares {1} typed variable slot(s) but preset has {2} value column(s)",
+                variableSlots,
+                presetVarCount
+            )
+
+        presetFileKey := Format('  "presetFile": "{1}",`n', C.bundlePresetZipName)
+    } else {
+        csvDisplay := FormatCsvName(csvPath)
+        csvFileKey := Format('  "csvFile": "{1}",`n', C.bundleCsvZipName)
+    }
+
+    exportedAt := FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss")
+
+    manifest := ""
+    manifest .= "{`n"
+    manifest .= Format('  "format": "{1}",`n', C.bundleFormatId)
+    manifest .= Format('  "formatVersion": {1},`n', C.bundleFormatVersion)
+    manifest .= Format('  "appVersion": "{1}",`n', EscapeJsonScalar(C.appVersion))
+    manifest .= Format('  "exportedAt": "{1}",`n', EscapeJsonScalar(exportedAt))
+    manifest .= Format('  "bundleName": "{1}",`n', EscapeJsonScalar(bundleLabel))
+    manifest .= Format('  "inputMode": "{1}",`n', inputMode)
+    manifest .= Format('  "recordingFile": "{1}",`n', C.bundleRecordingZipName)
+    manifest .= presetFileKey
+    manifest .= csvFileKey
+    manifest .= Format('  "recordingDisplayName": "{1}",`n', EscapeJsonScalar(recordingDisplay))
+
+    if presetMode
+        manifest .= Format('  "presetDisplayName": "{1}",`n', EscapeJsonScalar(presetDisplay))
+    else
+        manifest .= Format('  "csvDisplayName": "{1}",`n', EscapeJsonScalar(csvDisplay))
+
+    manifest .= Format('  "variableSlotCount": {1}', variableSlots)
+
+    if presetMode
+        manifest .= Format(',`n  "presetVariableCount": {1}', presetVarCount)
+
+    if mismatchWarning != ""
+        manifest .= Format(',`n  "presetSlotMismatchWarning": "{1}"', EscapeJsonScalar(mismatchWarning))
+
+    manifest .= "`n}`n"
+
+    if useZip {
+        staging := A_Temp "\" C.bundleStagingTempPrefix A_TickCount
+        zipTemp := A_Temp "\" C.bundleStagingTempPrefix A_TickCount ".zip"
+
+        try {
+            DirCreate(staging)
+            WriteTextFile(manifest, staging "\" C.bundleManifestFileName)
+            FileCopy logPath, staging "\" C.bundleRecordingZipName, 1
+
+            if presetMode
+                FileCopy presetPath, staging "\" C.bundlePresetZipName, 1
+            else
+                FileCopy csvPath, staging "\" C.bundleCsvZipName, 1
+
+            if FileExist(zipTemp)
+                FileDelete(zipTemp)
+
+            bundleZipExit := RunManageCompressArchiveFolder(staging, zipTemp)
+            if bundleZipExit != 0 || !FileExist(zipTemp) {
+                SetStatus("Could not create the zip file.")
+                ShowManageMsgBox "This PC couldn't make the zip file. Try saving as a folder instead, or update Windows and try again.", "Share bundle", "Icon!"
+                return
+            }
+
+            saveDefault := SafeCsvName(bundleLabel) C.bundleZipExt
+            savePath := ShowManageFileSelect(
+                "S16",
+                A_ScriptDir "\" saveDefault,
+                "Save bundle",
+                "Data Entry Autonoma bundle (*" C.bundleZipExt ";*.zip)"
+            )
+
+            if savePath = "" {
+                SetStatus("Save cancelled.")
+                return
+            }
+
+            EnsureParentDir(savePath)
+            if FileExist(savePath)
+                FileDelete(savePath)
+            FileMove zipTemp, savePath, 1
+
+            SetStatus("Saved — " FileBaseName(savePath))
+            ShowManageMsgBox "Saved here:`n`n" savePath, "Share bundle", "Iconi"
+        } catch as err {
+            SetStatus("Share didn't finish.")
+            ShowManageMsgBox "Something went wrong while saving:`n" err.Message, "Share bundle", "Icon!"
+        } finally {
+            RemoveDirTree(staging)
+            if FileExist(zipTemp)
+                try FileDelete(zipTemp)
+        }
+        return
+    }
+
+    parentDir := ShowManageFileSelect("D", A_ScriptDir, "Pick where to create the new folder")
+    if parentDir = "" {
+        SetStatus("Share cancelled.")
+        return
+    }
+
+    folderStem := SafeBundleDirName(bundleLabel)
+    bundleDir := ResolveUniqueBundleDirPath(parentDir, folderStem)
+
+    try {
+        DirCreate(bundleDir)
+        WriteTextFile(manifest, bundleDir "\" C.bundleManifestFileName)
+        FileCopy logPath, bundleDir "\" C.bundleRecordingZipName, 1
+
+        if presetMode
+            FileCopy presetPath, bundleDir "\" C.bundlePresetZipName, 1
+        else
+            FileCopy csvPath, bundleDir "\" C.bundleCsvZipName, 1
+
+        SetStatus("Saved — folder " FileBaseName(bundleDir))
+        ShowManageMsgBox "Your bundle is in this folder:`n`n" bundleDir, "Share bundle", "Iconi"
+    } catch as err {
+        SetStatus("Share didn't finish.")
+        ShowManageMsgBox "Something went wrong while saving:`n" err.Message, "Share bundle", "Icon!"
+    }
+}
+
+/**
+ * Imports a bundle from a picked folder or a `.zip`.
+ * Copies the recording plus data-input or CSV from the bundle into the app's library folders (same names as Shared), not unrelated files beside them.
+ */
+ImportDataEntryBundle(*) {
+    global C, S
+
+    if S.recording || S.applying || S.batchRunning {
+        SetStatus("Wait until recording or Run has finished before importing.")
+        return
+    }
+
+    how := ShowManageMsgBox(
+        "Was this bundle saved as a folder, or one zip file?`n`n"
+        . "Yes — pick the bundle folder.`n"
+        . "No — pick the .zip file.",
+        "Import a bundle",
+        "Icon? YesNoCancel"
+    )
+
+    if S.gui
+        S.gui.Show()
+
+    if how != "Yes" && how != "No" {
+        SetStatus("Import cancelled.")
+        return
+    }
+
+    extractDir := ""
+    tempBundleExtract := false
+
+    if how = "Yes" {
+        bundleParent := ShowManageFileSelect("D", A_ScriptDir, "Pick the bundle folder")
+        if bundleParent = "" {
+            SetStatus("Import cancelled.")
+            return
+        }
+
+        extractDir := RTrim(bundleParent, "\\")
+        bundleManifestFull := extractDir "\" C.bundleManifestFileName
+        if !FileExist(bundleManifestFull) {
+            SetStatus("No bundle info in that folder.")
+            ShowManageMsgBox "That folder doesn't contain " C.bundleManifestFileName ".`n`n"
+                . "Choose the folder that Share created — the one that holds the listing file, recording, and data files together.",
+                "Import bundle", "Icon!"
+            return
+        }
+
+        tempBundleExtract := false
+
+    }
+    ; how = No — zip
+    else {
+
+        picked := ShowManageFileSelect(
+            "1",
+            A_ScriptDir,
+            "Pick the bundle zip",
+            "Zip|*.dea.zip;*.zip"
+        )
+
+        if picked = "" {
+            SetStatus("Import cancelled.")
+            return
+        }
+
+        if !FileExist(picked) {
+            SetStatus("That file wasn't found.")
+            ShowManageMsgBox "Could not find:`n" picked, "Import bundle", "Icon!"
+            return
+        }
+
+        extractDir := A_Temp "\" C.bundleImportTempPrefix A_TickCount
+        DirCreate extractDir
+        tempBundleExtract := true
+        expandPsExitCode := RunManageExpandArchive(picked, extractDir)
+        if expandPsExitCode != 0 {
+            RemoveDirTree(extractDir)
+            SetStatus("Could not open that zip.")
+            ShowManageMsgBox "That zip could not be opened. It may be damaged, or your PC could not unpack it.", "Import bundle", "Icon!"
+            return
+        }
+    }
+
+    try {
+        manifestPath := extractDir "\" C.bundleManifestFileName
+        if !FileExist(manifestPath) {
+            SetStatus("This doesn't look like a bundle.")
+            ShowManageMsgBox "This folder or zip doesn't contain the bundle info file the app expects.", "Import bundle", "Icon!"
+            return
+        }
+
+        manifestText := ReadTextFile(manifestPath)
+        man := ParseBundleManifest(manifestText)
+
+        if man["format"] != C.bundleFormatId {
+            SetStatus("Not a bundle from this app.")
+            ShowManageMsgBox "This isn't a bundle from Data Entry Autonoma.", "Import bundle", "Icon!"
+            return
+        }
+
+        fv := Trim(man["formatVersion"])
+        try fvNum := Integer(fv)
+        catch {
+            fvNum := -1
+        }
+
+        if fvNum != C.bundleFormatVersion {
+            SetStatus("This bundle doesn't match this app version.")
+            ShowManageMsgBox "This bundle needs a matching app version.", "Import bundle", "Icon!"
+            return
+        }
+
+        if man["recordingFile"] = "" || man["recordingFile"] != C.bundleRecordingZipName {
+            SetStatus("This bundle looks damaged.")
+            ShowManageMsgBox "The bundle info doesn't match what this app expects. Try exporting again.", "Import bundle", "Icon!"
+            return
+        }
+
+        inputMode := StrLower(Trim(man["inputMode"]))
+        if inputMode != "preset" && inputMode != "csv" {
+            SetStatus("This bundle looks damaged.")
+            ShowManageMsgBox "The bundle info doesn't describe a valid preset or CSV setup.", "Import bundle", "Icon!"
+            return
+        }
+
+        recSrc := extractDir "\" C.bundleRecordingZipName
+        if !FileExist(recSrc) {
+            SetStatus("This bundle is missing the recording file.")
+            ShowManageMsgBox "The recording file is missing from this bundle.", "Import bundle", "Icon!"
+            return
+        }
+
+        presetSrc := ""
+        csvSrc := ""
+
+        if inputMode = "preset" {
+            if man["presetFile"] != C.bundlePresetZipName {
+                SetStatus("This bundle looks damaged.")
+                ShowManageMsgBox "The bundle info doesn't list the data-input file this app expects.", "Import bundle", "Icon!"
+                return
+            }
+
+            presetSrc := extractDir "\" C.bundlePresetZipName
+            if !FileExist(presetSrc) {
+                SetStatus("Missing data-input file in bundle.")
+                ShowManageMsgBox "The data-input file is missing from this folder or zip.", "Import bundle", "Icon!"
+                return
+            }
+        } else {
+            if man["csvFile"] != C.bundleCsvZipName {
+                SetStatus("This bundle looks damaged.")
+                ShowManageMsgBox "The bundle info doesn't list the spreadsheet file this app expects.", "Import bundle", "Icon!"
+                return
+            }
+
+            csvSrc := extractDir "\" C.bundleCsvZipName
+            if !FileExist(csvSrc) {
+                SetStatus("Missing spreadsheet in bundle.")
+                ShowManageMsgBox "The spreadsheet (CSV) file is missing from this folder or zip.", "Import bundle", "Icon!"
+                return
+            }
+        }
+
+        recDisplay := Trim(man["recordingDisplayName"])
+        if recDisplay = ""
+            recDisplay := "imported-recording"
+
+        recordingStem := SafeRecordingFileName(recDisplay)
+        destRecording := ResolveUniqueStemPath(C.recordingsDir, recordingStem, ".log")
+
+        destPreset := ""
+        destCsv := ""
+
+        if inputMode = "preset" {
+            presetDisplay := Trim(man["presetDisplayName"])
+            if presetDisplay = ""
+                presetDisplay := "imported-data-input"
+
+            presetStem := SafePresetName(presetDisplay)
+            if presetStem = ""
+                presetStem := "imported-data-input"
+
+            destPreset := ResolveUniqueStemPath(C.savesDir, presetStem, C.saveExt)
+        } else {
+            csvDisplay := Trim(man["csvDisplayName"])
+            if csvDisplay = ""
+                csvDisplay := "imported-batch"
+
+            csvStem := SafeCsvName(csvDisplay)
+            if csvStem = ""
+                csvStem := "imported-batch"
+
+            destCsv := ResolveUniqueStemPath(C.csvBatchesDir, csvStem, C.csvExt)
+        }
+
+        EnsureDir(C.recordingsDir)
+        EnsureDir(C.savesDir)
+        EnsureDir(C.csvBatchesDir)
+
+        FileCopy recSrc, destRecording, 1
+
+        if inputMode = "preset"
+            FileCopy presetSrc, destPreset, 1
+        else
+            FileCopy csvSrc, destCsv, 1
+
+        RefreshRecordingList()
+
+        slotCountImported := CountRecordingVariableSlots(destRecording)
+
+        if inputMode = "preset" {
+            RefreshPresetList()
+            SetInputSourceMode(C.inputSourcePreset, false)
+            SelectByBaseName(S.recordingList, S.recordingPaths, FileBaseName(destRecording))
+            SelectByBaseName(S.presetList, S.presetPaths, FileBaseName(destPreset))
+            ClearCsvSelection()
+        } else {
+            RefreshCsvList()
+            SetInputSourceMode(C.inputSourceCsv, false)
+            SelectByBaseName(S.recordingList, S.recordingPaths, FileBaseName(destRecording))
+            if S.csvEdit
+                S.csvEdit.Value := destCsv
+            SelectCsvListByPath(destCsv)
+        }
+
+        RememberSelections()
+        UpdateSelectionStatus()
+        summary := FormatRecordingName(destRecording) . (inputMode = "preset" ? " · " FormatPresetName(destPreset)
+            : " · " FormatCsvName(destCsv))
+
+        SetStatus("Success — " summary)
+
+        noteBlock := ""
+
+        if inputMode = "preset" {
+            warn := Trim(man["presetSlotMismatchWarning"])
+            presetCols := ParsePresetFile(destPreset).variables.Length
+
+            if warn != ""
+                noteBlock := warn
+            else if slotCountImported != presetCols
+                noteBlock := Format(
+                    "The recording uses {1} space(s) for typed text, but this data input has {2} row(s). You can edit the data input before Run if those should match.",
+                    slotCountImported,
+                    presetCols
+                )
+        }
+
+        msg := "SUCCESS — your bundle was imported.`n`n"
+            . summary "`n`n"
+            . "These are now selected in the app. You can click Run when you're ready."
+
+        if noteBlock != ""
+            msg .= "`n`n---`nFYI (not an error):`n" noteBlock
+
+        ShowManageMsgBox msg, "Import — success", "Iconi"
+
+    } catch as err {
+        SetStatus("Import didn't finish.")
+        ShowManageMsgBox "Something went wrong while importing:`n" err.Message, "Import bundle", "Icon!"
+    } finally {
+        if tempBundleExtract
+            RemoveDirTree(extractDir)
+    }
 }
 
 /**

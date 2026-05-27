@@ -1,0 +1,54 @@
+# detectInput session di-1
+# format: pipe-delimited UTF-8
+# coordinate mode: absolute screen plus active-window client coordinates
+# origin is metadata only; first input is not rewritten to 0,0
+# click fields:
+# elapsed_ms|click|button|screenX|screenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe
+# scroll fields:
+# elapsed_ms|scroll|direction|delta|notches|screenX|screenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe
+# key fields:
+# elapsed_ms|key|variable-N|vk|sc|hwnd|class|title|exe
+# shortcut fields:
+# elapsed_ms|shortcut|sendText|displayLabel|vk|sc|hwnd|class|title|exe
+# mouse_hold fields:
+# elapsed_ms|mouse_hold|button|duration_ms|startScreenX|startScreenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe|endScreenX|endScreenY
+# delay fields:
+# elapsed_ms|meta|delay|duration_ms
+# playback tip: prefer pctX/pctY against the target window's current client size, then fallback to clientX/clientY, then screenX/screenY.
+0|meta|recording_started
+# origin: 1110,832 (metadata only; coordinates are not rewritten)
+1079|click|LButton|1110|832|1110|832|0.578125|0.770370|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+1797|click|LButton|1110|832|1110|832|0.578125|0.770370|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+3750|click|LButton|1110|832|1110|832|0.578125|0.770370|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+8266|click|LButton|742|415|742|415|0.386458|0.384259|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+8704|key|variable-1|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+11766|click|LButton|1128|414|1128|414|0.587500|0.383333|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+17579|click|LButton|1014|435|1014|435|0.528125|0.402778|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+21125|click|LButton|720|468|720|468|0.375000|0.433333|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+21766|key|variable-2|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+27500|click|LButton|717|511|717|511|0.373438|0.473148|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+27954|key|variable-3|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+35079|click|LButton|721|556|721|556|0.375521|0.514815|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+36141|click|LButton|926|554|926|554|0.482292|0.512963|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+37344|click|LButton|732|576|732|576|0.381250|0.533333|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+45625|click|LButton|724|658|724|658|0.377083|0.609259|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+47219|shortcut|+{m}|Shift + m|77|50|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+58610|click|LButton|1151|468|1151|468|0.599479|0.433333|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+59891|key|variable-4|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+63141|click|LButton|1054|517|1054|517|0.548958|0.478704|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+64657|key|variable-5|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+73610|click|LButton|1116|834|1116|834|0.581250|0.772222|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+79094|click|LButton|874|735|874|735|0.455208|0.680556|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+83813|key|variable-6|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+93407|mouse_hold|LButton|2282|1214|378|1214|378|0.632292|0.350000|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe|1214|767
+94391|click|LButton|885|673|885|673|0.460938|0.623148|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+96875|key|variable-7|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+99219|click|LButton|1110|835|1110|835|0.578125|0.773148|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+105344|click|LButton|1109|834|1109|834|0.577604|0.772222|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+107891|click|LButton|164|123|164|123|0.085417|0.113889|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+110797|key|variable-8|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+112829|click|LButton|249|118|249|118|0.129688|0.109259|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+117610|click|LButton|1079|588|1079|588|0.561979|0.544444|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+119657|click|LButton|252|123|252|123|0.131250|0.113889|1920|1080|0|0|1920|1080|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+122110|key|variable-9|68|32|0x2114BE|Transparent Windows Client|VMPCHJB04 - Remote Desktop Connection - \\Remote|wfica32.exe
+124579|meta|recording_stopped

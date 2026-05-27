@@ -1,0 +1,15 @@
+﻿{
+  "format": "data-entry-autonoma-bundle",
+  "formatVersion": 1,
+  "appVersion": "1.0.6",
+  "exportedAt": "2026-05-27 09:48:17",
+  "bundleName": "1-SSJR-052726",
+  "inputMode": "preset",
+  "recordingFile": "recording.log",
+  "presetFile": "data-input.txt",
+  "recordingDisplayName": "1",
+  "presetDisplayName": "Main",
+  "variableSlotCount": 4,
+  "presetVariableCount": 11,
+  "presetSlotMismatchWarning": "Recording declares 4 typed variable slot(s) but preset has 11 value column(s)"
+}

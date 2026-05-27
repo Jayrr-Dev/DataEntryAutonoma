@@ -1,0 +1,15 @@
+﻿{
+  "format": "data-entry-autonoma-bundle",
+  "formatVersion": 1,
+  "appVersion": "1.0.6",
+  "exportedAt": "2026-05-27 09:53:18",
+  "bundleName": "Projectwise-SSJR-052726",
+  "inputMode": "preset",
+  "recordingFile": "recording.log",
+  "presetFile": "data-input.txt",
+  "recordingDisplayName": "Projectwise",
+  "presetDisplayName": "Main",
+  "variableSlotCount": 9,
+  "presetVariableCount": 11,
+  "presetSlotMismatchWarning": "Recording declares 9 typed variable slot(s) but preset has 11 value column(s)"
+}

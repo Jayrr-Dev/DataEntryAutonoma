@@ -1,0 +1,29 @@
+# detectInput session di-1
+# format: pipe-delimited UTF-8
+# coordinate mode: absolute screen plus active-window client coordinates
+# origin is metadata only; first input is not rewritten to 0,0
+# click fields:
+# elapsed_ms|click|button|screenX|screenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe
+# scroll fields:
+# elapsed_ms|scroll|direction|delta|notches|screenX|screenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe
+# key fields:
+# elapsed_ms|key|variable-N|vk|sc|hwnd|class|title|exe
+# shortcut fields:
+# elapsed_ms|shortcut|sendText|displayLabel|vk|sc|hwnd|class|title|exe
+# mouse_hold fields:
+# elapsed_ms|mouse_hold|button|duration_ms|startScreenX|startScreenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe|endScreenX|endScreenY
+# delay fields:
+# elapsed_ms|meta|delay|duration_ms
+# optional trailing note (Edit Log only, ignored during playback): |note|your label text
+# playback tip: prefer pctX/pctY against the target window's current client size, then fallback to clientX/clientY, then screenX/screenY.
+0|meta|recording_started
+# origin: 500,329 (metadata only; coordinates are not rewritten)
+3172|click|LButton|500|329|500|329|0.260417|0.318798|1920|1032|-8|-8|1936|1048|0x6504A6|XLMAIN|Book1 - Excel|EXCEL.EXE
+6234|key|variable-1|68|32|0x6504A6|XLMAIN|Book1 - Excel|EXCEL.EXE
+6953|click|LButton|501|347|501|347|0.260938|0.336240|1920|1032|-8|-8|1936|1048|0x6504A6|XLMAIN|Book1 - Excel|EXCEL.EXE
+7609|key|variable-2|68|32|0x6504A6|XLMAIN|Book1 - Excel|EXCEL.EXE
+8375|click|LButton|496|369|496|369|0.258333|0.357558|1920|1032|-8|-8|1936|1048|0x6504A6|XLMAIN|Book1 - Excel|EXCEL.EXE
+9094|key|variable-3|68|32|0x6504A6|XLMAIN|Book1 - Excel|EXCEL.EXE
+10937|click|LButton|492|388|492|388|0.256250|0.375969|1920|1032|-8|-8|1936|1048|0x6504A6|XLMAIN|Book1 - Excel|EXCEL.EXE
+11437|key|variable-4|68|32|0x6504A6|XLMAIN|Book1 - Excel|EXCEL.EXE
+12437|meta|recording_stopped
