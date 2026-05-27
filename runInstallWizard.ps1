@@ -52,8 +52,12 @@ $RELEASE_ZIP_NAME_PATTERN = "DataEntryAutonoma-v*-win64.zip"
 $DOWNLOAD_USER_AGENT = "$APP_DISPLAY_NAME Install Wizard"
 
 $WIZARD_WIDTH = 520
-$WIZARD_HEIGHT = 500
+$WIZARD_HEIGHT = 520
 $CONTENT_WIDTH = 460
+$WIZARD_TITLE_HEIGHT = 32
+$WIZARD_BODY_TOP = 44
+$WIZARD_LABEL_STACK_GAP = 12
+$WIZARD_CONTENT_PANEL_HEIGHT = 340
 
 $COLOR_BG = [System.Drawing.Color]::FromArgb(248, 249, 250)
 $COLOR_TEXT = [System.Drawing.Color]::FromArgb(26, 26, 26)
@@ -118,6 +122,25 @@ function Ensure-InstallSourceReady {
         Invoke-DownloadLatestRelease | Out-Null
         return $true
     } catch {
+        Set-WizardStatusMessage "Download failed."
+
+        $downloadError = $_.Exception.Message
+        $browseHint = @"
+Could not download $EXE_FILE_NAME from GitHub.
+
+$downloadError
+
+If you already downloaded the release zip, extract it and select $EXE_FILE_NAME below.
+Otherwise attach DataEntryAutonoma-v*-win64.zip to the GitHub release, or run the wizard from a folder that already contains the exe.
+"@
+
+        [System.Windows.Forms.MessageBox]::Show(
+            $browseHint,
+            "$APP_DISPLAY_NAME Setup",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        ) | Out-Null
+
         $pickedPath = Show-InstallSourceBrowseDialog
         if ($pickedPath -ne "") {
             $script:StandaloneExeSourcePath = $pickedPath
@@ -290,13 +313,14 @@ function Invoke-DownloadLatestRelease {
     Ensure-Directory $extractPath
     [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractPath)
 
-    $exePath = Join-Path $extractPath $EXE_FILE_NAME
-    if (-not (Test-Path $exePath)) {
+    $exeFile = Get-ChildItem -Path $extractPath -Filter $EXE_FILE_NAME -Recurse -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $exeFile) {
         throw "$EXE_FILE_NAME not found in $($asset.FileName)."
     }
 
-    $script:ReleaseSourceRoot = $extractPath
-    $script:StandaloneExeSourcePath = $exePath
+    $script:ReleaseSourceRoot = $exeFile.DirectoryName
+    $script:StandaloneExeSourcePath = $exeFile.FullName
     $script:DownloadedReleaseVersion = $asset.Version
 
     return $asset
@@ -550,26 +574,26 @@ $script:CurrentStep = 0
 
 $contentPanel = New-Object System.Windows.Forms.Panel
 $contentPanel.Location = New-Object System.Drawing.Point(30, 20)
-$contentPanel.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, 320)
+$contentPanel.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, $WIZARD_CONTENT_PANEL_HEIGHT)
 $contentPanel.BackColor = $COLOR_BG
 $form.Controls.Add($contentPanel)
 
 $btnBack = New-Object System.Windows.Forms.Button
 $btnBack.Text = "< Back"
 $btnBack.Size = New-Object System.Drawing.Size(90, 32)
-$btnBack.Location = New-Object System.Drawing.Point(230, 390)
+$btnBack.Location = New-Object System.Drawing.Point(230, 410)
 $form.Controls.Add($btnBack)
 
 $btnNext = New-Object System.Windows.Forms.Button
 $btnNext.Text = "Next >"
 $btnNext.Size = New-Object System.Drawing.Size(90, 32)
-$btnNext.Location = New-Object System.Drawing.Point(330, 390)
+$btnNext.Location = New-Object System.Drawing.Point(330, 410)
 $form.Controls.Add($btnNext)
 
 $btnCancel = New-Object System.Windows.Forms.Button
 $btnCancel.Text = "Cancel"
 $btnCancel.Size = New-Object System.Drawing.Size(90, 32)
-$btnCancel.Location = New-Object System.Drawing.Point(420, 390)
+$btnCancel.Location = New-Object System.Drawing.Point(420, 410)
 $form.Controls.Add($btnCancel)
 
 function Clear-ContentPanel {
@@ -591,15 +615,44 @@ function New-TitleLabel {
 function New-BodyLabel {
     param(
         [string]$Text,
-        [int]$Height = 120
+        [int]$FixedHeight = 0
     )
 
     $label = New-Object System.Windows.Forms.Label
     $label.Text = $Text
-    $label.AutoSize = $false
-    $label.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, $Height)
     $label.ForeColor = $COLOR_MUTED
     $label.UseMnemonic = $false
+
+    if ($FixedHeight -gt 0) {
+        $label.AutoSize = $false
+        $label.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, $FixedHeight)
+    } else {
+        $label.AutoSize = $true
+        $label.MaximumSize = New-Object System.Drawing.Size($CONTENT_WIDTH, [int]::MaxValue)
+    }
+
+    return $label
+}
+
+# Adds a wrapped body label below a prior control (or at WIZARD_BODY_TOP when none).
+function Add-StackedBodyLabel {
+    param(
+        [string]$Text,
+        [System.Windows.Forms.Control]$Below = $null,
+        [int]$Gap = $WIZARD_LABEL_STACK_GAP,
+        [System.Drawing.Color]$ForeColor = $null,
+        [int]$FixedHeight = 0
+    )
+
+    $label = New-BodyLabel -Text $Text -FixedHeight $FixedHeight
+    if ($null -ne $ForeColor) {
+        $label.ForeColor = $ForeColor
+    }
+
+    $top = if ($Below) { $Below.Bottom + $Gap } else { $WIZARD_BODY_TOP }
+    $label.Location = New-Object System.Drawing.Point(0, $top)
+    $contentPanel.Controls.Add($label)
+    $contentPanel.PerformLayout()
     return $label
 }
 
@@ -616,7 +669,7 @@ function Show-WizardStep {
             $title.Location = New-Object System.Drawing.Point(0, 0)
             $contentPanel.Controls.Add($title)
 
-            $body = New-BodyLabel @"
+            $welcomeText = @"
 Thank you for installing $APP_DISPLAY_NAME.
 
 This wizard copies the app, README, CHANGELOG, and VERSION to your chosen folder, creates recordings, saved-inputs, and csv-batches, and can add Desktop and Start Menu shortcuts. AutoHotkey is not required on your PC.
@@ -626,14 +679,13 @@ Version: v$($script:WizardAppVersion)
 CSV files use row 1 for column labels and can be edited in the built-in table editor. Share and Import portable bundles (folder or .dea.zip) from the main window title row.
 
 Click Next to choose where to install.
-"@ 188
-            $body.Location = New-Object System.Drawing.Point(0, 44)
-            $contentPanel.Controls.Add($body)
+"@
 
-            $status = New-BodyLabel (Get-InstallSourceSummary) 48
-            $status.Location = New-Object System.Drawing.Point(0, 236)
-            $status.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
-            $contentPanel.Controls.Add($status)
+            $body = Add-StackedBodyLabel -Text $welcomeText
+            $status = Add-StackedBodyLabel `
+                -Text (Get-InstallSourceSummary) `
+                -Below $body `
+                -ForeColor ([System.Drawing.Color]::FromArgb(6, 95, 70))
             $script:Welcome_StatusLabel = $status
         }
 
@@ -646,7 +698,7 @@ Click Next to choose where to install.
             $title.Location = New-Object System.Drawing.Point(0, 0)
             $contentPanel.Controls.Add($title)
 
-            $body = New-BodyLabel "Choose the folder where the app will be installed." 40
+            $body = New-BodyLabel "Choose the folder where the app will be installed." -FixedHeight 40
             $body.Location = New-Object System.Drawing.Point(0, 44)
             $contentPanel.Controls.Add($body)
 
@@ -663,11 +715,11 @@ Click Next to choose where to install.
             $contentPanel.Controls.Add($btnBrowse)
 
             $hintText = "Default location does not require administrator rights. The installer will create recordings, saved-inputs, and csv-batches folders inside this directory."
-            $hint = New-BodyLabel $hintText 56
+            $hint = New-BodyLabel $hintText -FixedHeight 56
             $hint.Location = New-Object System.Drawing.Point(0, 130)
             $contentPanel.Controls.Add($hint)
 
-            $upgradeNotice = New-BodyLabel "" 40
+            $upgradeNotice = New-BodyLabel "" -FixedHeight 40
             $upgradeNotice.Location = New-Object System.Drawing.Point(0, 188)
             $upgradeNotice.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
             $contentPanel.Controls.Add($upgradeNotice)
@@ -737,7 +789,7 @@ Click Next to choose where to install.
                     "Version: v$displayVersion`r`n"
                 }
             } else { "" }
-            $summary = New-BodyLabel "$installType`r`n`r`n$versionLine Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" 132
+            $summary = New-BodyLabel "$installType`r`n`r`n$versionLine Install: $EXE_FILE_NAME`r`nInstall folder:`r`n$script:InstallDir" -FixedHeight 132
             $summary.Location = New-Object System.Drawing.Point(0, 148)
             $contentPanel.Controls.Add($summary)
 
@@ -762,7 +814,7 @@ Click Next to choose where to install.
             $progress.Location = New-Object System.Drawing.Point(0, 56)
             $contentPanel.Controls.Add($progress)
 
-            $status = New-BodyLabel "Copying files..." 120
+            $status = New-BodyLabel "Copying files..." -FixedHeight 160
             $status.Location = New-Object System.Drawing.Point(0, 92)
             $contentPanel.Controls.Add($status)
 
@@ -830,9 +882,7 @@ ${versionLine}See README.md and CHANGELOG.md in the install folder for the CSV t
 Open the app from your Desktop or Start Menu shortcut, or run it from:
 $script:InstallDir
 "@
-            $body = New-BodyLabel $bodyText 188
-            $body.Location = New-Object System.Drawing.Point(0, 44)
-            $contentPanel.Controls.Add($body)
+            Add-StackedBodyLabel -Text $bodyText | Out-Null
         }
     }
 }
