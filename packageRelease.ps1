@@ -46,6 +46,25 @@ Run .\compile.ps1 first, then run this script again.
 "@
 }
 
+$exeBytes = [System.IO.File]::ReadAllBytes($DIST_EXE)
+$exeText = [System.Text.Encoding]::ASCII.GetString($exeBytes)
+if (-not $exeText.Contains($VERSION)) {
+    Write-Error @"
+dist\DataEntryAutonoma.exe does not contain version $VERSION (stale build).
+Run .\compile.ps1 again, then rerun this script.
+"@
+}
+
+$staleVersionMarkers = @("1.0.5", "Input Presets")
+foreach ($marker in $staleVersionMarkers) {
+    if ($exeText.Contains($marker)) {
+        Write-Error @"
+dist\DataEntryAutonoma.exe still contains stale marker '$marker'.
+Run .\compile.ps1 from the updated source, then rerun this script.
+"@
+    }
+}
+
 if (Test-Path $STAGING_DIR) {
     Remove-Item -LiteralPath $STAGING_DIR -Recurse -Force
 }
