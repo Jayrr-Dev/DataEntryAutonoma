@@ -5,6 +5,26 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-05-27
+
+### Added
+
+- **Create CSV** button on Bulk Inputs (separate from **Edit**)
+- `runDataEntryAutonoma.bat` / `.ps1`: unblocks downloaded exe and launches the app
+- `packageRelease.ps1` validation: fails if `dist\DataEntryAutonoma.exe` is stale vs `VERSION`
+
+### Changed
+
+- Edit Data Input: inline-only table (removed Selected row), full-width columns, auto comma escaping on Save, taller layout
+- Edit CSV dialog: wider (720px), taller table, full-width columns, proper inline edit sizing
+- Default move speed → 10 (was 3)
+- Install wizard: graceful launch when SmartScreen blocks auto-start; `Unblock-File` on installed exe
+
+### Fixed
+
+- v1.1.1 release zip sometimes contained a stale exe (version file updated but binary was not rebuilt)
+- Install wizard Close button error when publisher was untrusted
+
 ## [1.1.1] - 2026-05-27
 
 ### Added
@@ -164,6 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.1.2]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.6...v1.1.0
 [1.0.6]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.5...v1.0.6

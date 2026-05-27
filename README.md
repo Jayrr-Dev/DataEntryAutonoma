@@ -14,7 +14,7 @@ Show the app what to do once. It remembers your mouse clicks, scrolls, and keypr
 
 **Developers:** the source is built with [AutoHotkey v2](https://www.autohotkey.com/) and compiled into that exe.
 
-**Current release:** v1.1.1
+**Current release:** v1.1.2
 
 ## What it does
 
@@ -26,6 +26,15 @@ Data Entry Autonoma works like showing someone how to fill out a form and having
 4. Store the text to type in a **data input** or **CSV file**. Each run or each CSV row can fill the form with new values while you watch or walk away.
 
 You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, five tabs, **Share** and **Import** on the title row, tab-specific **i** help buttons, list hover tooltips, and plain-language guidance while you work.
+
+## What's new (v1.1.2)
+
+- **Edit Data Input:** inline table editing, auto comma escaping, full-width columns
+- **Bulk Inputs:** separate **Create CSV** and **Edit** buttons; larger CSV editor
+- **Default move speed:** 10
+- **Install:** `runDataEntryAutonoma.bat` unblocks and launches; release build validates exe version
+
+See [Version history](#version-history) for v1.1.1 and earlier.
 
 ## What's new (v1.1.1)
 
@@ -150,7 +159,7 @@ There is no separate Help button; use the **i** on the tab you are working in.
 
 ### App behavior
 
-- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.1.1`)
+- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.1.2`)
 - **Single instance**: only one app window at a time
 - **Always on top** main window for quick access
 - Remembers last selected recording, data input, and CSV in `apply-state.ini`
@@ -179,7 +188,7 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.1.1-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.1.2-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
@@ -338,7 +347,7 @@ For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 w
 
 5. **Find the output**
    - Built file: `dist\DataEntryAutonoma.exe`
-   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.1.1-win64.zip`
+   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.1.2-win64.zip`
    - Publish to GitHub: `.\publishRelease.ps1` builds and uploads the zip
    - Copy the exe plus empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders when sharing with others (same layout as Path 1).
 
@@ -434,7 +443,7 @@ If the recording expects typed variables but none are provided, the app prompts 
 |---------|-------------|
 | Run speed | Multiplier for recorded gap timing when **Recorded gaps** is enabled |
 | Typing speed | Multiplier for per-key delay during human-like typing |
-| Move speed | Multiplier for smooth mouse travel time (default: 3) |
+| Move speed | Multiplier for smooth mouse travel time (default: 10) |
 | Initial delay (ms) | Wait before the first action |
 
 ### Data input file format
@@ -444,7 +453,7 @@ Saved under `saved-inputs/` as `*.txt`:
 ```ini
 playback_speed=1.0
 typing_speed=1.0
-move_speed=3
+move_speed=10
 initial_delay=1000
 click_pause_ms=150
 segment_pause_ms=200
@@ -523,6 +532,7 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
+| **1.1.2** | Edit Data Input and CSV editor UX, Create CSV button, default move speed 10, release exe validation |
 | **1.1.1** | Install wizard auto-download and layout fixes, publishRelease script, source-vs-release guidance |
 | **1.1.0** | CSV table editor, Share/Import portable bundles (`.dea.zip`), five-tab layout with Speed Settings, list hover tooltips, Edit Data Input and Edit Recording Log improvements, default move speed 3 |
 | **1.0.6** | Data input note labels, CSV header row, Edit Recording Log table, Run Options-only mouse/typing, install/uninstall wizard version display |
