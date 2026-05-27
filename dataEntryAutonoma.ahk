@@ -1069,19 +1069,21 @@ CreateManageGui() {
     S.gui.OnEvent("Close", GuiClosed)
 
     bundleBtnW := 76
-    titleRowW := UI.contentWidth - (bundleBtnW * 2) - (UI.btnGap * 2)
+    titleRowActionGap := UI.btnGap
+    titleRowActionsW := bundleBtnW + titleRowActionGap + bundleBtnW
+    titleRowActionsX := UI.marginX + UI.contentWidth - titleRowActionsW
 
     S.gui.SetFont("s" UI.fontSizeTitle, UI.fontFamily)
-    S.gui.Add("Text", "xm w" titleRowW " c" UI.textPrimary . " Section", "Data Entry Autonoma")
+    S.gui.Add("Text", "xm c" UI.textPrimary " Section", "Data Entry Autonoma")
     S.importBundleButton := S.gui.Add(
         "Button",
-        "x+" UI.btnGap " yp w" bundleBtnW " h" hSec " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "x" titleRowActionsX " yp w" bundleBtnW " h" hSec " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Import"
     )
     S.importBundleButton.OnEvent("Click", ImportDataEntryBundle)
     S.shareBundleButton := S.gui.Add(
         "Button",
-        "x+" UI.btnGap " yp w" bundleBtnW " h" hSec " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "x+" titleRowActionGap " yp w" bundleBtnW " h" hSec " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Share"
     )
     S.shareBundleButton.OnEvent("Click", ShareDataEntryBundle)
@@ -8873,6 +8875,11 @@ ShareDataEntryBundle(*) {
     }
 
     defaultName := FormatRecordingName(logPath)
+    inputDisplayName := presetMode ? FormatPresetName(presetPath) : FormatCsvName(csvPath)
+    inputStem := RegExReplace(StrReplace(inputDisplayName, " ", "-"), "[\\/:*?`"<>|]", "-")
+    inputStem := Trim(RegExReplace(inputStem, "-+", "-"), "-")
+    if inputStem = ""
+        inputStem := presetMode ? "data-input" : "batch"
     bundlePcStem := RegExReplace(StrReplace(A_ComputerName, " ", "-"), "[\\/:*?`"<>|]", "-")
     bundlePcStem := RegExReplace(bundlePcStem, "i)^desktop-+", "")
     bundlePcStem := RegExReplace(bundlePcStem, "i)^desktop$", "")
@@ -8880,7 +8887,7 @@ ShareDataEntryBundle(*) {
     if bundlePcStem = ""
         bundlePcStem := "unknown-pc"
     bundleDateSuffix := "-" bundlePcStem "-" FormatTime(A_Now, "MMddyy")
-    defaultFullLabel := defaultName bundleDateSuffix
+    defaultFullLabel := defaultName "-" inputStem bundleDateSuffix
     bundleOpts := ShowShareBundleDialog(defaultFullLabel)
     if !bundleOpts.ok {
         SetStatus("Share cancelled.")
