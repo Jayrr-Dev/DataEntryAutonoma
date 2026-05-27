@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional note labels in preset variable lines (`name:Alice` types `Alice`; plain values unchanged)
 - Tabbed **Edit Preset** dialog: **Details** (name and variables), **Speed settings**, and **Advanced** (pauses and between-steps timing)
 - CSV batch files use row 1 as a header row for column labels (progress table and prompts); data rows start on row 2
+- **Edit Log** table view for recording events with editable timing and field values, plus raw log preview
 
 ### Changed
 
@@ -19,8 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSV `label:value` cell syntax removed; put column labels on row 1 instead
 - Commas inside CSV and preset values can be escaped with `\,` (use `\\` for a literal backslash); preset save/load no longer splits on escaped commas
 - Edit Preset help text and tab **i** buttons updated for note labels and the new preset editor layout
-- Install wizard window title and welcome step show the version from `VERSION`; upgrade path shows from/to versions
-- Uninstall wizard shows installed version, lists `csv-batches\` in user data, and removes docs/wizard files with app files
+- Install and uninstall wizards updated for v1.0.6: version in title, CSV header/comma-escape tips, upgrade from/to versions, README/CHANGELOG copied on install
 - Taller Edit Preset window so tab content is not clipped
 
 ### Fixed

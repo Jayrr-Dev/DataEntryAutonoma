@@ -72,6 +72,7 @@ Typical uses:
 - **Esc saves** the recording and opens a rename dialog; **Cancel** on that dialog discards the file
 - Recordings list shows **name** and **variable count** for each session
 - **Rename**, **Edit Log**, and **Delete** from the Recordings tab
+- **Edit Log** opens a table of recording events (timing, variables, clicks, shortcuts) plus a raw log preview
 
 ### Run (replay)
 
@@ -176,7 +177,8 @@ If you already extracted the release zip (or cloned the repo for development), y
    .\runInstallWizard.ps1
    ```
 3. Follow the on-screen steps:
-   - **Welcome** → **Install location** → **Shortcuts and launch**
+   - **Welcome** shows version, data folders, and CSV/preset format tips
+   - **Install location** → **Shortcuts and launch**
    - Shows install type (fresh or upgrade), version (including upgrade from/to), and target folder before you click **Install**
    - If the app files are not already in the folder, the wizard downloads them automatically when you click **Next**
    - Default install folder: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`

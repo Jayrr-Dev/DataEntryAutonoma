@@ -52,7 +52,7 @@ $RELEASE_ZIP_NAME_PATTERN = "DataEntryAutonoma-v*-win64.zip"
 $DOWNLOAD_USER_AGENT = "$APP_DISPLAY_NAME Install Wizard"
 
 $WIZARD_WIDTH = 520
-$WIZARD_HEIGHT = 440
+$WIZARD_HEIGHT = 500
 $CONTENT_WIDTH = 460
 
 $COLOR_BG = [System.Drawing.Color]::FromArgb(248, 249, 250)
@@ -193,6 +193,26 @@ function Get-TargetInstallVersion {
     }
 
     return Get-LocalProjectVersion
+}
+
+# Returns the install wizard window title with the active version label.
+function Get-InstallWizardFormTitle {
+    param([string]$Version = $script:WizardAppVersion)
+
+    if ($Version) {
+        return "$APP_DISPLAY_NAME Setup v$Version"
+    }
+
+    return "$APP_DISPLAY_NAME Setup"
+}
+
+# Updates the install wizard form title from the current version label.
+function Update-InstallWizardFormTitle {
+    param([string]$Version = $script:WizardAppVersion)
+
+    if ($form) {
+        $form.Text = Get-InstallWizardFormTitle -Version $Version
+    }
 }
 
 # Returns a short label for the install source shown on the welcome screen.
@@ -503,17 +523,6 @@ function Show-WizardError {
     Set-WizardNavigationEnabled $true
 })
 
-$form = New-Object System.Windows.Forms.Form
-$form.Text = if ($script:WizardAppVersion) { "$APP_DISPLAY_NAME Setup v$($script:WizardAppVersion)" } else { "$APP_DISPLAY_NAME Setup" }
-$form.ClientSize = New-Object System.Drawing.Size($WIZARD_WIDTH, $WIZARD_HEIGHT)
-$form.FormBorderStyle = "FixedDialog"
-$form.MaximizeBox = $false
-$form.MinimizeBox = $false
-$form.StartPosition = "CenterScreen"
-$form.BackColor = $COLOR_BG
-$form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-
-$script:CurrentStep = 0
 Initialize-InstallSource
 $script:DownloadedReleaseVersion = ""
 $script:WizardAppVersion = Get-LocalProjectVersion
@@ -527,28 +536,40 @@ $script:IsUpgrade = $false
 $script:WizardBusy = $false
 $script:Welcome_StatusLabel = $null
 
+$form = New-Object System.Windows.Forms.Form
+$form.Text = Get-InstallWizardFormTitle -Version $script:WizardAppVersion
+$form.ClientSize = New-Object System.Drawing.Size($WIZARD_WIDTH, $WIZARD_HEIGHT)
+$form.FormBorderStyle = "FixedDialog"
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$form.StartPosition = "CenterScreen"
+$form.BackColor = $COLOR_BG
+$form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+
+$script:CurrentStep = 0
+
 $contentPanel = New-Object System.Windows.Forms.Panel
 $contentPanel.Location = New-Object System.Drawing.Point(30, 20)
-$contentPanel.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, 280)
+$contentPanel.Size = New-Object System.Drawing.Size($CONTENT_WIDTH, 320)
 $contentPanel.BackColor = $COLOR_BG
 $form.Controls.Add($contentPanel)
 
 $btnBack = New-Object System.Windows.Forms.Button
 $btnBack.Text = "< Back"
 $btnBack.Size = New-Object System.Drawing.Size(90, 32)
-$btnBack.Location = New-Object System.Drawing.Point(230, 330)
+$btnBack.Location = New-Object System.Drawing.Point(230, 390)
 $form.Controls.Add($btnBack)
 
 $btnNext = New-Object System.Windows.Forms.Button
 $btnNext.Text = "Next >"
 $btnNext.Size = New-Object System.Drawing.Size(90, 32)
-$btnNext.Location = New-Object System.Drawing.Point(330, 330)
+$btnNext.Location = New-Object System.Drawing.Point(330, 390)
 $form.Controls.Add($btnNext)
 
 $btnCancel = New-Object System.Windows.Forms.Button
 $btnCancel.Text = "Cancel"
 $btnCancel.Size = New-Object System.Drawing.Size(90, 32)
-$btnCancel.Location = New-Object System.Drawing.Point(420, 330)
+$btnCancel.Location = New-Object System.Drawing.Point(420, 390)
 $form.Controls.Add($btnCancel)
 
 function Clear-ContentPanel {
@@ -598,17 +619,19 @@ function Show-WizardStep {
             $body = New-BodyLabel @"
 Thank you for installing $APP_DISPLAY_NAME.
 
-This wizard copies the app to your chosen folder and can add Desktop and Start Menu shortcuts. AutoHotkey is not required on your PC.
+This wizard copies the app, README, CHANGELOG, and VERSION to your chosen folder, creates recordings, saved-inputs, and csv-batches, and can add Desktop and Start Menu shortcuts. AutoHotkey is not required on your PC.
 
 Version: v$($script:WizardAppVersion)
 
+CSV files use row 1 for column labels. Presets and CSV values can escape commas with backslash (for example I\, LEE).
+
 Click Next to choose where to install.
-"@ 132
+"@ 188
             $body.Location = New-Object System.Drawing.Point(0, 44)
             $contentPanel.Controls.Add($body)
 
             $status = New-BodyLabel (Get-InstallSourceSummary) 48
-            $status.Location = New-Object System.Drawing.Point(0, 180)
+            $status.Location = New-Object System.Drawing.Point(0, 236)
             $status.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
             $contentPanel.Controls.Add($status)
             $script:Welcome_StatusLabel = $status
@@ -802,10 +825,12 @@ Click Next to choose where to install.
             $bodyText = @"
 $APP_DISPLAY_NAME is ready to use.
 
-${versionLine}Open the app from your Desktop or Start Menu shortcut, or run it from:
+${versionLine}See README.md and CHANGELOG.md in the install folder for CSV header rows, preset note labels, and comma escaping.
+
+Open the app from your Desktop or Start Menu shortcut, or run it from:
 $script:InstallDir
 "@
-            $body = New-BodyLabel $bodyText 160
+            $body = New-BodyLabel $bodyText 188
             $body.Location = New-Object System.Drawing.Point(0, 44)
             $contentPanel.Controls.Add($body)
         }
@@ -888,6 +913,9 @@ $btnNext.Add_Click({
                 if (-not (Ensure-InstallSourceReady -StatusMessage "Downloading the latest version...")) {
                     return
                 }
+
+                $script:WizardAppVersion = Get-TargetInstallVersion
+                Update-InstallWizardFormTitle -Version $script:WizardAppVersion
             } finally {
                 $script:WizardBusy = $false
                 Set-WizardNavigationEnabled $true

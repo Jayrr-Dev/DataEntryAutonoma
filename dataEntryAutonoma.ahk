@@ -40,12 +40,36 @@ C := {
     presetsTabHelpTitle: "Input Presets help",
     csvBatchHelpTitle: "CSV Bulk Inputs help",
     runOptionsTabHelpTitle: "Run Options help",
+    presetVariablesHelpTitle: "Preset variables help",
+    presetVariablesHelpMessage: "
+    (
+One row per variable in the table. Row 1 = variable-1, row 2 = variable-2, and so on.
+
+Columns: Slot (variable-N), Label (optional note, stripped at run time), and Value (typed text).
+Click Label or Value in the table to edit inline, or use Selected row below.
+Add row inserts after the selected row; Delete row removes the selected row (at least one row required).
+
+Labels can include spaces (Label Drawing Number, Value 281435 types 281435).
+
+Escape a comma in a value with backslash:
+  Label Developed_By, Value I\, LEE types I, LEE
+  Use \\ for a literal backslash
+    )",
+    recordingLogEventsHelpTitle: "Recording events help",
+    recordingLogEventsHelpMessage: "
+    (
+Select a row, edit the fields below, then click Apply row. Double-click a row to apply quickly.
+
+Columns: #, Ms, Type, Label (optional note, ignored during playback), and Summary.
+
+Label is stored as |note|your text at the end of the log line. It does not affect Run.
+    )",
     recordingsTabHelpMessage: "
     (
 Select a recording, then click Run.
 
 Rename: change the recording file name
-Edit Log: open the raw recording file for advanced edits
+Edit Log: edit timing, optional row labels, and event values in a table, or preview the raw log
 Delete: remove the selected recording
 
 While recording:
@@ -59,14 +83,14 @@ While recording:
 Choose Use input preset for Run, then pick a preset from the list.
 
 Edit Preset opens a tabbed editor:
-- Details: preset name and variable values (one line per variable)
+- Details: preset name and variable values (table with Label and Value columns)
 - Speed settings: run, typing, move speed, and initial delay
 - Advanced: click/step pauses and between-steps timing
 Mouse movement and typing style are set on the Run Options tab, not in the preset.
 Delete Preset: remove the selected preset
-Refresh: reload recordings, presets, and CSV lists
+Add preset: create a new preset (opens the editor with a suggested name)
 
-Variable lines map to variable-1, variable-2, and so on in your recording.
+Variable rows map to variable-1, variable-2, and so on in your recording.
 Optional note labels before a colon are for your notes only and are stripped at run time.
 Labels can include spaces (Drawing Number:281435 types 281435).
 
@@ -120,7 +144,7 @@ Rules:
 - Escape a backslash as \\
 - Blank lines and lines starting with # are ignored
 
-Config (next to the run-source radio):
+Run mode (Config section on the CSV tab):
 - Ask to run next line: progress table and prompt before each row (Run, Skip, Run all remaining)
 - Run all rows automatically: no prompts between rows
 
@@ -165,9 +189,9 @@ For delay and speed numbers, use Edit Preset on the Input Presets tab:
     inputSourcePreset: "preset",
     inputSourceCsv: "csv",
 
-    csvBatchConfigTitle: "CSV batch settings",
     csvAskNextLineLabel: "Ask to run next line before each row",
     csvRunAllRowsLabel: "Run all rows automatically",
+    csvBatchConfigSectionLabel: "Config",
     csvBatchProgressTitle: "CSV batch progress",
     csvBatchStatusPending: "",
     csvBatchStatusDone: "✓",
@@ -303,19 +327,28 @@ UI := {
     recordingColVarCount: "Variable count",
     statusHeight: 30,
     csvEditWidth: 300,
-    csvBatchConfigBtnWidth: 52,
+    presetAddBtnWidth: 100,
     csvBatchTableWidth: 560,
-    csvBatchTableHeight: 240,
-    csvBatchPromptWidth: 400,
+    csvBatchTableHeight: 180,
+    csvBatchPromptDetailsLines: 5,
     csvBatchPromptBtnWidth: 118,
-    presetEditorWidth: 480,
-    presetEditorTabHeight: 430,
-    presetEditorFieldWidth: 430,
+    presetEditorWidth: 720,
+    presetEditorTabHeight: 650,
+    presetEditorFieldWidth: 720,
     presetEditorLabelWidth: 180,
     presetEditorValueWidth: 220,
-    presetEditorVariablesLines: 14,
+    presetEditorListHeight: 260,
+    presetEditorDetailLabelWidth: 108,
+    presetEditorDetailValueWidth: 600,
     presetEditorButtonRowHeight: 40,
-    presetEditorOuterPad: 28
+    presetEditorOuterPad: 32,
+    recordingLogEditorWidth: 580,
+    recordingLogEditorTabHeight: 580,
+    recordingLogEditorListHeight: 240,
+    recordingLogEditorDetailLabelWidth: 108,
+    recordingLogEditorDetailValueWidth: 432,
+    recordingLogEditorButtonRowHeight: 40,
+    recordingLogEditorOuterPad: 32
 }
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
@@ -389,17 +422,21 @@ S := {
     csvEdit: "",
     detectButton: "",
     applyButton: "",
-    refreshButton: "",
     editButton: "",
+    addPresetButton: "",
     browseCsvButton: "",
     csvBatchInfoButton: "",
-    csvBatchConfigButton: "",
+    csvAskNextLineRadio: "",
+    csvRunAllRowsRadio: "",
     csvBatchRunAllRemaining: false,
     csvBatchTableGui: "",
     csvBatchTableLv: "",
     csvBatchStatusColumnIndex: 0,
     csvBatchProgressTableWidth: 0,
-    csvBatchPromptGui: "",
+    csvBatchPromptDetails: "",
+    csvBatchRunBtn: "",
+    csvBatchSkipBtn: "",
+    csvBatchRunAllBtn: "",
     renameRecordingButton: "",
     editRecordingButton: "",
     deleteRecordingButton: "",
@@ -554,6 +591,20 @@ AddManageTabInfoButton(options := "x+2") {
 }
 
 /**
+ * Adds a circular info button on a child dialog or editor window.
+ * @param {Gui} gui Target window.
+ * @param {String} options Gui Add options after position (default x+2).
+ * @returns {Gui.Button}
+ */
+AddManageChildInfoButton(gui, options := "x+2") {
+    global UI
+
+    btn := gui.Add("Button", options " w" UI.infoBtnSize " h" UI.infoBtnSize " -Theme", "i")
+    ApplyManageCircularInfoButton(btn)
+    return btn
+}
+
+/**
  * Shows a help message in a modal dialog.
  * @param {String} message Help body text.
  * @param {String} title Dialog title.
@@ -619,7 +670,11 @@ GetManageInputTabMetrics() {
     recordingChrome := UI.tabLabelHeight + UI.tabRowGap + UI.tabRowGap + UI.btnHeightSecondary
     presetChrome := UI.tabLabelHeight + UI.tabRowGap + UI.tabRadioRowH + UI.tabRowGap
         + UI.tabRowGap + UI.btnHeightTool
-    csvChrome := UI.tabLabelHeight + UI.tabRowGap + UI.tabRadioRowH + UI.tabRowGap
+    csvChrome := UI.tabLabelHeight + UI.tabRowGap
+        + UI.tabRadioRowH + UI.tabRowGap
+        + UI.tabLabelHeight + UI.tabRowGap
+        + UI.tabRadioRowH + UI.tabRowGap
+        + UI.tabRadioRowH + UI.tabRowGap
         + UI.tabLabelHeight + UI.tabRowGap
         + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool
     playbackContent := UI.tabLabelHeight + UI.tabRowGap + (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap + 36
@@ -739,20 +794,20 @@ CreateManageGui() {
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.usePresetRadio := S.gui.Add("Radio", "xs Checked", "Use input preset for Run")
     S.usePresetRadio.OnEvent("Click", (*) => SetInputSourceMode(C.inputSourcePreset))
+    S.addPresetButton := S.gui.Add(
+        "Button",
+        "x+" UI.btnGap " w" UI.presetAddBtnWidth " h" hTool
+        " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Add preset"
+    )
+    S.addPresetButton.OnEvent("Click", ShowPresetEditor.Bind(true))
 
     S.presetList := S.gui.Add("ListBox", BuildManageTabListOptions(tabMetrics.listPresetH))
     S.presetList.OnEvent("Change", OnPresetListChange)
 
-    S.refreshButton := S.gui.Add(
-        "Button",
-        "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Refresh"
-    )
-    S.refreshButton.OnEvent("Click", (*) => RefreshAllLists(true))
-
     S.editButton := S.gui.Add(
         "Button",
-        "x+" btnGap " w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "xs w" threeBtnW " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
         "Edit Preset"
     )
     S.editButton.OnEvent("Click", ShowPresetEditor)
@@ -771,13 +826,14 @@ CreateManageGui() {
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.useCsvRadio := S.gui.Add("Radio", "xs", "Use CSV bulk inputs for Run")
     S.useCsvRadio.OnEvent("Click", (*) => SetInputSourceMode(C.inputSourceCsv))
-    S.csvBatchConfigButton := S.gui.Add(
-        "Button",
-        "x+" UI.btnGap " w" UI.csvBatchConfigBtnWidth " h" hTool
-        " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Config"
-    )
-    S.csvBatchConfigButton.OnEvent("Click", ShowCsvBatchConfig)
+
+    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add("Text", "xs Section c" UI.textMuted, C.csvBatchConfigSectionLabel)
+    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    S.csvAskNextLineRadio := S.gui.Add("Radio", "xs", C.csvAskNextLineLabel)
+    S.csvAskNextLineRadio.OnEvent("Click", OnCsvBatchRunModeChange)
+    S.csvRunAllRowsRadio := S.gui.Add("Radio", "xs -Group", C.csvRunAllRowsLabel)
+    S.csvRunAllRowsRadio.OnEvent("Click", OnCsvBatchRunModeChange)
 
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
     S.gui.Add("Text", "xs c" UI.textMuted, "Saved CSV files")
@@ -904,13 +960,14 @@ GuiClosed(*) {
 SetInteractiveState(enabled) {
     global S
 
-    for ctrl in [S.detectButton, S.applyButton, S.refreshButton, S.refreshCsvButton, S.editButton,
+    for ctrl in [S.detectButton, S.applyButton, S.addPresetButton, S.refreshCsvButton, S.editButton,
         S.renameRecordingButton, S.editRecordingButton, S.deleteRecordingButton,
         S.deletePresetButton, S.recordingList, S.presetList, S.csvList, S.csvEdit, S.browseCsvButton,
         S.editCsvButton, S.renameCsvButton, S.deleteCsvButton,
         S.usePresetRadio, S.useCsvRadio,
         S.recordingInfoButton, S.presetInfoButton, S.csvBatchInfoButton, S.runOptionsInfoButton,
-        S.csvBatchConfigButton, S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
+        S.csvAskNextLineRadio, S.csvRunAllRowsRadio,
+        S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
         S.mainTab] {
         if ctrl
             ctrl.Enabled := enabled
@@ -982,13 +1039,13 @@ ApplyInputSourceControlState() {
     if S.useCsvRadio
         S.useCsvRadio.Value := presetMode ? 0 : 1
 
-    for ctrl in [S.presetList, S.editButton, S.deletePresetButton]
+    for ctrl in [S.presetList, S.addPresetButton, S.editButton, S.deletePresetButton]
         if ctrl
             ctrl.Enabled := presetMode
 
     for ctrl in [
         S.csvList, S.csvEdit, S.browseCsvButton, S.editCsvButton, S.renameCsvButton,
-        S.deleteCsvButton, S.csvBatchConfigButton, S.refreshCsvButton,
+        S.deleteCsvButton, S.refreshCsvButton, S.csvAskNextLineRadio, S.csvRunAllRowsRadio,
         S.useCsvRadio
     ]
         if ctrl
@@ -998,6 +1055,36 @@ ApplyInputSourceControlState() {
         S.usePresetRadio.Enabled := true
     if S.useCsvRadio
         S.useCsvRadio.Enabled := true
+}
+
+/**
+ * Syncs CSV batch run-mode radios with persisted state.
+ */
+SyncCsvBatchRunModeFromState() {
+    global S
+
+    if S.csvAskNextLineRadio
+        S.csvAskNextLineRadio.Value := S.csvAskNextLine ? 1 : 0
+    if S.csvRunAllRowsRadio
+        S.csvRunAllRowsRadio.Value := S.csvAskNextLine ? 0 : 1
+}
+
+/**
+ * Persists CSV batch run mode when an inline radio is selected.
+ */
+OnCsvBatchRunModeChange(*) {
+    global S
+
+    if S.csvAskNextLineRadio && S.csvAskNextLineRadio.Value {
+        S.csvAskNextLine := true
+        RememberSelections()
+        return
+    }
+
+    if S.csvRunAllRowsRadio && S.csvRunAllRowsRadio.Value {
+        S.csvAskNextLine := false
+        RememberSelections()
+    }
 }
 
 /**
@@ -1390,69 +1477,21 @@ ShowRunOptionsTabHelp(*) {
 }
 
 /**
- * Opens CSV batch settings (Ask to run next line).
+ * Shows help for the recording events table in Edit Log.
  */
-ShowCsvBatchConfig(*) {
-    global S, C, UI
+ShowRecordingLogEventsHelp(*) {
+    global C
 
-    dlgWidth := 380
-    btnW := Floor((dlgWidth - UI.btnGap) / 2)
-    btnH := UI.btnHeightSecondary
-    savedAsk := S.csvAskNextLine
+    ShowManageHelpMessage(C.recordingLogEventsHelpMessage, C.recordingLogEventsHelpTitle)
+}
 
-    dlg := Gui(
-        "+ToolWindow -MaximizeBox -MinimizeBox",
-        C.csvBatchConfigTitle
-    )
-    BindManageChildGui(dlg)
-    dlg.BackColor := UI.surface
-    dlg.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-    dlg.MarginX := UI.marginX
-    dlg.MarginY := UI.marginY
+/**
+ * Shows help for preset variable inputs in Edit Preset.
+ */
+ShowPresetVariablesHelp(*) {
+    global C
 
-    dlg.Add("Text", "xm w" dlgWidth " c" UI.textMuted, "CSV batch run mode")
-    askRadio := dlg.Add(
-        "Radio",
-        "xm w" dlgWidth " c" UI.textPrimary,
-        C.csvAskNextLineLabel
-    )
-    askRadio.Value := savedAsk ? 1 : 0
-    runAllRadio := dlg.Add(
-        "Radio",
-        "xm w" dlgWidth " c" UI.textPrimary,
-        C.csvRunAllRowsLabel
-    )
-    runAllRadio.Value := savedAsk ? 0 : 1
-
-    okBtn := dlg.Add(
-        "Button",
-        "xm y+12 w" btnW " h" btnH " Default +Background" UI.accent " c" UI.accentText,
-        "OK"
-    )
-    cancelBtn := dlg.Add(
-        "Button",
-        "x+" UI.btnGap " w" btnW " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        "Cancel"
-    )
-
-    SaveCsvConfig(*) {
-        S.csvAskNextLine := askRadio.Value ? true : false
-        RememberSelections()
-        dlg.Destroy()
-    }
-
-    CancelCsvConfig(*) {
-        S.csvAskNextLine := savedAsk
-        dlg.Destroy()
-    }
-
-    okBtn.OnEvent("Click", SaveCsvConfig)
-    cancelBtn.OnEvent("Click", CancelCsvConfig)
-    dlg.OnEvent("Close", CancelCsvConfig)
-    dlg.OnEvent("Escape", CancelCsvConfig)
-
-    dlg.Show("Center")
-    WinWaitClose("ahk_id " dlg.Hwnd)
+    ShowManageHelpMessage(C.presetVariablesHelpMessage, C.presetVariablesHelpTitle)
 }
 
 /**
@@ -1517,6 +1556,53 @@ GetCsvRowDisplayVars(row, variableCount) {
 }
 
 /**
+ * Builds the current-row preview text for the CSV batch window.
+ * @param {Object} row Parsed CSV row.
+ * @param {Array<String>} variableLabels Header labels from row 1 of the CSV.
+ * @returns {String}
+ */
+BuildCsvBatchRowPromptText(row, variableLabels := []) {
+    lines := [Format("Row label: {1}", row.label)]
+
+    Loop row.variables.Length {
+        label := A_Index <= variableLabels.Length && variableLabels[A_Index] != ""
+            ? variableLabels[A_Index]
+            : "Var" A_Index
+        lines.Push(Format("{1}: {2}", label, row.variables[A_Index]))
+    }
+
+    return Join(lines, "`n")
+}
+
+/**
+ * Enables or disables CSV batch row prompt buttons.
+ * @param {Boolean} enabled Whether prompt actions are available.
+ */
+SetCsvBatchPromptButtonsEnabled(enabled) {
+    global S
+
+    for btn in [S.csvBatchRunBtn, S.csvBatchSkipBtn, S.csvBatchRunAllBtn] {
+        if btn
+            btn.Enabled := enabled
+    }
+}
+
+/**
+ * Handles Close/Escape on the unified CSV batch progress window.
+ */
+OnCsvBatchWindowClose(*) {
+    global S, C
+
+    if !S.batchRunning
+        return
+
+    if S.csvBatchRunBtn && S.csvBatchRunBtn.Enabled
+        SetCsvBatchPromptChoice(C.csvBatchPromptChoiceSkip)
+    else
+        S.stopBatch := true
+}
+
+/**
  * Creates the always-on-top CSV batch progress table listing all rows.
  * @param {Array<Object>} rows Parsed CSV rows.
  * @param {Array<String>} variableLabels Header labels from row 1 of the CSV.
@@ -1561,9 +1647,42 @@ ShowCsvBatchProgressTable(rows, variableLabels := [], rowLabelHeader := "Row") {
 
     tableLv.ModifyCol(1, 40)
     tableLv.ModifyCol(S.csvBatchStatusColumnIndex, 64)
+    SetManageListViewColumnIntegerSort(tableLv, 1)
+
+    tableGui.Add("Text", "xm w" tableWidth " Section c" UI.textPrimary, "Current row")
+    S.csvBatchPromptDetails := tableGui.Add(
+        "Edit",
+        "xs w" tableWidth " r" UI.csvBatchPromptDetailsLines " ReadOnly Multi -TabStop +Background" UI.statusBg,
+        ""
+    )
+
+    btnW := UI.csvBatchPromptBtnWidth
+    btnH := UI.btnHeightSecondary
+    S.csvBatchRunBtn := tableGui.Add(
+        "Button",
+        "xm w" btnW " h" btnH " Default +Background" UI.accent " c" UI.accentText,
+        C.csvBatchPromptRun
+    )
+    S.csvBatchSkipBtn := tableGui.Add(
+        "Button",
+        "x+" UI.btnGap " w" btnW " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        C.csvBatchPromptSkip
+    )
+    S.csvBatchRunAllBtn := tableGui.Add(
+        "Button",
+        "xm w" tableWidth " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        C.csvBatchPromptRunAll
+    )
+
+    S.csvBatchRunBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceRun))
+    S.csvBatchSkipBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceSkip))
+    S.csvBatchRunAllBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceRunAll))
+    tableGui.OnEvent("Close", OnCsvBatchWindowClose)
+    tableGui.OnEvent("Escape", OnCsvBatchWindowClose)
 
     S.csvBatchTableGui := tableGui
     S.csvBatchTableLv := tableLv
+    SetCsvBatchPromptButtonsEnabled(false)
     tableGui.Show("x24 y80 w" tableWidth)
 }
 
@@ -1575,8 +1694,12 @@ ShowCsvBatchProgressTable(rows, variableLabels := [], rowLabelHeader := "Row") {
 SetCsvBatchProgressRowStatus(rowIndex, status) {
     global S
 
-    if S.csvBatchTableLv && S.csvBatchStatusColumnIndex
-        S.csvBatchTableLv.Modify(rowIndex, "Col" S.csvBatchStatusColumnIndex, status)
+    if S.csvBatchTableLv && S.csvBatchStatusColumnIndex {
+        visualRowIndex := FindManageListViewVisualRow(S.csvBatchTableLv, rowIndex, 1)
+        if !visualRowIndex
+            visualRowIndex := rowIndex
+        S.csvBatchTableLv.Modify(visualRowIndex, "Col" S.csvBatchStatusColumnIndex, status)
+    }
 }
 
 /**
@@ -1592,6 +1715,10 @@ CloseCsvBatchProgressTable() {
     S.csvBatchTableLv := ""
     S.csvBatchStatusColumnIndex := 0
     S.csvBatchProgressTableWidth := 0
+    S.csvBatchPromptDetails := ""
+    S.csvBatchRunBtn := ""
+    S.csvBatchSkipBtn := ""
+    S.csvBatchRunAllBtn := ""
 }
 
 /**
@@ -1626,86 +1753,31 @@ WaitForCsvBatchPromptChoice() {
  * @returns {String} Prompt choice constant from C.csvBatchPromptChoice*.
  */
 WaitCsvBatchRowPrompt(rowIndex, row, totalRows, variableLabels := []) {
-    global S, C, UI
+    global S, C
 
-    CloseCsvBatchRowPrompt()
     S.csvPromptChoice := C.csvBatchPromptChoiceNone
 
-    dlgWidth := UI.csvBatchPromptWidth
-    btnW := UI.csvBatchPromptBtnWidth
-    btnH := UI.btnHeightSecondary
+    if S.csvBatchTableGui
+        S.csvBatchTableGui.Title := Format("CSV row {}/{}", rowIndex, totalRows)
 
-    promptGui := Gui(
-        "+AlwaysOnTop +ToolWindow -MaximizeBox -MinimizeBox",
-        Format("CSV row {}/{}", rowIndex, totalRows)
-    )
-    ApplyManageAppIcon(promptGui)
-    promptGui.BackColor := UI.surface
-    promptGui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
-    promptGui.MarginX := UI.marginX
-    promptGui.MarginY := UI.marginY
-
-    promptGui.Add(
-        "Text",
-        "xm w" dlgWidth " c" UI.textPrimary,
-        Format("Row label: {1}", row.label)
-    )
-
-    Loop row.variables.Length {
-        label := A_Index <= variableLabels.Length && variableLabels[A_Index] != ""
-            ? variableLabels[A_Index]
-            : "Var" A_Index
-        promptGui.Add(
-            "Text",
-            "xm w" dlgWidth " c" UI.textMuted,
-            Format("{1}: {2}", label, row.variables[A_Index])
-        )
-    }
-
-    runBtn := promptGui.Add(
-        "Button",
-        "xm w" btnW " h" btnH " Default +Background" UI.accent " c" UI.accentText,
-        C.csvBatchPromptRun
-    )
-    skipBtn := promptGui.Add(
-        "Button",
-        "x+" UI.btnGap " w" btnW " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        C.csvBatchPromptSkip
-    )
-    runAllBtn := promptGui.Add(
-        "Button",
-        "xm w" dlgWidth " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
-        C.csvBatchPromptRunAll
-    )
-
-    runBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceRun))
-    skipBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceSkip))
-    runAllBtn.OnEvent("Click", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceRunAll))
-    promptGui.OnEvent("Close", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceSkip))
-    promptGui.OnEvent("Escape", SetCsvBatchPromptChoice.Bind(C.csvBatchPromptChoiceSkip))
-
-    S.csvBatchPromptGui := promptGui
+    if S.csvBatchPromptDetails
+        S.csvBatchPromptDetails.Value := BuildCsvBatchRowPromptText(row, variableLabels)
 
     if S.csvBatchTableLv
-        S.csvBatchTableLv.Modify(rowIndex, "Select Focus")
+        SelectManageListViewDataRow(S.csvBatchTableLv, rowIndex, 1)
 
-    tableWidth := S.csvBatchProgressTableWidth ? S.csvBatchProgressTableWidth : UI.csvBatchTableWidth
-    promptX := 24 + tableWidth + 12
-    promptGui.Show("x" promptX " y80 w" UI.csvBatchPromptWidth)
+    SetCsvBatchPromptButtonsEnabled(true)
 
     return WaitForCsvBatchPromptChoice()
 }
 
 /**
- * Destroys the CSV batch row prompt window.
+ * Clears the pending CSV batch row prompt choice and disables prompt buttons.
  */
 CloseCsvBatchRowPrompt() {
     global S, C
 
-    if S.csvBatchPromptGui {
-        try S.csvBatchPromptGui.Destroy()
-        S.csvBatchPromptGui := ""
-    }
+    SetCsvBatchPromptButtonsEnabled(false)
     S.csvPromptChoice := C.csvBatchPromptChoiceNone
 }
 
@@ -1811,6 +1883,7 @@ RestoreSelections() {
 
     ApplyInputSourceControlState()
     S.csvAskNextLine := saved.csvAskNextLine
+    SyncCsvBatchRunModeFromState()
 }
 
 UpdateSelectionStatus() {
@@ -2537,10 +2610,446 @@ RenameSelectedRecording(*) {
 }
 
 /**
- * Opens a simple editor for the selected recording log file.
+ * Returns Edit Recording Log dialog height (tab panel + button row + outer padding).
+ * @returns {Integer}
+ */
+GetRecordingLogEditorWindowHeight() {
+    global UI
+
+    return UI.recordingLogEditorTabHeight + UI.recordingLogEditorButtonRowHeight + UI.recordingLogEditorOuterPad
+}
+
+/** Trailing log field marker for optional editor note labels (ignored during playback). */
+RECORDING_LOG_NOTE_FIELD := "note"
+
+/**
+ * Returns the optional note label stored on one recording log event row.
+ * @param {Array} parts Pipe-delimited log fields.
+ * @returns {String}
+ */
+GetRecordingLogEventNote(parts) {
+    if parts.Length >= 3 && parts[parts.Length - 2] = RECORDING_LOG_NOTE_FIELD
+        return parts[parts.Length]
+    return ""
+}
+
+/**
+ * Sets or clears the optional note label on one recording log event row.
+ * @param {Array} parts Pipe-delimited log fields.
+ * @param {String} noteLabel Note text; blank removes the label.
+ * @returns {Array}
+ */
+SetRecordingLogEventNote(parts, noteLabel) {
+    noteLabel := Trim(noteLabel)
+    if parts.Length >= 3 && parts[parts.Length - 2] = RECORDING_LOG_NOTE_FIELD
+        parts.Length -= 2
+    if noteLabel != ""
+        parts.Push(RECORDING_LOG_NOTE_FIELD, noteLabel)
+    return parts
+}
+
+/**
+ * Builds a short summary string for one recording log event row.
+ * @param {Array} parts Pipe-delimited log fields.
+ * @returns {String}
+ */
+BuildRecordingLogEditorSummary(parts) {
+    if parts.Length < 3
+        return Trim(parts[1])
+
+    eventType := parts[2]
+
+    switch eventType {
+        case "click":
+            pctX := parts.Length >= 9 ? parts[8] : ""
+            pctY := parts.Length >= 10 ? parts[9] : ""
+            return pctX != "" && pctY != ""
+                ? Format("{} @ {},{}", parts[3], pctX, pctY)
+                : Format("{} click", parts[3])
+        case "key":
+            return parts[3]
+        case "shortcut":
+            return parts.Length >= 5
+                ? Format("{} -> {}", parts[4], parts[3])
+                : parts[3]
+        case "scroll":
+            return parts.Length >= 6
+                ? Format("{} delta {} x{}", parts[3], parts[4], parts[5])
+                : parts[3]
+        case "mouse_hold":
+            return parts.Length >= 5
+                ? Format("{} {} ms", parts[3], parts[4])
+                : parts[3]
+        case "meta":
+            if parts.Length >= 4 && parts[3] = "delay"
+                return Format("delay {} ms", parts[4])
+            return parts.Length >= 3 ? parts[3] : "meta"
+        default:
+            return eventType
+    }
+}
+
+/**
+ * Returns editable field definitions for a recording log event row.
+ * @param {Array} parts Pipe-delimited log fields.
+ * @returns {Array<Object>}
+ */
+GetRecordingLogEditorDetailFields(parts) {
+    if parts.Length < 3
+        return []
+
+    eventType := parts[2]
+    fields := []
+
+    switch eventType {
+        case "click":
+            fields.Push({ label: "Button", partIndex: 3 })
+            if parts.Length >= 9
+                fields.Push({ label: "Pct X", partIndex: 8 })
+            if parts.Length >= 10
+                fields.Push({ label: "Pct Y", partIndex: 9 })
+        case "key":
+            fields.Push({ label: "Variable", partIndex: 3 })
+        case "shortcut":
+            fields.Push({ label: "Send text", partIndex: 3 })
+            if parts.Length >= 5
+                fields.Push({ label: "Display label", partIndex: 4 })
+        case "scroll":
+            fields.Push({ label: "Direction", partIndex: 3 })
+            if parts.Length >= 5
+                fields.Push({ label: "Delta", partIndex: 4 })
+            if parts.Length >= 6
+                fields.Push({ label: "Notches", partIndex: 5 })
+        case "mouse_hold":
+            fields.Push({ label: "Button", partIndex: 3 })
+            if parts.Length >= 5
+                fields.Push({ label: "Duration (ms)", partIndex: 4 })
+        default:
+            if eventType = "meta" && parts.Length >= 4 && parts[3] = "delay"
+                fields.Push({ label: "Delay (ms)", partIndex: 4 })
+    }
+
+    validFields := []
+    for field in fields {
+        if field.partIndex >= 1 && field.partIndex <= parts.Length
+            validFields.Push(field)
+    }
+
+    return validFields
+}
+
+/**
+ * Parses a recording log into header lines and editable event rows.
+ * @param {String} filePath Recording log path.
+ * @returns {{headerLines: Array<String>, events: Array<Object>}}
+ */
+ParseRecordingLogForEditor(filePath) {
+    headerLines := []
+    events := []
+
+    Loop Read filePath {
+        line := A_LoopReadLine
+        trimmed := Trim(line)
+
+        if trimmed = "" || SubStr(trimmed, 1, 1) = "#" {
+            headerLines.Push(line)
+            continue
+        }
+
+        for eventLine in SplitMergedLogLines(trimmed) {
+            parts := StrSplit(eventLine, "|")
+            if parts.Length >= 3
+                events.Push({ parts: parts })
+        }
+    }
+
+    return { headerLines: headerLines, events: events }
+}
+
+/**
+ * Serializes header lines and event rows back into a recording log file body.
+ * @param {Array<String>} headerLines Header and comment lines.
+ * @param {Array<Object>} events Parsed event rows.
+ * @returns {String}
+ */
+SerializeRecordingLogFromEditor(headerLines, events) {
+    lines := []
+
+    for line in headerLines
+        lines.Push(line)
+
+    for event in events
+        lines.Push(Join(event.parts, "|"))
+
+    return Join(lines, "`n")
+}
+
+/**
+ * Populates the recording log events ListView.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Array<Object>} events Parsed event rows.
+ */
+PopulateRecordingLogEventsList(listView, events) {
+    listView.Delete()
+
+    Loop events.Length {
+        parts := events[A_Index].parts
+        listView.Add(
+            "",
+            A_Index,
+            parts[1],
+            parts[2],
+            GetRecordingLogEventNote(parts),
+            BuildRecordingLogEditorSummary(parts)
+        )
+    }
+
+    listView.ModifyCol(1, 36)
+    listView.ModifyCol(2, 72)
+    listView.ModifyCol(3, 84)
+    listView.ModifyCol(4, 120)
+    listView.ModifyCol(5, 240)
+    SetManageListViewColumnIntegerSort(listView, 1)
+    SetManageListViewColumnIntegerSort(listView, 2)
+}
+
+/**
+ * Refreshes one row in the recording log events ListView.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} rowIndex One-based ListView row index.
+ * @param {Object} event Parsed event row.
+ */
+RefreshRecordingLogEditorListRow(listView, rowIndex, event) {
+    parts := event.parts
+    visualRowIndex := FindManageListViewVisualRow(listView, rowIndex, 1)
+    if !visualRowIndex
+        visualRowIndex := rowIndex
+
+    listView.Modify(
+        visualRowIndex,
+        "",
+        rowIndex,
+        parts[1],
+        parts[2],
+        GetRecordingLogEventNote(parts),
+        BuildRecordingLogEditorSummary(parts)
+    )
+}
+
+/**
+ * Returns the ListView row and column under client coordinates.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} clientX Mouse X relative to the ListView client area.
+ * @param {Integer} clientY Mouse Y relative to the ListView client area.
+ * @returns {{row: Integer, col: Integer}}
+ */
+GetManageListViewHitSubItem(listView, clientX, clientY) {
+    static LVM_SUBITEMHITTEST := 0x1039
+
+    info := Buffer(24, 0)
+    NumPut("int", clientX, info, 0)
+    NumPut("int", clientY, info, 4)
+    DllCall(
+        "SendMessage",
+        "Ptr", listView.Hwnd,
+        "UInt", LVM_SUBITEMHITTEST,
+        "Ptr", 0,
+        "Ptr", info,
+        "Ptr"
+    )
+
+    rowIndex := NumGet(info, 12, "Int") + 1
+    colIndex := NumGet(info, 16, "Int") + 1
+    if rowIndex < 1
+        return { row: 0, col: 0 }
+
+    return { row: rowIndex, col: colIndex }
+}
+
+/**
+ * Reads the stable data row id stored in a ListView key column.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} visualRowIndex One-based visual row index in the ListView.
+ * @param {Integer} keyColumnIndex One-based column that stores the stable row id.
+ * @returns {Integer}
+ */
+GetManageListViewDataRowIndex(listView, visualRowIndex, keyColumnIndex := 1) {
+    if visualRowIndex < 1
+        return 0
+
+    return SafeInteger(listView.GetText(visualRowIndex, keyColumnIndex), 0)
+}
+
+/**
+ * Returns the stable data row id for the currently selected ListView row.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} keyColumnIndex One-based column that stores the stable row id.
+ * @returns {Integer}
+ */
+GetManageListViewSelectedDataRowIndex(listView, keyColumnIndex := 1) {
+    visualRowIndex := listView.GetNext(0, "Focused")
+    if !visualRowIndex
+        visualRowIndex := listView.GetNext(0, "Selected")
+
+    return GetManageListViewDataRowIndex(listView, visualRowIndex, keyColumnIndex)
+}
+
+/**
+ * Finds the visual ListView row that displays a stable data row id.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} dataRowIndex Stable row id stored in the key column.
+ * @param {Integer} keyColumnIndex One-based column that stores the stable row id.
+ * @returns {Integer}
+ */
+FindManageListViewVisualRow(listView, dataRowIndex, keyColumnIndex := 1) {
+    if dataRowIndex < 1
+        return 0
+
+    Loop listView.GetCount() {
+        if SafeInteger(listView.GetText(A_Index, keyColumnIndex), 0) = dataRowIndex
+            return A_Index
+    }
+
+    return 0
+}
+
+/**
+ * Selects a ListView row by stable data row id.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} dataRowIndex Stable row id stored in the key column.
+ * @param {Integer} keyColumnIndex One-based column that stores the stable row id.
+ */
+SelectManageListViewDataRow(listView, dataRowIndex, keyColumnIndex := 1) {
+    visualRowIndex := FindManageListViewVisualRow(listView, dataRowIndex, keyColumnIndex)
+    if visualRowIndex
+        listView.Modify(visualRowIndex, "Select Focus")
+}
+
+/**
+ * Enables numeric sorting for one ListView column.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} columnIndex One-based column index.
+ */
+SetManageListViewColumnIntegerSort(listView, columnIndex) {
+    listView.ModifyCol(columnIndex, "Integer")
+}
+
+/**
+ * Returns the bounding rectangle of one ListView subitem in client coordinates.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} rowIndex One-based row index.
+ * @param {Integer} colIndex One-based column index.
+ * @returns {{left: Integer, top: Integer, right: Integer, bottom: Integer}}
+ */
+GetManageListViewSubItemRect(listView, rowIndex, colIndex) {
+    static LVM_GETSUBITEMRECT := 0x1038
+
+    rect := Buffer(16, 0)
+    NumPut("int", colIndex - 1, rect, 0)
+    if !DllCall(
+        "SendMessage",
+        "Ptr", listView.Hwnd,
+        "UInt", LVM_GETSUBITEMRECT,
+        "Ptr", rowIndex - 1,
+        "Ptr", rect,
+        "Ptr"
+    )
+        return { left: 0, top: 0, right: 0, bottom: 0 }
+
+    return {
+        left: NumGet(rect, 0, "Int"),
+        top: NumGet(rect, 4, "Int"),
+        right: NumGet(rect, 8, "Int"),
+        bottom: NumGet(rect, 12, "Int")
+    }
+}
+
+/**
+ * Returns the recording variable slot name for a one-based row index.
+ * @param {Integer} rowIndex One-based variable row.
+ * @returns {String}
+ */
+FormatPresetVariableSlot(rowIndex) {
+    return "variable-" rowIndex
+}
+
+/**
+ * Splits one preset variable line into optional label and typed value parts.
+ * @param {String} rawValue Stored preset variable text.
+ * @returns {{label: String, value: String}}
+ */
+ParseManageVariableParts(rawValue) {
+    rawValue := Trim(rawValue)
+    if rawValue = ""
+        return { label: "", value: "" }
+
+    if RegExMatch(rawValue, "i)^[A-Za-z]:\\")
+        return { label: "", value: rawValue }
+
+    if RegExMatch(rawValue, "i)^https?://")
+        return { label: "", value: rawValue }
+
+    if RegExMatch(rawValue, "^(?<label>[A-Za-z_][A-Za-z0-9_ ]*)\s*:\s*(?<value>.+)$", &match)
+        return { label: Trim(match.label), value: Trim(match.value) }
+
+    return { label: "", value: rawValue }
+}
+
+/**
+ * Combines label and value back into one stored preset variable line.
+ * @param {String} label Optional note label.
+ * @param {String} value Typed value text.
+ * @returns {String}
+ */
+FormatManageVariableStorage(label, value) {
+    label := Trim(label)
+    value := Trim(value)
+    if value = ""
+        return ""
+    if label = ""
+        return value
+    return label ":" value
+}
+
+/**
+ * Populates the preset variables ListView.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Array<Object>} variableRows Parsed variable rows.
+ */
+PopulatePresetVariablesList(listView, variableRows) {
+    listView.Delete()
+
+    Loop variableRows.Length {
+        row := variableRows[A_Index]
+        listView.Add("", A_Index, FormatPresetVariableSlot(A_Index), row.label, row.value)
+    }
+
+    listView.ModifyCol(1, 40)
+    listView.ModifyCol(2, 100)
+    listView.ModifyCol(3, 180)
+    listView.ModifyCol(4, 340)
+    SetManageListViewColumnIntegerSort(listView, 1)
+}
+
+/**
+ * Refreshes one row in the preset variables ListView.
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} rowIndex One-based ListView row index.
+ * @param {Object} row Parsed variable row.
+ */
+RefreshPresetVariableListRow(listView, rowIndex, row) {
+    visualRowIndex := FindManageListViewVisualRow(listView, rowIndex, 1)
+    if !visualRowIndex
+        visualRowIndex := rowIndex
+
+    listView.Modify(visualRowIndex, "", rowIndex, FormatPresetVariableSlot(rowIndex), row.label, row.value)
+}
+
+/**
+ * Opens a table editor for the selected recording log file.
  */
 ShowRecordingLogEditor(*) {
-    global S
+    global S, UI
 
     if S.recording || S.applying || S.batchRunning
         return
@@ -2557,11 +3066,14 @@ ShowRecordingLogEditor(*) {
     }
 
     try {
-        logContent := FileRead(path, "UTF-8")
+        parsedLog := ParseRecordingLogForEditor(path)
     } catch as err {
         ShowManageMsgBox "Could not read recording:`n" err.Message, "Edit Log", "Icon!"
         return
     }
+
+    headerLines := parsedLog.headerLines
+    events := parsedLog.events
 
     CloseRecordingLogEditor()
 
@@ -2572,22 +3084,159 @@ ShowRecordingLogEditor(*) {
     BindManageChildGui(editor)
     S.logEditorGui := editor
     S.editingLogPath := path
-    editor.SetFont("s10", "Consolas")
+    editor.SetFont("s10", "Segoe UI")
     editor.BackColor := "FFFFFF"
 
-    editor.Add("Text", "w520 c1A1A1A", FormatRecordingName(path) " — raw log (UTF-8)")
-    logEdit := editor.Add("Edit", "xm w520 h320 VScroll HScroll", logContent)
+    editor.Add("Text", "xm w" UI.recordingLogEditorWidth " c1A1A1A", FormatRecordingName(path))
+
+    editorTab := editor.Add(
+        "Tab3",
+        "xm w" UI.recordingLogEditorWidth " h" UI.recordingLogEditorTabHeight,
+        ["Events", "Raw log"]
+    )
+
+    editorTab.UseTab(1)
+    editor.Add("Text", "Section c1A1A1A", "Recording events")
+    recordingLogEventsInfoButton := AddManageChildInfoButton(editor, "x+2")
+    recordingLogEventsInfoButton.OnEvent("Click", ShowRecordingLogEventsHelp)
+    logList := editor.Add(
+        "ListView",
+        "xs w" UI.recordingLogEditorWidth " h" UI.recordingLogEditorListHeight " -Multi +Background" UI.listBg,
+        ["#", "Ms", "Type", "Label", "Summary"]
+    )
+    PopulateRecordingLogEventsList(logList, events)
+
+    editor.Add("Text", "xs w" UI.recordingLogEditorWidth " c1A1A1A", "Selected row")
+    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Elapsed (ms):")
+    msEdit := editor.Add("Edit", "x+0 w120 ReadOnly", "")
+    editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "Label:")
+    noteEdit := editor.Add("Edit", "x+0 w" UI.recordingLogEditorDetailValueWidth, "")
+    detailField1Label := editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "")
+    detailField1Edit := editor.Add("Edit", "x+0 w" UI.recordingLogEditorDetailValueWidth, "")
+    detailField2Label := editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "")
+    detailField2Edit := editor.Add("Edit", "x+0 w" UI.recordingLogEditorDetailValueWidth, "")
+    detailField3Label := editor.Add("Text", "xs w" UI.recordingLogEditorDetailLabelWidth " c555555", "")
+    detailField3Edit := editor.Add("Edit", "x+0 w" UI.recordingLogEditorDetailValueWidth, "")
+    applyRowBtn := editor.Add(
+        "Button",
+        "xs w120 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Apply row"
+    )
+
+    editorTab.UseTab(2)
+    editor.Add("Text", "Section c1A1A1A", "Raw log preview")
+    editor.Add(
+        "Text",
+        "xs w" UI.recordingLogEditorWidth " c555555",
+        "Read-only preview generated from the Events table. Save writes the table back to the log file."
+    )
+    rawPreview := editor.Add(
+        "Edit",
+        "xs w" UI.recordingLogEditorWidth " r14 Multi ReadOnly -TabStop +Background" UI.statusBg,
+        SerializeRecordingLogFromEditor(headerLines, events)
+    )
+
+    editorTab.UseTab()
 
     saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
     closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
 
+    detailLabels := [detailField1Label, detailField2Label, detailField3Label]
+    detailEdits := [detailField1Edit, detailField2Edit, detailField3Edit]
+    selectedRowIndex := 0
+    detailFieldDefs := []
+
+    UpdateRawPreview(*) {
+        rawPreview.Value := SerializeRecordingLogFromEditor(headerLines, events)
+    }
+
+    LoadDetailPanel(rowIndex) {
+        selectedRowIndex := rowIndex
+        detailFieldDefs := []
+
+        if rowIndex < 1 || rowIndex > events.Length {
+            msEdit.Value := ""
+            msEdit.ReadOnly := true
+            noteEdit.Value := ""
+            Loop 3 {
+                detailLabels[A_Index].Text := ""
+                detailLabels[A_Index].Visible := false
+                detailEdits[A_Index].Value := ""
+                detailEdits[A_Index].Visible := false
+            }
+            return
+        }
+
+        event := events[rowIndex]
+        parts := event.parts
+        msEdit.ReadOnly := false
+        msEdit.Value := parts[1]
+        noteEdit.Value := GetRecordingLogEventNote(parts)
+        detailFieldDefs := GetRecordingLogEditorDetailFields(parts)
+
+        Loop 3 {
+            if A_Index <= detailFieldDefs.Length {
+                fieldDef := detailFieldDefs[A_Index]
+                detailLabels[A_Index].Text := fieldDef.label ":"
+                detailLabels[A_Index].Visible := true
+                detailEdits[A_Index].Value := parts[fieldDef.partIndex]
+                detailEdits[A_Index].Visible := true
+            } else {
+                detailLabels[A_Index].Text := ""
+                detailLabels[A_Index].Visible := false
+                detailEdits[A_Index].Value := ""
+                detailEdits[A_Index].Visible := false
+            }
+        }
+    }
+
+    ApplySelectedRow(*) {
+        if selectedRowIndex < 1 || selectedRowIndex > events.Length
+            return
+
+        event := events[selectedRowIndex]
+        parts := event.parts
+        parts[1] := Trim(msEdit.Value)
+
+        Loop detailFieldDefs.Length {
+            fieldDef := detailFieldDefs[A_Index]
+            if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length
+                parts[fieldDef.partIndex] := Trim(detailEdits[A_Index].Value)
+        }
+
+        SetRecordingLogEventNote(parts, noteEdit.Value)
+
+        RefreshRecordingLogEditorListRow(logList, selectedRowIndex, event)
+        UpdateRawPreview()
+        SetStatus(Format("Updated log row {} — {}", selectedRowIndex, BuildRecordingLogEditorSummary(parts)))
+    }
+
+    OnLogListSelect(*) {
+        LoadDetailPanel(GetManageListViewSelectedDataRowIndex(logList))
+    }
+
     SaveLog(*) {
+        if selectedRowIndex >= 1 && selectedRowIndex <= events.Length {
+            event := events[selectedRowIndex]
+            parts := event.parts
+            parts[1] := Trim(msEdit.Value)
+            Loop detailFieldDefs.Length {
+                fieldDef := detailFieldDefs[A_Index]
+                if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length
+                    parts[fieldDef.partIndex] := Trim(detailEdits[A_Index].Value)
+            }
+            SetRecordingLogEventNote(parts, noteEdit.Value)
+            RefreshRecordingLogEditorListRow(logList, selectedRowIndex, event)
+        }
+
         try {
             logFile := FileOpen(path, "w", "UTF-8-RAW")
             if !logFile
                 throw Error("Could not open file for writing.")
-            logFile.Write(logEdit.Value)
+            logFile.Write(SerializeRecordingLogFromEditor(headerLines, events))
             logFile.Close()
+            UpdateRawPreview()
+            RefreshAllLists(false)
             SetStatus("Saved log — " FormatRecordingName(path))
         } catch as err {
             ShowManageMsgBox "Could not save log:`n" err.Message, "Edit Log", "Icon!"
@@ -2600,19 +3249,52 @@ ShowRecordingLogEditor(*) {
             S.gui.Show()
     }
 
+    logList.OnEvent("ItemSelect", OnLogListSelect)
+    logList.OnEvent("DoubleClick", ApplySelectedRow)
+    applyRowBtn.OnEvent("Click", ApplySelectedRow)
     saveBtn.OnEvent("Click", SaveLog)
     closeBtn.OnEvent("Click", CloseLogEditor)
     editor.OnEvent("Close", CloseLogEditor)
     editor.OnEvent("Escape", CloseLogEditor)
 
-    editor.Show("w540 h420")
-    logEdit.Focus()
+    if events.Length {
+        SelectManageListViewDataRow(logList, 1)
+        LoadDetailPanel(1)
+    } else {
+        LoadDetailPanel(0)
+    }
+
+    editor.Show("w" (UI.recordingLogEditorWidth + 24) " h" GetRecordingLogEditorWindowHeight())
+    logList.Focus()
 }
 
-ShowPresetEditor(*) {
+/**
+ * Returns an unused preset file base name for Add preset.
+ * @returns {String}
+ */
+SuggestNewPresetName() {
+    global C
+
+    if !FileExist(C.savesDir "\default" C.saveExt)
+        return "default"
+
+    presetNumber := 2
+    while FileExist(C.savesDir "\preset-" presetNumber C.saveExt)
+        presetNumber++
+    return "preset-" presetNumber
+}
+
+/**
+ * Opens the tabbed preset editor for the selected preset or a new preset.
+ * @param {Boolean} createNew When true, opens a blank editor with a suggested name.
+ */
+ShowPresetEditor(createNew := false, *) {
     global C, S, UI
 
-    selectedPreset := GetSelectedPresetPath()
+    if createNew && S.presetList
+        S.presetList.Value := 0
+
+    selectedPreset := createNew ? "" : GetSelectedPresetPath()
     originalPresetPath := selectedPreset
     selectedRecording := GetSelectedRecordingPath()
     existingSettings := selectedPreset && FileExist(selectedPreset)
@@ -2620,8 +3302,11 @@ ShowPresetEditor(*) {
         : DefaultSettings()
 
     variableCount := Max(existingSettings.variables.Length, CountVariablesInLog(selectedRecording), 1)
-    while existingSettings.variables.Length < variableCount
-        existingSettings.variables.Push("")
+    editorVariableRows := []
+    for variableValue in existingSettings.variables
+        editorVariableRows.Push(ParseManageVariableParts(variableValue))
+    while editorVariableRows.Length < variableCount
+        editorVariableRows.Push({ label: "", value: "" })
 
     if S.gui
         S.gui.Hide()
@@ -2639,18 +3324,50 @@ ShowPresetEditor(*) {
 
     editorTab.UseTab(1)
     editor.Add("Text", "Section c1A1A1A", "Details")
-    editor.Add("Text", "xs w" UI.presetEditorFieldWidth " c1A1A1A", "Preset name")
-    nameEdit := editor.Add("Edit", "xs w" UI.presetEditorFieldWidth, selectedPreset ? FormatPresetName(selectedPreset) : "default")
-    editor.Add("Text", "xs w" UI.presetEditorFieldWidth " c1A1A1A", "Variable inputs")
+    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A", "Preset name")
+    nameEdit := editor.Add(
+        "Edit",
+        "xs w" UI.presetEditorWidth,
+        createNew ? SuggestNewPresetName()
+            : (selectedPreset ? FormatPresetName(selectedPreset) : "default")
+    )
+    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A", "Variable inputs")
+    presetVariablesInfoButton := AddManageChildInfoButton(editor, "x+2")
+    presetVariablesInfoButton.OnEvent("Click", ShowPresetVariablesHelp)
     editor.Add(
         "Text",
-        "xs w" UI.presetEditorFieldWidth " c555555",
-        "One value per line. Line 1 = variable-1, line 2 = variable-2, etc. Optional note labels (Drawing Number:281435) are stripped at run time. Escape commas with \\, (Developed_By:I\\, LEE)."
+        "xs w" UI.presetEditorWidth " c555555",
+        "Click Label or Value to edit inline, or use Selected row below. Add row / Delete row adjust variable slots."
     )
-    variablesEdit := editor.Add(
-        "Edit",
-        "xs w" UI.presetEditorFieldWidth " r" UI.presetEditorVariablesLines " Multi",
-        Join(existingSettings.variables, "`n")
+    variablesList := editor.Add(
+        "ListView",
+        "xs w" UI.presetEditorWidth " h" UI.presetEditorListHeight " -Multi +Background" UI.listBg,
+        ["#", "Slot", "Label", "Value"]
+    )
+    PopulatePresetVariablesList(variablesList, editorVariableRows)
+    inlineEditCtrl := editor.Add("Edit", "Hidden w10 h22")
+    addRowBtn := editor.Add(
+        "Button",
+        "xs w100 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Add row"
+    )
+    deleteRowBtn := editor.Add(
+        "Button",
+        "x+8 w100 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Delete row"
+    )
+
+    editor.Add("Text", "xs w" UI.presetEditorWidth " c1A1A1A", "Selected row")
+    editor.Add("Text", "xs w" UI.presetEditorDetailLabelWidth " c555555", "Slot:")
+    slotEdit := editor.Add("Edit", "x+0 w120 ReadOnly", "")
+    editor.Add("Text", "xs w" UI.presetEditorDetailLabelWidth " c555555", "Label:")
+    labelEdit := editor.Add("Edit", "x+0 w" UI.presetEditorDetailValueWidth, "")
+    editor.Add("Text", "xs w" UI.presetEditorDetailLabelWidth " c555555", "Value:")
+    valueEdit := editor.Add("Edit", "x+0 w" UI.presetEditorDetailValueWidth, "")
+    applyRowBtn := editor.Add(
+        "Button",
+        "xs w120 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Apply row"
     )
 
     editorTab.UseTab(2)
@@ -2702,7 +3419,209 @@ ShowPresetEditor(*) {
     saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
     closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
 
+    selectedRowIndex := 0
+    inlineEditRow := 0
+    inlineEditCol := 0
+    inlineEditOriginal := ""
+    presetVarColLabel := 3
+    presetVarColValue := 4
+    presetEditorActive := true
+    editorHwnd := editor.Hwnd
+
+    DisablePresetInlineEditHotkeys() {
+        presetEditorActive := false
+        HotIf
+        try Hotkey "Enter", "Off"
+    }
+
+    CommitVariableInlineEdit(*) {
+        if !presetEditorActive || inlineEditRow < 1
+            return
+
+        try {
+            if !inlineEditCtrl.Visible
+                return
+        } catch {
+            return
+        }
+
+        newText := Trim(inlineEditCtrl.Value)
+        inlineEditCtrl.Visible := false
+
+        if inlineEditRow >= 1 && inlineEditRow <= editorVariableRows.Length {
+            if inlineEditCol = presetVarColLabel
+                editorVariableRows[inlineEditRow].label := newText
+            else if inlineEditCol = presetVarColValue
+                editorVariableRows[inlineEditRow].value := newText
+            RefreshPresetVariableListRow(variablesList, inlineEditRow, editorVariableRows[inlineEditRow])
+
+            if selectedRowIndex = inlineEditRow {
+                labelEdit.Value := editorVariableRows[inlineEditRow].label
+                valueEdit.Value := editorVariableRows[inlineEditRow].value
+            }
+        }
+
+        inlineEditRow := 0
+        inlineEditCol := 0
+        inlineEditOriginal := ""
+    }
+
+    CancelVariableInlineEdit(*) {
+        if !presetEditorActive
+            return
+
+        try {
+            if !inlineEditCtrl.Visible
+                return
+        } catch {
+            return
+        }
+
+        inlineEditCtrl.Value := inlineEditOriginal
+        inlineEditCtrl.Visible := false
+        inlineEditRow := 0
+        inlineEditCol := 0
+        inlineEditOriginal := ""
+    }
+
+    StartVariableInlineEdit(visualRowIndex, colIndex) {
+        if colIndex != presetVarColLabel && colIndex != presetVarColValue
+            return
+
+        CommitVariableInlineEdit()
+
+        dataRowIndex := GetManageListViewDataRowIndex(variablesList, visualRowIndex, 1)
+        if dataRowIndex < 1
+            return
+
+        ControlGetPos &listX, &listY, , , variablesList
+        rect := GetManageListViewSubItemRect(variablesList, visualRowIndex, colIndex)
+        editW := Max(rect.right - rect.left, 40)
+        editH := Max(rect.bottom - rect.top, 22)
+
+        inlineEditRow := dataRowIndex
+        inlineEditCol := colIndex
+        inlineEditOriginal := variablesList.GetText(visualRowIndex, colIndex)
+        inlineEditCtrl.Move(listX + rect.left, listY + rect.top, editW, editH)
+        inlineEditCtrl.Value := inlineEditOriginal
+        inlineEditCtrl.Visible := true
+        inlineEditCtrl.Focus()
+    }
+
+    LoadVariableDetailPanel(rowIndex) {
+        if !(inlineEditCtrl.Visible && rowIndex = inlineEditRow)
+            CommitVariableInlineEdit()
+        selectedRowIndex := rowIndex
+
+        if rowIndex < 1 || rowIndex > editorVariableRows.Length {
+            slotEdit.Value := ""
+            labelEdit.Value := ""
+            valueEdit.Value := ""
+            return
+        }
+
+        row := editorVariableRows[rowIndex]
+        slotEdit.Value := FormatPresetVariableSlot(rowIndex)
+        labelEdit.Value := row.label
+        valueEdit.Value := row.value
+    }
+
+    ApplySelectedVariableRow(*) {
+        CommitVariableInlineEdit()
+        if selectedRowIndex < 1 || selectedRowIndex > editorVariableRows.Length
+            return
+
+        row := editorVariableRows[selectedRowIndex]
+        row.label := Trim(labelEdit.Value)
+        row.value := Trim(valueEdit.Value)
+        RefreshPresetVariableListRow(variablesList, selectedRowIndex, row)
+        SetStatus(Format("Updated preset row {} — {}", selectedRowIndex, FormatPresetVariableSlot(selectedRowIndex)))
+    }
+
+    SyncSelectedVariableRowFromDetailPanel() {
+        if selectedRowIndex < 1 || selectedRowIndex > editorVariableRows.Length
+            return
+
+        row := editorVariableRows[selectedRowIndex]
+        row.label := Trim(labelEdit.Value)
+        row.value := Trim(valueEdit.Value)
+    }
+
+    AddPresetVariableRow(*) {
+        CommitVariableInlineEdit()
+        SyncSelectedVariableRowFromDetailPanel()
+
+        insertIndex := selectedRowIndex >= 1
+            ? Min(selectedRowIndex + 1, editorVariableRows.Length + 1)
+            : editorVariableRows.Length + 1
+        editorVariableRows.InsertAt(insertIndex, { label: "", value: "" })
+        PopulatePresetVariablesList(variablesList, editorVariableRows)
+        SelectManageListViewDataRow(variablesList, insertIndex)
+        LoadVariableDetailPanel(insertIndex)
+        SetStatus(Format("Added preset row {} — {}", insertIndex, FormatPresetVariableSlot(insertIndex)))
+    }
+
+    DeletePresetVariableRow(*) {
+        CommitVariableInlineEdit()
+        SyncSelectedVariableRowFromDetailPanel()
+
+        if editorVariableRows.Length <= 1 {
+            ShowManageMsgBox "At least one variable row is required.", "Edit Preset", "Icon!"
+            return
+        }
+
+        rowIndex := selectedRowIndex
+        if rowIndex < 1
+            rowIndex := GetManageListViewSelectedDataRowIndex(variablesList)
+        if rowIndex < 1
+            return
+
+        editorVariableRows.RemoveAt(rowIndex)
+        PopulatePresetVariablesList(variablesList, editorVariableRows)
+
+        nextRowIndex := Min(rowIndex, editorVariableRows.Length)
+        SelectManageListViewDataRow(variablesList, nextRowIndex)
+        LoadVariableDetailPanel(nextRowIndex)
+        SetStatus(Format("Deleted preset row {} — {} row(s) remain", rowIndex, editorVariableRows.Length))
+    }
+
+    OnVariablesListSelect(*) {
+        LoadVariableDetailPanel(GetManageListViewSelectedDataRowIndex(variablesList))
+    }
+
+    OnVariablesListClick(ctl, item, *) {
+        if !item
+            return
+
+        ControlGetPos &listX, &listY, , , variablesList
+        CoordMode "Mouse", "Client"
+        MouseGetPos &mouseX, &mouseY, , &controlHwnd
+        if controlHwnd != variablesList.Hwnd
+            return
+
+        hit := GetManageListViewHitSubItem(variablesList, mouseX - listX, mouseY - listY)
+        if hit.row < 1
+            return
+
+        dataRowIndex := GetManageListViewDataRowIndex(variablesList, hit.row, 1)
+        if dataRowIndex < 1
+            return
+
+        variablesList.Modify(hit.row, "Select Focus")
+        LoadVariableDetailPanel(dataRowIndex)
+        StartVariableInlineEdit(hit.row, hit.col)
+    }
+
     SaveEditor(*) {
+        CommitVariableInlineEdit()
+
+        if selectedRowIndex >= 1 && selectedRowIndex <= editorVariableRows.Length {
+            row := editorVariableRows[selectedRowIndex]
+            row.label := Trim(labelEdit.Value)
+            row.value := Trim(valueEdit.Value)
+            RefreshPresetVariableListRow(variablesList, selectedRowIndex, row)
+        }
+
         presetName := SafePresetName(nameEdit.Value)
         if presetName = "" {
             ShowManageMsgBox "Enter a preset name.", "Edit Preset", "Icon!"
@@ -2723,8 +3642,8 @@ ShowPresetEditor(*) {
             variables: []
         }
 
-        for line in StrSplit(variablesEdit.Value, "`n", "`r")
-            settings.variables.Push(Trim(line))
+        for row in editorVariableRows
+            settings.variables.Push(FormatManageVariableStorage(row.label, row.value))
 
         while settings.variables.Length && settings.variables[settings.variables.Length] = ""
             settings.variables.Pop()
@@ -2754,18 +3673,62 @@ ShowPresetEditor(*) {
     }
 
     CloseEditor(*) {
-        editor.Destroy()
+        DisablePresetInlineEditHotkeys()
+        try editor.Destroy()
         if S.gui
             S.gui.Show()
+    }
+
+    OnEditorEscape(*) {
+        if presetEditorActive {
+            try {
+                if inlineEditCtrl.Visible {
+                    CancelVariableInlineEdit()
+                    return
+                }
+            } catch {
+            }
+        }
+        CloseEditor()
+    }
+
+    PresetInlineEditHotIf(*) {
+        if !presetEditorActive || !WinActive("ahk_id " editorHwnd)
+            return false
+        try
+            return inlineEditCtrl.Visible
+        catch
+            return false
     }
 
     saveBtn.OnEvent("Click", SaveEditor)
     closeBtn.OnEvent("Click", CloseEditor)
     editor.OnEvent("Close", CloseEditor)
-    editor.OnEvent("Escape", CloseEditor)
+    editor.OnEvent("Escape", OnEditorEscape)
+    variablesList.OnEvent("ItemSelect", OnVariablesListSelect)
+    variablesList.OnEvent("Click", OnVariablesListClick)
+    variablesList.OnEvent("DoubleClick", OnVariablesListClick)
+    inlineEditCtrl.OnEvent("LoseFocus", CommitVariableInlineEdit)
+    applyRowBtn.OnEvent("Click", ApplySelectedVariableRow)
+    addRowBtn.OnEvent("Click", AddPresetVariableRow)
+    deleteRowBtn.OnEvent("Click", DeletePresetVariableRow)
 
-    editor.Show("w" UI.presetEditorWidth " h" GetPresetEditorWindowHeight())
-    nameEdit.Focus()
+    HotIf PresetInlineEditHotIf
+    Hotkey "Enter", CommitVariableInlineEdit, "On"
+    HotIf
+
+    if editorVariableRows.Length {
+        SelectManageListViewDataRow(variablesList, 1)
+        LoadVariableDetailPanel(1)
+    } else {
+        LoadVariableDetailPanel(0)
+    }
+
+    editor.Show("w" (UI.presetEditorWidth + 24) " h" GetPresetEditorWindowHeight())
+    if editorVariableRows.Length
+        variablesList.Focus()
+    else
+        nameEdit.Focus()
 }
 
 
@@ -3758,6 +4721,7 @@ WriteHeader(sessionName) {
     WriteLine("# elapsed_ms|mouse_hold|button|duration_ms|startScreenX|startScreenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe|endScreenX|endScreenY`n")
     WriteLine("# delay fields:`n")
     WriteLine("# elapsed_ms|meta|delay|duration_ms`n")
+    WriteLine("# optional trailing note (Edit Log only, ignored during playback): |note|your label text`n")
     WriteLine("# playback tip: prefer pctX/pctY against the target window's current client size, then fallback to clientX/clientY, then screenX/screenY.`n")
 }
 
@@ -4031,6 +4995,9 @@ RunApplyBatch(logPath, csvPath, presetPath := "") {
 
             S.variables := row.variables.Clone()
             SetStatus(Format("CSV row {}/{} — {} ({} variable(s))", rowIndex, totalRows, row.label, row.variables.Length))
+
+            if askNextLine
+                SetCsvBatchPromptButtonsEnabled(false)
 
             BeginApplySession(parsed, true)
             result := ExecuteApplyPlayback(parsed)
@@ -4435,20 +5402,7 @@ Cleanup(*) {
  * @returns {String}
  */
 StripManageVariableLabel(rawValue) {
-    rawValue := Trim(rawValue)
-    if rawValue = ""
-        return ""
-
-    if RegExMatch(rawValue, "i)^[A-Za-z]:\\")
-        return rawValue
-
-    if RegExMatch(rawValue, "i)^https?://")
-        return rawValue
-
-    if RegExMatch(rawValue, "^[A-Za-z_][A-Za-z0-9_ ]*\s*:\s*(.+)$", &match)
-        return Trim(match[1])
-
-    return rawValue
+    return ParseManageVariableParts(rawValue).value
 }
 
 /**
@@ -5844,7 +6798,7 @@ SafeFloat(value, fallback := 0.0) {
  * Parses a boolean preset value.
  * @param {String} value Raw text from a preset file.
  * @param {Boolean} fallback Value when parsing fails.
- * @returns {Boolean}
+ * @returns {Boolean}d
  */
 SafeBool(value, fallback := false) {
     value := StrLower(Trim(value))

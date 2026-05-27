@@ -29,6 +29,7 @@ $CHANGELOG_FILE_NAME = "CHANGELOG.md"
 $VERSION_FILE_NAME = "VERSION"
 $INSTALL_WIZARD_PS1 = "runInstallWizard.ps1"
 $INSTALL_WIZARD_BAT = "runInstallWizard.bat"
+$APP_VERSION_FALLBACK = "1.0.6"
 $APPLY_STATE_FILE_NAME = "apply-state.ini"
 $RECORDINGS_FOLDER_NAME = "recordings"
 $SAVED_INPUTS_FOLDER_NAME = "saved-inputs"
@@ -96,6 +97,36 @@ function Get-InstalledVersion {
     }
 
     return ""
+}
+
+# Returns VERSION from the wizard script folder when not running from an install dir.
+function Get-LocalWizardVersion {
+    $versionPath = Join-Path $SCRIPT_ROOT $VERSION_FILE_NAME
+    if (Test-Path $versionPath) {
+        return (Get-Content -LiteralPath $versionPath -Raw).Trim()
+    }
+
+    return $APP_VERSION_FALLBACK
+}
+
+# Returns the uninstall wizard window title with the active version label.
+function Get-UninstallWizardFormTitle {
+    param([string]$Version = $script:WizardAppVersion)
+
+    if ($Version) {
+        return "$APP_DISPLAY_NAME Uninstall v$Version"
+    }
+
+    return "$APP_DISPLAY_NAME Uninstall"
+}
+
+# Updates the uninstall wizard form title from the current version label.
+function Update-UninstallWizardFormTitle {
+    param([string]$Version = $script:WizardAppVersion)
+
+    if ($form) {
+        $form.Text = Get-UninstallWizardFormTitle -Version $Version
+    }
 }
 
 # Removes a file or folder when it exists.
@@ -320,20 +351,25 @@ function Get-UninstallSummaryText {
 # =============================================================================
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
+[System.Windows.Forms.Application]::SetUnhandledExceptionMode([System.Windows.Forms.UnhandledExceptionMode]::CatchException)
+[System.Windows.Forms.Application]::add_ThreadException({
+    param($sender, $eventArgs)
 
-$form = New-Object System.Windows.Forms.Form
-$form.Text = if ($script:WizardAppVersion) { "$APP_DISPLAY_NAME Uninstall v$($script:WizardAppVersion)" } else { "$APP_DISPLAY_NAME Uninstall" }
-$form.ClientSize = New-Object System.Drawing.Size($WIZARD_WIDTH, $WIZARD_HEIGHT)
-$form.FormBorderStyle = "FixedDialog"
-$form.MaximizeBox = $false
-$form.MinimizeBox = $false
-$form.StartPosition = "CenterScreen"
-$form.BackColor = $COLOR_BG
-$form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+    [System.Windows.Forms.MessageBox]::Show(
+        "Uninstall error:`r`n$($eventArgs.Exception.Message)",
+        $APP_DISPLAY_NAME,
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error
+    ) | Out-Null
+    $eventArgs.ExceptionHandled = $true
+})
 
 $script:CurrentStep = 0
 $script:InstallDir = $DEFAULT_INSTALL_DIR
 $script:WizardAppVersion = Get-InstalledVersion -InstallDir $DEFAULT_INSTALL_DIR
+if (-not $script:WizardAppVersion) {
+    $script:WizardAppVersion = Get-LocalWizardVersion
+}
 $script:RemoveAppFiles = $true
 $script:RemoveUserData = $true
 $script:RemoveApplyState = $true
@@ -341,6 +377,16 @@ $script:RemoveDesktopShortcut = $true
 $script:RemoveStartMenuShortcut = $true
 $script:LastUninstallResult = $null
 $script:Step4_Failed = $false
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = Get-UninstallWizardFormTitle -Version $script:WizardAppVersion
+$form.ClientSize = New-Object System.Drawing.Size($WIZARD_WIDTH, $WIZARD_HEIGHT)
+$form.FormBorderStyle = "FixedDialog"
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$form.StartPosition = "CenterScreen"
+$form.BackColor = $COLOR_BG
+$form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 
 $contentPanel = New-Object System.Windows.Forms.Panel
 $contentPanel.Location = New-Object System.Drawing.Point(30, 20)
@@ -412,13 +458,13 @@ function Show-WizardStep {
             $welcomeText = @"
 This wizard removes $APP_DISPLAY_NAME from your computer.
 
-You can choose which files, user data, and shortcuts to remove. Recordings, saved presets, and CSV bulk inputs can be deleted permanently if you select that option.
+You can choose which files, user data, and shortcuts to remove. Recordings, saved presets, and CSV bulk inputs in csv-batches can be deleted permanently if you select that option.
 "@
             if ($script:WizardAppVersion) {
                 $welcomeText += "`r`n`r`nInstalled version: v$($script:WizardAppVersion)"
             }
-            $welcomeText += "`r`n`r`nClick Next to choose the install folder and select what to remove."
-            $body = New-BodyLabel $welcomeText $(if ($script:WizardAppVersion) { 248 } else { 228 })
+            $welcomeText += "`r`n`r`nReinstall later with runInstallWizard.bat from a release zip.`r`n`r`nClick Next to choose the install folder and select what to remove."
+            $body = New-BodyLabel $welcomeText $(if ($script:WizardAppVersion) { 260 } else { 240 })
             $body.Location = New-Object System.Drawing.Point(0, 44)
             $contentPanel.Controls.Add($body)
         }
@@ -616,7 +662,7 @@ You can choose which files, user data, and shortcuts to remove. Recordings, save
             $bodyText = @"
 $APP_DISPLAY_NAME has been removed based on your selections.
 
-If you removed application files, the app is no longer installed on this PC.
+If you removed application files, the app is no longer installed on this PC. To install again, run runInstallWizard.bat from a release zip.
 "@
             if (Test-RunningFromInstallDir -InstallDir $script:InstallDir -and $script:RemoveAppFiles) {
                 $bodyText += @"
@@ -637,6 +683,10 @@ function Save-CurrentStepState {
         1 {
             $script:InstallDir = $script:Step1_PathBox.Text.Trim()
             $script:WizardAppVersion = Get-InstalledVersion -InstallDir $script:InstallDir
+            if (-not $script:WizardAppVersion) {
+                $script:WizardAppVersion = Get-LocalWizardVersion
+            }
+            Update-UninstallWizardFormTitle -Version $script:WizardAppVersion
         }
         2 {
             $script:RemoveAppFiles = $script:Step2_AppFiles.Checked
