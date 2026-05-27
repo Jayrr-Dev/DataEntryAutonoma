@@ -585,6 +585,7 @@ function Install-ApplicationFiles {
 
     $destinationExe = Join-Path $InstallDir $EXE_FILE_NAME
     Copy-Item -Path $exeSource -Destination $destinationExe -Force
+    Unblock-File -LiteralPath $destinationExe -ErrorAction SilentlyContinue
 
     $sourceIconPath = Get-ReleaseSourcePath (Join-Path $ASSETS_RELATIVE_PATH $ICON_FILE_NAME)
     $iconPath = ""
@@ -617,14 +618,54 @@ function Invoke-BuildStandaloneExe {
     $script:ReleaseSourceRoot = $PROJECT_ROOT
 }
 
-# Starts the installed standalone application.
+# Starts the installed standalone application. Returns $true when launch succeeds.
 function Start-InstalledApplication {
     param(
         [string]$LaunchPath,
         [string]$WorkingDirectory
     )
 
-    Start-Process -FilePath $LaunchPath -WorkingDirectory $WorkingDirectory
+    if (-not (Test-Path -LiteralPath $LaunchPath)) {
+        return $false
+    }
+
+    try {
+        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $startInfo.FileName = $LaunchPath
+        $startInfo.WorkingDirectory = $WorkingDirectory
+        $startInfo.UseShellExecute = $true
+        [System.Diagnostics.Process]::Start($startInfo) | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+# Closes the wizard after optional post-install launch; never treats launch failure as setup failure.
+function Complete-WizardSetup {
+    if ($script:LaunchWhenFinished -and $script:LastInstallResult -and -not $script:Step3_Failed) {
+        $launched = Start-InstalledApplication `
+            -LaunchPath $script:LastInstallResult.LaunchPath `
+            -WorkingDirectory $script:InstallDir
+
+        if (-not $launched) {
+            [System.Windows.Forms.MessageBox]::Show(
+                @"
+Install completed successfully.
+
+The app could not be started automatically (Windows may have blocked it).
+
+Open it from your Desktop or Start Menu shortcut, or run:
+$($script:LastInstallResult.LaunchPath)
+"@,
+                $APP_DISPLAY_NAME,
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            ) | Out-Null
+        }
+    }
+
+    $form.Close()
 }
 
 # Returns true when a WinForms control can still be updated safely.
@@ -1038,6 +1079,7 @@ When the app is ready, click Next to choose where to install.
         4 {
             $btnBack.Enabled = $false
             $btnNext.Text = "Close"
+            $btnNext.Enabled = $true
             $btnCancel.Enabled = $false
 
             $title = New-TitleLabel "Setup complete"
@@ -1113,12 +1155,7 @@ $btnNext.Add_Click({
 
     try {
     if ($script:CurrentStep -eq 4) {
-        if ($script:LaunchWhenFinished -and $script:LastInstallResult -and -not $script:Step3_Failed) {
-            Start-InstalledApplication `
-                -LaunchPath $script:LastInstallResult.LaunchPath `
-                -WorkingDirectory $script:InstallDir
-        }
-        $form.Close()
+        Complete-WizardSetup
         return
     }
 

@@ -30,6 +30,8 @@ $FILES_AT_ROOT = @(
     "README.md",
     "CHANGELOG.md",
     "VERSION",
+    "runDataEntryAutonoma.bat",
+    "runDataEntryAutonoma.ps1",
     "runInstallWizard.bat",
     "runInstallWizard.ps1"
 )

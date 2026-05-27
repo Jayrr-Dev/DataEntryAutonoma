@@ -8304,13 +8304,18 @@ ActivateExistingManageInstance() {
     global APP_GUI_TITLE
 
     DetectHiddenWindows true
+    prevMatchMode := A_TitleMatchMode
+    SetTitleMatchMode 3
     hwnd := WinExist(APP_GUI_TITLE)
+    SetTitleMatchMode prevMatchMode
     DetectHiddenWindows false
 
     if !hwnd
         return
 
     try {
+        if WinGetTitle("ahk_id " hwnd) != APP_GUI_TITLE
+            return
         if WinGetMinMax("ahk_id " hwnd) = -1
             WinRestore "ahk_id " hwnd
         WinShow "ahk_id " hwnd

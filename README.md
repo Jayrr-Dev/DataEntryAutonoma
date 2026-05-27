@@ -268,7 +268,9 @@ Use **Path 1** if you just want to run the app. Use **Path 2** if you are develo
 6. **Optional: bulk inputs**
    - Saved CSV files live in `csv-batches\` (created automatically). Use the **Bulk Inputs** tab to edit, rename, delete, or browse for a file.
 
-**Windows SmartScreen:** If Windows warns about an unknown publisher, that is common for unsigned executables. Only continue if you trust the source (this repo or your own build).
+**Windows SmartScreen:** If Windows warns about an unknown publisher, that is common for unsigned executables. Only continue if you trust the source (this repo or your own build). Choose **More info** → **Run anyway**.
+
+**App will not open after download:** Extract the full zip first (do not run the exe from inside the zip). Then either run **`runDataEntryAutonoma.bat`** (unblocks and starts the app), or right-click **`DataEntryAutonoma.exe`** → **Properties** → check **Unblock** → **OK**, then open again. Check the taskbar for a SmartScreen dialog that may be behind other windows.
 
 ---
 
