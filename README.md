@@ -6,9 +6,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Show the app what to do once. It remembers your mouse clicks, scrolls, and keypresses, then repeats those same actions for you automatically, including typing text into fields for you.
+Show the app what to do once. It remembers your mouse clicks, scrolls, and keypresses and repeats those same actions for you automatically, including typing text into fields for you.
 
-Record mouse clicks, scrolls, and keyboard input once, then click **Run** to replay that exact sequence. The app can **automatically type text** into the fields you marked during recording, using values from a data input or CSV file so each run can enter different names, numbers, and notes without you typing them again. No scripting required.
+Record mouse clicks, scrolls, and keyboard input once. Click **Run** to replay that exact sequence. The app can **automatically type text** into the fields you marked during recording, using values from a data input or CSV file so each run can enter different names, numbers, and notes without you typing them again. No scripting required.
 
 **End users:** run `DataEntryAutonoma.exe`. **AutoHotkey does not need to be installed** on your PC. The exe is a standalone Windows app.
 
@@ -18,7 +18,7 @@ Record mouse clicks, scrolls, and keyboard input once, then click **Run** to rep
 
 ## What it does
 
-Data Entry Autonoma works like showing someone how to fill out a form, then having them do it again for you.
+Data Entry Autonoma works like showing someone how to fill out a form and having them do it again for you.
 
 1. Click **Record** and use your mouse and keyboard normally: click buttons, scroll lists, type in fields (or press a key after a click to mark a field for automated text input later).
 2. The app saves every click, scroll, and keypress as a replayable sequence.
@@ -124,7 +124,7 @@ Typical uses:
 - **Share** exports the selected recording plus the active data input or CSV as a portable folder or `.dea.zip` file
 - Bundle includes `manifest.json` listing the recording and data input or CSV files (not arbitrary extra files beside them)
 - Default share name pattern: `{recording}-{data input or CSV}-{PC}-{date}`
-- **Import** asks folder vs zip, then pulls in the bundle's recording and data input or CSV
+- **Import** asks folder vs zip and pulls in the bundle's recording and data input or CSV
 
 ### In-app help
 
@@ -196,7 +196,7 @@ If you already extracted the release zip (or cloned the repo for development), y
    - Shows install type (fresh or upgrade), version (including upgrade from/to), and target folder before you click **Install**
    - If the app files are not already in the folder, the wizard downloads them automatically when you click **Next**
    - Default install folder: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`
-4. Click **Install**, then **Close** when setup completes.
+4. Click **Install**. When setup completes, click **Close**.
 
 **Standalone only:** The wizard installs `DataEntryAutonoma.exe`. **AutoHotkey is not required** on the PC where you install or run the app.
 
@@ -215,7 +215,7 @@ To remove the app, shortcuts, and optional user data:
 1. Run **`runUninstallWizard.bat`** from the install folder (or from an extracted release zip / repo clone).
 2. Choose the install folder (default: `%LOCALAPPDATA%\Programs\DataEntryAutonoma`). The wizard title and confirm step show the installed version when `VERSION` is present.
 3. Select what to remove (application files including VERSION/CHANGELOG/wizards, recordings, data inputs, CSV bulk inputs, `apply-state.ini`, shortcuts).
-4. Confirm on the summary step, then click **Uninstall**.
+4. On the summary step, confirm your choices and click **Uninstall**.
 
 If you run the uninstaller from inside the install folder, remaining files (including the uninstaller itself) are deleted automatically after the wizard closes.
 
@@ -335,7 +335,7 @@ For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 w
    ```powershell
    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
    ```
-   Then run `.\compile.ps1` again. Only do this if you trust this project's scripts.
+   After that, run `.\compile.ps1` again. Only do this if you trust this project's scripts.
 
 More build and packaging notes: [BUILD.md](BUILD.md).
 
@@ -376,7 +376,7 @@ After [installation](#installation):
 3. Press **Esc** to save; enter a name or click **Cancel** to discard
 4. On **Data Inputs**, click **Add Data Input** or **Edit Data Input** to set variable values, **or** on **Bulk Inputs**, create or pick a CSV for many rows
 5. Adjust **Run Options** and **Speed Settings** if needed
-6. Select a recording, choose **Use data input for Run** or **Use bulk inputs for Run**, then click **Run**
+6. Select a recording, choose **Use data input for Run** or **Use bulk inputs for Run**, and click **Run**
 7. Click **i** on any tab if you need help with that section
 
 For many rows, use **Bulk Inputs** instead of typing variables into a data input. Use **Config** on that tab to choose step-by-step prompts or automatic batch run.
@@ -387,7 +387,7 @@ For many rows, use **Bulk Inputs** instead of typing variables into a data input
 2. Click targets in your app. After each click you may type a character to mark typed input for that field, or skip typing for click-only navigation.
 3. Scroll when needed; wheel actions are captured at the cursor.
 4. **Hold Caps Lock** to record a manual delay between steps.
-5. **Drag** or **hold left-click** to record a mouse hold (for example to select cells in Excel), then release to save it. Quick clicks stay normal clicks.
+5. **Drag** or **hold left-click** to record a mouse hold (for example to select cells in Excel). Release to save it. Quick clicks stay normal clicks.
 6. Press **Ctrl**, **Shift**, or **Alt** with another key to record keyboard shortcuts (for example Ctrl+C).
 7. Press **Esc** when finished. Name the recording in the dialog or click **Cancel** to throw it away.
 8. Close the app window while recording to cancel without saving.
