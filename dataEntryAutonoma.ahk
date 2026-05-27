@@ -75,13 +75,33 @@ Escape a comma in a value with backslash:
     recordingLogEventsHelpTitle: "Recording events help",
     recordingLogEventsHelpMessage: "
     (
-Select a row, edit the fields below, then click Apply row. Double-click a row to apply quickly.
+Edit Recording Log, Events tab (top to bottom)
 
-Columns: #, Ms, Type, Label (optional note, ignored during playback), and Summary.
+(i) next to Recording events
+Opens this help.
 
-Label is stored as |note|your text at the end of the log line. It does not affect Run.
+Recording events table
+One row per logged event. Columns: #, Ms (elapsed ms), Type, Label, Summary.
 
-Use Description (below the recording name) for free-form notes stored in the log header; hover the recording row on the main list to preview it as a tooltip.
+Selected row
+Edit Elapsed (ms) and the fields shown for that event type (click, key, scroll, shortcut, and so on).
+Label is an optional note, ignored during Run and playback.
+
+Apply row
+Updates the table from Selected row. Double-click a row to apply quickly.
+Switching rows or Save also commits the current row.
+
+Label storage
+Stored as |note|your text at the end of the log line. Does not affect Run.
+
+Raw log tab
+Read-only preview built from the Events table. Save writes the table back to the log file.
+
+Description (top of window)
+Free-form notes in the log header. Hover the recording on the main Recordings list to preview as a tooltip.
+
+Save / Close
+Save updates the recording file. Close leaves the file unchanged if you did not save.
     )",
     recordingsTabHelpMessage: "
     (
@@ -123,74 +143,94 @@ Run: press Esc to stop playback.
     )",
     presetsTabHelpMessage: "
     (
-Choose Use data input for Run, then pick a data input from the list.
+Data Inputs tab (top to bottom)
 
-Edit Data Input opens an editor for the name, optional description, and variable values (table).
-Optional description appears as a tooltip when you hover that data input's row.
-Speed multipliers and initial delay are on the Speed Settings tab.
-Mouse movement, typing style, and timing pauses are on the Run Options tab.
-Delete Data Input: remove the selected data input
-Add Data Input: create a new data input (opens the editor with a suggested name)
+(i) next to Run input source
+Opens this help.
 
-Variable rows map to variable-1, variable-2, and so on in your recording.
-Optional note labels before a colon are for your notes only and are stripped at run time.
-Labels can include spaces (Drawing Number:281435 types 281435).
+Use data input for Run
+Supply variable values from the selected data input when you Run a recording. Only one input source can be active (Data Inputs or Bulk Inputs).
 
-Examples (all type Alice then Bob):
-  name:Alice
-  Bob
+Saved data inputs list
+Stored in saved-inputs\. Columns: Name, Variable count.
+Hover a row to preview its optional description (set in Edit Data Input).
 
-  Drawing Number:281435
-  role:Bob
+Add Data Input
+Create a new data input (opens the editor with a suggested name).
 
-Plain lines without a colon still work as before.
-Escape a comma in a value with backslash: Developed_By:I\, LEE types I, LEE.
-Data input and bulk inputs cannot both be active for Run.
+Edit Data Input
+Edit the name, optional description, and variable values.
+- Table: one row per variable (row 1 = variable-1, row 2 = variable-2, ...).
+- Columns: Slot, Label (optional note), Value (typed text).
+- Click Label or Value to edit inline, or use Selected row and Apply row.
+- Add row / Delete row adjust slots (at least one row required).
+
+Delete Data Input
+Remove the selected data input.
+
+Variable values
+Label is for your notes only and is stripped at run time. Values are what Run types.
+Labels can include spaces (Label Drawing Number, Value 281435 types 281435).
+Comma in a value: use backslash (Value I\, LEE types I, LEE).
+Use \\ for a literal backslash.
+Plain values with no label still work.
+
+Other tabs
+Speed Settings: speed multipliers and initial delay.
+Run Options: mouse movement, typing style, and timing pauses.
+
+Run (bottom)
+Replay uses the selected data input's values. Esc stops playback.
     )",
     csvBatchHelpMessage: "
     (
-Bulk inputs run the selected recording once per row. Each row supplies values for that pass.
+Bulk Inputs tab (top to bottom)
 
-Choose Use bulk inputs for Run (only one input source can be active).
+(i) next to Saved CSV files
+Opens this help.
 
-Saved files:
-- Stored in csv-batches\
-- Edit CSV: create or edit a file
-- Rename / Delete: manage saved files
-- Browse: load an external file (optional import into csv-batches\)
-- Refresh: reload all lists
+Use bulk inputs for Run
+Replay the selected recording once per CSV data row. Only one input source can be active (Data Inputs or Bulk Inputs).
 
-CSV format:
-  row,name,qty,region
+Config
+- Ask to run next line before each row: progress table, then Run, Skip, or Run all remaining
+- Run all rows automatically: no prompt between rows
 
-Examples:
+Saved CSV files
+Stored in csv-batches\. List columns: Name, Line, Var Count.
+
+Edit CSV
+Table editor for the selected file (or a new file). Row 1 is the header. Click a cell to edit inline. Add row / Delete row / Add col / Delete col. Commas and backslashes in values are escaped automatically on Save.
+
+Rename
+Change the selected file name.
+
+Delete
+Remove the selected file.
+
+Browse
+Pick an external CSV path (optional import into csv-batches\).
+
+Refresh
+Reload all lists.
+
+File format
+Row 1: header (column labels; not typed during Run).
+Column A on data rows: row label (display only in prompts).
+Columns B onward: variable-1, variable-2, and so on.
+
+Example:
   row,name,qty,region
   1,Alice,100,East
   2,Bob,250,West
 
-  Value with a comma:
-  row,name
-  1,Smith\, Jones
+Comma in a value: Smith\, Jones runs as Smith, Jones.
+Use \\ for a literal backslash.
+Single variable column: header value, then one value per row.
+Blank lines and lines starting with # are ignored.
 
-  Single variable column:
-  value
-  hello
-  world
-
-Rules:
-- Row 1 is a header row (column labels for your notes; not typed during Run)
-- Column 1 header names the row label column; columns 2+ name variable-1, variable-2, ...
-- Data rows start on row 2; column 1 is the row label (display only)
-- Columns 2+ on data rows supply the values typed during Run
-- Escape a comma inside a value with backslash: Smith\, Jones types Smith, Jones
-- Escape a backslash as \\
-- Blank lines and lines starting with # are ignored
-
-Run mode (Config section on the Bulk Inputs tab):
-- Ask to run next line: progress table and prompt before each row (Run, Skip, Run all remaining)
-- Run all rows automatically: no prompts between rows
-
-Esc stops the whole batch.
+Run (bottom)
+Each row supplies values for that pass. Esc stops the whole batch.
     )",
     runOptionsTabHelpMessage: "
     (
@@ -388,7 +428,7 @@ UI := {
     recordingListHeight: 300,
     presetListHeight: 285,
     marginX: 18,
-    marginY: 4,
+    marginY: 2,
     btnGap: 10,
     btnHeightSecondary: 26,
     btnHeightTool: 28,
@@ -413,8 +453,31 @@ UI := {
     csvColVarCount: "Var Count",
     statusHeight: 30,
     csvEditWidth: 300,
+    csvEditorWidth: 600,
+    csvEditorListWidth: 560,
+    csvEditorListHeight: 250,
+    csvEditorMaxCols: 1000,
+    csvEditorRowNumberColWidth: 40,
+    csvEditorDataColWidth: 72,
+    csvEditorInlineMinWidth: 40,
+    csvEditorInlineMaxWidth: 140,
+    csvEditorMarginX: 12,
+    csvEditorMarginY: 4,
+    csvEditorNameEditH: 24,
+    csvEditorHelpTextH: 36,
+    csvEditorButtonWidth: 72,
+    csvEditorButtonHeight: 24,
+    csvEditorButtonGap: 2,
+    csvEditorButtonGroupGap: 6,
+    csvEditorListToButtonsGap: -2,
+    csvEditorButtonsToSaveGap: 4,
+    csvEditorSaveButtonWidth: 120,
+    csvEditorSaveButtonHeight: 28,
+    csvEditorSaveButtonGap: 6,
+    csvEditorBottomPad: 10,
+    csvEditorOuterPad: 14,
     csvBatchTableWidth: 560,
-    csvBatchTableHeight: 180,
+    csvBatchTableHeight: 190,
     csvBatchPromptDetailsLines: 5,
     csvBatchPromptBtnWidth: 118,
     presetEditorWidth: 690,
@@ -2925,6 +2988,24 @@ ParseCsvEditorRows(content, maxCols) {
 }
 
 /**
+ * Returns Edit CSV dialog height from layout constants (no fixed empty footer).
+ * @returns {Integer}
+ */
+GetCsvEditorWindowHeight() {
+    global UI
+
+    rowGap := UI.csvEditorMarginY
+    return rowGap
+        + UI.tabLabelHeight + rowGap
+        + UI.csvEditorNameEditH + rowGap
+        + UI.csvEditorHelpTextH + rowGap
+        + UI.csvEditorListHeight + rowGap + UI.csvEditorListToButtonsGap
+        + UI.csvEditorButtonHeight + rowGap + UI.csvEditorButtonsToSaveGap
+        + UI.csvEditorSaveButtonHeight
+        + UI.csvEditorBottomPad + UI.csvEditorOuterPad
+}
+
+/**
  * Returns editable column count for the CSV editor table.
  * @param {Array<Array<String>>} rows Editable rows.
  * @param {Integer} maxCols Maximum allowed columns.
@@ -2940,6 +3021,24 @@ GetCsvEditorColumnCount(rows, maxCols) {
 }
 
 /**
+ * Converts a one-based column index to Excel-style letters (A, B, ..., AA).
+ * @param {Integer} colIndex One-based column index.
+ * @returns {String}
+ */
+FormatSpreadsheetColumnName(colIndex) {
+    name := ""
+    colIndex := Max(1, Integer(colIndex))
+
+    while colIndex > 0 {
+        colIndex--
+        name := Chr(65 + Mod(colIndex, 26)) name
+        colIndex := Floor(colIndex / 26)
+    }
+
+    return name
+}
+
+/**
  * Builds fixed ListView columns for the CSV editor.
  * @param {Integer} colCount Number of editable columns.
  * @returns {Array<String>}
@@ -2948,7 +3047,7 @@ BuildCsvEditorListColumns(colCount) {
     columns := ["#"]
 
     Loop colCount
-        columns.Push("Column " A_Index)
+        columns.Push(FormatSpreadsheetColumnName(A_Index))
 
     return columns
 }
@@ -2960,14 +3059,16 @@ BuildCsvEditorListColumns(colCount) {
  * @param {Integer} colCount Number of editable columns.
  */
 PopulateCsvEditorList(listView, rows, colCount) {
+    global UI
+
     listView.Delete()
 
     Loop rows.Length
         RefreshCsvEditorListRow(listView, A_Index, rows[A_Index], colCount, true)
 
-    listView.ModifyCol(1, 40)
+    listView.ModifyCol(1, UI.csvEditorRowNumberColWidth)
     Loop colCount
-        listView.ModifyCol(A_Index + 1, A_Index = 1 ? 110 : 130)
+        listView.ModifyCol(A_Index + 1, UI.csvEditorDataColWidth)
     SetManageListViewColumnIntegerSort(listView, 1)
 }
 
@@ -3039,7 +3140,7 @@ ShowCsvEditor(*) {
         ? ReadTextFile(selectedPath)
         : DefaultCsvTemplate()
 
-    csvEditorMaxCols := 8
+    csvEditorMaxCols := UI.csvEditorMaxCols
     csvEditorRows := ParseCsvEditorRows(existingContent, csvEditorMaxCols)
     csvEditorColCount := GetCsvEditorColumnCount(csvEditorRows, csvEditorMaxCols)
 
@@ -3048,98 +3149,221 @@ ShowCsvEditor(*) {
 
     editor := Gui("+ToolWindow", "Edit CSV")
     BindManageChildGui(editor)
+    editor.MarginX := UI.csvEditorMarginX
+    editor.MarginY := UI.csvEditorMarginY
     editor.SetFont("s10", "Segoe UI")
     editor.BackColor := "FFFFFF"
 
-    editorW := 720
-    listW := 680
-    detailLabelW := 70
-    detailEditW := 230
+    editorW := UI.csvEditorWidth
+    listW := UI.csvEditorListWidth
 
     editor.Add("Text", "w" listW " c1A1A1A", "CSV name")
     nameEdit := editor.Add(
         "Edit",
-        "w" listW,
+        "w" listW " h" UI.csvEditorNameEditH,
         selectedPath ? FormatCsvName(selectedPath) : "batch-1"
     )
     editor.Add(
         "Text",
-        "xm w" listW " c555555",
-        "Row 1 is the header. Select a row below, edit its columns, then Apply row or Save. Commas and backslashes are escaped automatically."
+        "xm w" listW " h" UI.csvEditorHelpTextH " c555555",
+        "Row 1 is the header. Click a cell to edit inline. Commas and backslashes are escaped automatically."
     )
-    csvList := editor.Add("ListView", "xm w" listW " h210 -Multi +Background" UI.listBg, BuildCsvEditorListColumns(csvEditorColCount))
+    csvList := editor.Add(
+        "ListView",
+        "xm w" listW " h" UI.csvEditorListHeight " -Multi +Background" UI.listBg,
+        BuildCsvEditorListColumns(csvEditorColCount)
+    )
     PopulateCsvEditorList(csvList, csvEditorRows, csvEditorColCount)
+    csvInlineEdit := editor.Add("Edit", "Hidden w10 h22")
 
-    addRowBtn := editor.Add("Button", "xm w100 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText, "Add row")
-    deleteRowBtn := editor.Add("Button", "x+8 w100 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText, "Delete row")
+    addRowBtn := editor.Add(
+        "Button",
+        "xm y+" UI.csvEditorListToButtonsGap " w" UI.csvEditorButtonWidth " h" UI.csvEditorButtonHeight
+            " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Add row"
+    )
+    deleteRowBtn := editor.Add(
+        "Button",
+        "x+" UI.csvEditorButtonGap " w" UI.csvEditorButtonWidth " h" UI.csvEditorButtonHeight
+            " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Delete row"
+    )
+    addColBtn := editor.Add(
+        "Button",
+        "x+" UI.csvEditorButtonGroupGap " w" UI.csvEditorButtonWidth " h" UI.csvEditorButtonHeight
+            " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Add col"
+    )
+    deleteColBtn := editor.Add(
+        "Button",
+        "x+" UI.csvEditorButtonGap " w" UI.csvEditorButtonWidth " h" UI.csvEditorButtonHeight
+            " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Delete col"
+    )
 
-    editor.Add("Text", "xm w" listW " c1A1A1A", "Selected row")
-    csvFieldEdits := []
-    Loop csvEditorMaxCols {
-        colNum := A_Index
-        rowOpt := Mod(colNum, 2) = 1 ? "xs" : "x+14"
-        editor.Add("Text", rowOpt " w" detailLabelW " c555555", "Col " colNum ":")
-        editCtrl := editor.Add("Edit", "x+0 w" detailEditW, "")
-        csvFieldEdits.Push(editCtrl)
-    }
-
-    applyRowBtn := editor.Add("Button", "xm w120 h28 +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText, "Apply row")
-
-    saveBtn := editor.Add("Button", "xm w130 h32 Default", "Save")
-    closeBtn := editor.Add("Button", "x+8 w130 h32", "Close")
+    saveBtn := editor.Add(
+        "Button",
+        "xm y+" UI.csvEditorButtonsToSaveGap " w" UI.csvEditorSaveButtonWidth
+            " h" UI.csvEditorSaveButtonHeight " Default",
+        "Save"
+    )
+    closeBtn := editor.Add(
+        "Button",
+        "x+" UI.csvEditorSaveButtonGap " w" UI.csvEditorSaveButtonWidth
+            " h" UI.csvEditorSaveButtonHeight,
+        "Close"
+    )
     selectedCsvRowIndex := 0
+    csvInlineRow := 0
+    csvInlineCol := 0
+    csvInlineOriginal := ""
 
-    SyncCsvEditorRowFromDetailPanel() {
-        if selectedCsvRowIndex < 1 || selectedCsvRowIndex > csvEditorRows.Length
+    CommitCsvInlineEdit(*) {
+        if csvInlineRow < 1 || csvInlineCol < 2
             return
 
-        row := []
-        Loop csvEditorColCount
-            row.Push(Trim(csvFieldEdits[A_Index].Value))
+        try {
+            if !csvInlineEdit.Visible
+                return
+        } catch {
+            return
+        }
 
-        while row.Length > 1 && row[row.Length] = ""
-            row.Pop()
+        csvInlineEdit.Visible := false
+        dataCol := csvInlineCol - 1
 
-        csvEditorRows[selectedCsvRowIndex] := row
-        RefreshCsvEditorListRow(csvList, selectedCsvRowIndex, row, csvEditorColCount)
+        if csvInlineRow >= 1 && csvInlineRow <= csvEditorRows.Length
+            && dataCol >= 1 && dataCol <= csvEditorColCount {
+            row := csvEditorRows[csvInlineRow]
+            while row.Length < dataCol
+                row.Push("")
+            row[dataCol] := Trim(csvInlineEdit.Value)
+            RefreshCsvEditorListRow(csvList, csvInlineRow, row, csvEditorColCount)
+        }
+
+        csvInlineRow := 0
+        csvInlineCol := 0
+        csvInlineOriginal := ""
+    }
+
+    StartCsvInlineEdit(visualRowIndex, colIndex) {
+        if colIndex < 2 || colIndex > csvEditorColCount + 1
+            return
+
+        CommitCsvInlineEdit()
+
+        dataRowIndex := GetManageListViewDataRowIndex(csvList, visualRowIndex, 1)
+        if dataRowIndex < 1 || dataRowIndex > csvEditorRows.Length
+            return
+
+        ControlGetPos &listX, &listY, , , csvList
+        rect := GetManageListViewSubItemRect(csvList, visualRowIndex, colIndex)
+        editW := Min(Max(rect.right - rect.left, UI.csvEditorInlineMinWidth), UI.csvEditorInlineMaxWidth)
+        editH := Max(rect.bottom - rect.top, 22)
+
+        csvInlineRow := dataRowIndex
+        csvInlineCol := colIndex
+        csvInlineOriginal := csvList.GetText(visualRowIndex, colIndex)
+        csvInlineEdit.Move(listX + rect.left, listY + rect.top, editW, editH)
+        csvInlineEdit.Value := csvInlineOriginal
+        csvInlineEdit.Visible := true
+        csvInlineEdit.Focus()
+    }
+
+    OnCsvEditorListClick(ctl, item, *) {
+        if !item
+            return
+
+        ControlGetPos &listX, &listY, , , csvList
+        CoordMode "Mouse", "Client"
+        MouseGetPos &mouseX, &mouseY, , &controlHwnd, 2
+        if controlHwnd != csvList.Hwnd
+            return
+
+        hit := GetManageListViewHitSubItem(csvList, mouseX - listX, mouseY - listY)
+        if hit.row < 1
+            return
+
+        selectedCsvRowIndex := GetManageListViewDataRowIndex(csvList, hit.row, 1)
+        csvList.Modify(hit.row, "Select Focus")
+        StartCsvInlineEdit(hit.row, hit.col)
     }
 
     LoadCsvEditorRow(rowIndex) {
-        SyncCsvEditorRowFromDetailPanel()
+        if !(csvInlineEdit.Visible && rowIndex = csvInlineRow)
+            CommitCsvInlineEdit()
         selectedCsvRowIndex := rowIndex
-
-        Loop csvEditorMaxCols {
-            csvFieldEdits[A_Index].Enabled := A_Index <= csvEditorColCount
-            csvFieldEdits[A_Index].Value := ""
-        }
-
-        if rowIndex < 1 || rowIndex > csvEditorRows.Length
-            return
-
-        row := csvEditorRows[rowIndex]
-        Loop csvEditorColCount
-            csvFieldEdits[A_Index].Value := A_Index <= row.Length ? row[A_Index] : ""
     }
 
-    ApplyCsvEditorRow(*) {
-        SyncCsvEditorRowFromDetailPanel()
-        if selectedCsvRowIndex >= 1
-            SetStatus(Format("Updated CSV row {}", selectedCsvRowIndex))
+    RefreshCsvEditorTableAndSelection(rowIndex := 0) {
+        PopulateCsvEditorList(csvList, csvEditorRows, csvEditorColCount)
+        if rowIndex >= 1 {
+            SelectManageListViewDataRow(csvList, rowIndex)
+            selectedCsvRowIndex := rowIndex
+        }
     }
 
     AddCsvEditorRow(*) {
-        SyncCsvEditorRowFromDetailPanel()
+        CommitCsvInlineEdit()
         insertIndex := selectedCsvRowIndex >= 1
             ? Min(selectedCsvRowIndex + 1, csvEditorRows.Length + 1)
             : csvEditorRows.Length + 1
         firstCol := insertIndex = 1 ? "row" : String(insertIndex - 1)
         csvEditorRows.InsertAt(insertIndex, [firstCol])
-        PopulateCsvEditorList(csvList, csvEditorRows, csvEditorColCount)
-        SelectManageListViewDataRow(csvList, insertIndex)
-        LoadCsvEditorRow(insertIndex)
+        RefreshCsvEditorTableAndSelection(insertIndex)
+    }
+
+    AddCsvEditorColumn(*) {
+        CommitCsvInlineEdit()
+        if csvEditorColCount >= csvEditorMaxCols {
+            ShowManageMsgBox "The CSV editor supports up to column "
+                FormatSpreadsheetColumnName(csvEditorMaxCols) ".", "Edit CSV", "Icon!"
+            return
+        }
+
+        csvEditorColCount++
+        csvList.InsertCol(
+            csvEditorColCount + 1,
+            String(UI.csvEditorDataColWidth),
+            FormatSpreadsheetColumnName(csvEditorColCount)
+        )
+        for rowIndex, row in csvEditorRows {
+            while row.Length < csvEditorColCount
+                row.Push("")
+            if rowIndex = 1
+                row[csvEditorColCount] := FormatSpreadsheetColumnName(csvEditorColCount)
+        }
+
+        RefreshCsvEditorTableAndSelection(selectedCsvRowIndex)
+    }
+
+    DeleteCsvEditorColumn(*) {
+        CommitCsvInlineEdit()
+        if csvEditorColCount <= 1 {
+            ShowManageMsgBox "At least one column is required.", "Edit CSV", "Icon!"
+            return
+        }
+
+        confirm := ShowManageMsgBox(
+            "Delete column " FormatSpreadsheetColumnName(csvEditorColCount) " from every row?",
+            "Edit CSV",
+            "YesNo Icon?"
+        )
+        if confirm != "Yes"
+            return
+
+        for row in csvEditorRows {
+            if row.Length >= csvEditorColCount
+                row.RemoveAt(csvEditorColCount)
+        }
+        csvList.DeleteCol(csvEditorColCount + 1)
+        csvEditorColCount--
+
+        RefreshCsvEditorTableAndSelection(selectedCsvRowIndex)
     }
 
     DeleteCsvEditorRow(*) {
+        CommitCsvInlineEdit()
         if selectedCsvRowIndex < 1 || selectedCsvRowIndex > csvEditorRows.Length
             return
         if selectedCsvRowIndex = 1 {
@@ -3148,10 +3372,8 @@ ShowCsvEditor(*) {
         }
 
         csvEditorRows.RemoveAt(selectedCsvRowIndex)
-        PopulateCsvEditorList(csvList, csvEditorRows, csvEditorColCount)
         nextRow := Min(selectedCsvRowIndex, csvEditorRows.Length)
-        SelectManageListViewDataRow(csvList, nextRow)
-        LoadCsvEditorRow(nextRow)
+        RefreshCsvEditorTableAndSelection(nextRow)
     }
 
     OnCsvEditorListSelect(*) {
@@ -3159,7 +3381,7 @@ ShowCsvEditor(*) {
     }
 
     SaveCsvEditor(*) {
-        SyncCsvEditorRowFromDetailPanel()
+        CommitCsvInlineEdit()
 
         csvName := SafeCsvName(nameEdit.Value)
         if csvName = "" {
@@ -3210,9 +3432,13 @@ ShowCsvEditor(*) {
     }
 
     csvList.OnEvent("ItemSelect", OnCsvEditorListSelect)
-    applyRowBtn.OnEvent("Click", ApplyCsvEditorRow)
+    csvList.OnEvent("Click", OnCsvEditorListClick)
+    csvList.OnEvent("DoubleClick", OnCsvEditorListClick)
+    csvInlineEdit.OnEvent("LoseFocus", CommitCsvInlineEdit)
     addRowBtn.OnEvent("Click", AddCsvEditorRow)
     deleteRowBtn.OnEvent("Click", DeleteCsvEditorRow)
+    addColBtn.OnEvent("Click", AddCsvEditorColumn)
+    deleteColBtn.OnEvent("Click", DeleteCsvEditorColumn)
     saveBtn.OnEvent("Click", SaveCsvEditor)
     closeBtn.OnEvent("Click", CloseCsvEditor)
     editor.OnEvent("Close", CloseCsvEditor)
@@ -3223,7 +3449,7 @@ ShowCsvEditor(*) {
         LoadCsvEditorRow(1)
     }
 
-    editor.Show("w" editorW " h610")
+    editor.Show("w" editorW " h" GetCsvEditorWindowHeight())
     csvList.Focus()
 }
 
