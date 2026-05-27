@@ -41,6 +41,10 @@ Install AutoHotkey v2 from https://www.autohotkey.com/
 
 New-Item -ItemType Directory -Force -Path $OUTPUT_DIR | Out-Null
 
+if (Test-Path $OUTPUT_EXE) {
+    Remove-Item -LiteralPath $OUTPUT_EXE -Force
+}
+
 Write-Host "Compiling $INPUT_SCRIPT"
 Write-Host "  version: $APP_VERSION (keep in sync with C.appVersion in dataEntryAutonoma.ahk)"
 Write-Host "  -> $OUTPUT_EXE"
@@ -52,6 +56,11 @@ if (Test-Path $APP_ICON) {
 else {
     Write-Warning "App icon not found ($APP_ICON). Run .\buildAppIcon.ps1 first."
     & $AHK2EXE /in $INPUT_SCRIPT /out $OUTPUT_EXE /base $AHK_BASE
+}
+
+$compileDeadline = (Get-Date).AddSeconds(60)
+while (-not (Test-Path $OUTPUT_EXE) -and (Get-Date) -lt $compileDeadline) {
+    Start-Sleep -Milliseconds 250
 }
 
 if (-not (Test-Path $OUTPUT_EXE)) {

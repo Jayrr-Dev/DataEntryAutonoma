@@ -6,7 +6,7 @@ SetMouseDelay -1
 SetKeyDelay -1
 
 ; dataEntryAutonoma.ahk
-; Data Entry Autonoma v1.1.2 — record clicks, scrolls, and keys; replay with presets or CSV batches.
+; Data Entry Autonoma v1.2.0 — record clicks, scrolls, and keys; replay with presets or CSV batches.
 ; Copyright (c) 2026 Jayrr Dev — https://github.com/Jayrr-Dev/DataEntryAutonoma
 ; SPDX-License-Identifier: MIT
 ; Unified Record and Run module with CSV batch support.
@@ -25,7 +25,7 @@ CoordMode "ToolTip", "Screen"
 ; =============================================================================
 
 C := {
-    appVersion: "1.1.2", ; keep in sync with VERSION at project root
+    appVersion: "1.2.0", ; keep in sync with VERSION at project root
     recordingsDir: A_ScriptDir "\recordings",
     savesDir: A_ScriptDir "\saved-inputs",
     csvBatchesDir: A_ScriptDir "\csv-batches",

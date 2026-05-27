@@ -5,6 +5,20 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-05-27
+
+### Added
+
+- **Edit Recording Log → Global Adjust tab:** bulk coordinate offset (saved for Run), screen `w/h → w/h` rescale, and target window (title, exe, class) apply to all events
+- **Target title picker:** dropdown of open windows with ↻ refresh; fills title, exe, and class on select
+- Per-row **Window title** and **Exe** fields in Edit Log Events tab (rich click rows)
+- Playback offset headers: `# playback_offset_x` / `# playback_offset_y` / `# playback_reference_client_w` / `# playback_reference_client_h`
+
+### Changed
+
+- Global Adjust help split from Events tab help; layout uses consistent `Offset (px): X/Y` and `Screen: w/h → w/h` labels
+- Edit Recording Log tab order: Events, Global Adjust, Raw log
+
 ## [1.1.2] - 2026-05-27
 
 ### Added
@@ -184,6 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.2.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.6...v1.1.0

@@ -14,7 +14,7 @@ Show the app what to do once. It remembers your mouse clicks, scrolls, and keypr
 
 **Developers:** the source is built with [AutoHotkey v2](https://www.autohotkey.com/) and compiled into that exe.
 
-**Current release:** v1.1.2
+**Current release:** v1.2.0
 
 ## What it does
 
@@ -26,6 +26,13 @@ Data Entry Autonoma works like showing someone how to fill out a form and having
 4. Store the text to type in a **data input** or **CSV file**. Each run or each CSV row can fill the form with new values while you watch or walk away.
 
 You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, five tabs, **Share** and **Import** on the title row, tab-specific **i** help buttons, list hover tooltips, and plain-language guidance while you work.
+
+## What's new (v1.2.0)
+
+- **Edit Recording Log → Global Adjust tab:** offset X/Y at Run, screen `w/h → w/h` rescale, target window apply to all events
+- **Target title picker:** choose from open windows (↻ refresh); per-row window title and exe on click rows
+
+See [Version history](#version-history) for v1.1.2 and earlier.
 
 ## What's new (v1.1.2)
 
@@ -82,7 +89,7 @@ Typical uses:
 - **Esc saves** the recording and opens a rename dialog; **Cancel** on that dialog discards the file
 - Recordings list shows **name** and **variable count** for each session; hover a row to preview its optional description
 - **Rename**, **Edit Log**, and **Delete** from the Recordings tab
-- **Edit Recording Log** opens a table of recording events (timing, variables, clicks, shortcuts) plus a raw log preview
+- **Edit Recording Log** opens Events (table + row editor), **Global Adjust** (bulk coordinates and target window), and Raw log preview
 
 ### Run (replay)
 
@@ -159,7 +166,7 @@ There is no separate Help button; use the **i** on the tab you are working in.
 
 ### App behavior
 
-- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.1.2`)
+- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.2.0`)
 - **Single instance**: only one app window at a time
 - **Always on top** main window for quick access
 - Remembers last selected recording, data input, and CSV in `apply-state.ini`
@@ -188,7 +195,7 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.1.2-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.2.0-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
@@ -347,7 +354,7 @@ For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 w
 
 5. **Find the output**
    - Built file: `dist\DataEntryAutonoma.exe`
-   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.1.2-win64.zip`
+   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.2.0-win64.zip`
    - Publish to GitHub: `.\publishRelease.ps1` builds and uploads the zip
    - Copy the exe plus empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders when sharing with others (same layout as Path 1).
 
@@ -532,6 +539,7 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
+| **1.2.0** | Edit Log Global Adjust tab, playback offset, screen rescale, target window picker, per-row window fields |
 | **1.1.2** | Edit Data Input and CSV editor UX, Create CSV button, default move speed 10, release exe validation |
 | **1.1.1** | Install wizard auto-download and layout fixes, publishRelease script, source-vs-release guidance |
 | **1.1.0** | CSV table editor, Share/Import portable bundles (`.dea.zip`), five-tab layout with Speed Settings, list hover tooltips, Edit Data Input and Edit Recording Log improvements, default move speed 3 |
