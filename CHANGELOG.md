@@ -5,6 +5,26 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-05-27
+
+### Added
+
+- `publishRelease.ps1` / `publishRelease.bat`: build, package, and upload the win64 zip to GitHub in one step
+- Install wizard: automatic download on welcome, retry / open releases / browse fallback buttons
+
+### Changed
+
+- Install wizard welcome layout (auto-wrapping text, no clipped messages)
+- Share bundle default name includes data input or CSV name
+- README updated for v1.1.1 and clearer release vs source download instructions
+
+### Fixed
+
+- Install wizard failed when GitHub source zip was used instead of the release zip
+- Install wizard `ForeColor` parameter error on welcome screen
+- Install wizard download now finds `DataEntryAutonoma.exe` inside nested release folders
+- Install wizard can build from source when AutoHotkey v2 is installed
+
 ## [1.1.0] - 2026-05-27
 
 ### Added
@@ -144,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.1.1]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.6...v1.1.0
 [1.0.6]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.4...v1.0.5

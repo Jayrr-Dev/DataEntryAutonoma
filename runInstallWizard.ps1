@@ -35,7 +35,7 @@ $LICENSE_FILE_NAME = "LICENSE"
 $README_FILE_NAME = "README.md"
 $CHANGELOG_FILE_NAME = "CHANGELOG.md"
 $VERSION_FILE_NAME = "VERSION"
-$APP_VERSION_FALLBACK = "1.1.0"
+$APP_VERSION_FALLBACK = "1.1.1"
 $INSTALL_WIZARD_PS1 = "runInstallWizard.ps1"
 $INSTALL_WIZARD_BAT = "runInstallWizard.bat"
 $UNINSTALL_WIZARD_PS1 = "runUninstallWizard.ps1"
@@ -222,6 +222,19 @@ function Update-WelcomeAuxiliaryLayout {
     }
 }
 
+# Returns guidance when automatic download is unavailable.
+function Get-InstallSourceFailureSummary {
+    if (Test-Path $SOURCE_SCRIPT_PATH) {
+        return @"
+This folder is source code only (no $EXE_FILE_NAME yet).
+
+Download DataEntryAutonoma-v*-win64.zip from GitHub Releases (not the green Code zip), or build locally with build.bat if AutoHotkey v2 is installed, then run this wizard again.
+"@
+    }
+
+    return "Could not download automatically. Open GitHub Releases, or browse for $EXE_FILE_NAME."
+}
+
 # Downloads (or confirms) the install source on the welcome screen.
 function Invoke-WelcomeInstallSourcePrep {
     if (Test-StandaloneExeAvailable) {
@@ -234,21 +247,41 @@ function Invoke-WelcomeInstallSourcePrep {
     Set-WizardNavigationEnabled $false
     Set-WelcomeFallbackButtonsVisible $false
     Set-WelcomeDownloadProgressVisible $true
-    Set-WizardStatusMessage "Downloading the latest version from GitHub..."
-    if (Test-ControlUsable $script:Welcome_StatusLabel) {
-        $script:Welcome_StatusLabel.ForeColor = $COLOR_MUTED
-    }
     Update-WelcomeAuxiliaryLayout
     [System.Windows.Forms.Application]::DoEvents()
 
     try {
+        if ((Test-Path $SOURCE_SCRIPT_PATH) -and (Test-CanBuildStandaloneExe)) {
+            Set-WizardStatusMessage "Building $EXE_FILE_NAME from source..."
+            if (Test-ControlUsable $script:Welcome_StatusLabel) {
+                $script:Welcome_StatusLabel.ForeColor = $COLOR_MUTED
+            }
+            [System.Windows.Forms.Application]::DoEvents()
+
+            try {
+                Invoke-BuildStandaloneExe
+                $script:InstallSourcePrepFailed = $false
+                Update-WelcomeInstallSourceReadyUi
+                return $true
+            } catch {
+                Set-WizardStatusMessage "Build failed. Trying GitHub download..."
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+        }
+
+        Set-WizardStatusMessage "Downloading the latest version from GitHub..."
+        if (Test-ControlUsable $script:Welcome_StatusLabel) {
+            $script:Welcome_StatusLabel.ForeColor = $COLOR_MUTED
+        }
+        [System.Windows.Forms.Application]::DoEvents()
+
         if (Ensure-InstallSourceReady) {
             $script:InstallSourcePrepFailed = $false
             Update-WelcomeInstallSourceReadyUi
             return $true
         }
 
-        Set-WizardStatusMessage "Could not download automatically. Open GitHub Releases, or browse for $EXE_FILE_NAME."
+        Set-WizardStatusMessage (Get-InstallSourceFailureSummary)
         if (Test-ControlUsable $script:Welcome_StatusLabel) {
             $script:Welcome_StatusLabel.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
         }
@@ -581,6 +614,7 @@ function Invoke-BuildStandaloneExe {
     }
 
     $script:StandaloneExeSourcePath = $DIST_EXE_PATH
+    $script:ReleaseSourceRoot = $PROJECT_ROOT
 }
 
 # Starts the installed standalone application.
