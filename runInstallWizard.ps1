@@ -35,7 +35,7 @@ $LICENSE_FILE_NAME = "LICENSE"
 $README_FILE_NAME = "README.md"
 $CHANGELOG_FILE_NAME = "CHANGELOG.md"
 $VERSION_FILE_NAME = "VERSION"
-$APP_VERSION_FALLBACK = "1.0.6"
+$APP_VERSION_FALLBACK = "1.1.0"
 $INSTALL_WIZARD_PS1 = "runInstallWizard.ps1"
 $INSTALL_WIZARD_BAT = "runInstallWizard.bat"
 $UNINSTALL_WIZARD_PS1 = "runUninstallWizard.ps1"
@@ -623,7 +623,7 @@ This wizard copies the app, README, CHANGELOG, and VERSION to your chosen folder
 
 Version: v$($script:WizardAppVersion)
 
-CSV files use row 1 for column labels. Presets and CSV values can escape commas with backslash (for example I\, LEE).
+CSV files use row 1 for column labels and can be edited in the built-in table editor. Share and Import portable bundles (folder or .dea.zip) from the main window title row.
 
 Click Next to choose where to install.
 "@ 188
@@ -825,7 +825,7 @@ Click Next to choose where to install.
             $bodyText = @"
 $APP_DISPLAY_NAME is ready to use.
 
-${versionLine}See README.md and CHANGELOG.md in the install folder for CSV header rows, preset note labels, and comma escaping.
+${versionLine}See README.md and CHANGELOG.md in the install folder for the CSV table editor, Share/Import bundles, and updated tab help.
 
 Open the app from your Desktop or Start Menu shortcut, or run it from:
 $script:InstallDir

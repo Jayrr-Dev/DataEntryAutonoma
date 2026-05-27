@@ -5,6 +5,31 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-27
+
+### Added
+
+- CSV table editor (ListView, inline cell edit, add/delete rows and columns, Excel-style column headers)
+- Share / Import portable bundles (folder or .dea.zip) with manifest.json
+- Import and Share buttons on main window title row (right-aligned)
+- Share dialog intro, naming hint below text box, default name `{recording}-{data input or CSV}-{PC}-{date}`
+- List hover tooltips for recording and data input descriptions
+
+### Changed
+
+- Help text rewritten for Recordings, Data Inputs, Bulk Inputs, and Recording events tabs (sectioned, concise, no em dashes)
+- Default move speed → 3 (was 1.5)
+- CSV editor and Share dialog layout tightened
+- Edit Data Input / preset editor UI improvements
+
+### Fixed
+
+- Edit Data Input acting as Add (duplicate preset files)
+- Preset save serialization error
+- Recording log row labels not persisting to file
+- List description tooltips invisible or stopping early
+- GetRecordingLogEventNote / SetRecordingLogEventNote wrong field index
+
 ## [1.0.6] - 2026-05-26
 
 ### Added
@@ -119,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.1.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.6...v1.1.0
 [1.0.6]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.0.3...v1.0.4

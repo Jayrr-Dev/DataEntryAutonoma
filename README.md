@@ -14,7 +14,7 @@ Record mouse clicks, scrolls, and keyboard input once, then click **Run** to rep
 
 **Developers:** the source is built with [AutoHotkey v2](https://www.autohotkey.com/) and compiled into that exe.
 
-**Current release:** v1.0.6
+**Current release:** v1.1.0
 
 ## What it does
 
@@ -26,6 +26,15 @@ Data Entry Autonoma works like showing someone how to fill out a form, then havi
 4. Store the text to type in a **preset** or **CSV file**. Each run or each CSV row can fill the form with new values while you watch or walk away.
 
 You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, four tabs, tab-specific **i** help buttons, and plain-language tooltips while you work.
+
+## What's new (v1.1.0)
+
+- **CSV table editor:** edit saved CSV files in a ListView with inline cell edit, add/delete rows and columns, and Excel-style column headers
+- **Share / Import bundles:** export or import portable folders or `.dea.zip` files with a manifest (recording plus preset or CSV)
+- **Import and Share buttons** on the main window title row (right-aligned)
+- **List hover tooltips** for recording and data input descriptions
+- **Help text rewritten** for Recordings, Data Inputs, Bulk Inputs, and Recording events tabs (sectioned and concise)
+- **Default move speed** is now 3 (was 1.5)
 
 ## What's new (v1.0.6)
 
@@ -131,7 +140,7 @@ There is no separate Help button; use the **i** on the tab you are working in.
 
 ### App behavior
 
-- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.0.6`)
+- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.1.0`)
 - **Single instance**: only one app window at a time
 - **Always on top** main window for quick access
 - Remembers last selected recording, preset, and CSV in `apply-state.ini`
@@ -158,7 +167,7 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.0.6-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.1.0-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
@@ -315,7 +324,7 @@ For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 w
 
 5. **Find the output**
    - Built file: `dist\DataEntryAutonoma.exe`
-   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.0.6-win64.zip`
+   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.1.0-win64.zip`
    - Copy the exe plus empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders when sharing with others (same layout as Path 1).
 
 6. **If PowerShell blocks the script**
@@ -410,7 +419,7 @@ Default preset file format (saved under `saved-inputs/`):
 ```ini
 playback_speed=1.0
 typing_speed=1.0
-move_speed=1.5
+move_speed=3
 initial_delay=1000
 click_pause_ms=150
 segment_pause_ms=200
@@ -485,6 +494,7 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
+| **1.1.0** | CSV table editor, Share/Import portable bundles, list hover tooltips, rewritten tab help, default move speed 3, Edit Data Input fixes |
 | **1.0.6** | Preset note labels, tabbed Edit Preset, CSV header row, Run Options-only mouse/typing, install/uninstall wizard version display |
 | **1.0.5** | Tab layout fixes, **i** help on all tabs, install wizard fixes, `VERSION` in release zip, CSV/preset run-source layout |
 | **1.0.4** | Tab info (i) buttons on all tabs, updated CSV help text, layout fixes for recordings list and tab buttons |
