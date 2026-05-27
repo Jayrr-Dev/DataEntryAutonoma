@@ -740,12 +740,12 @@ function Add-StackedBodyLabel {
         [string]$Text,
         [System.Windows.Forms.Control]$Below = $null,
         [int]$Gap = $WIZARD_LABEL_STACK_GAP,
-        [System.Drawing.Color]$ForeColor = $null,
+        [System.Drawing.Color]$ForeColor,
         [int]$FixedHeight = 0
     )
 
     $label = New-BodyLabel -Text $Text -FixedHeight $FixedHeight
-    if ($null -ne $ForeColor) {
+    if ($PSBoundParameters.ContainsKey("ForeColor")) {
         $label.ForeColor = $ForeColor
     }
 
