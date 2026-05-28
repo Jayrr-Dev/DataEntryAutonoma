@@ -14,7 +14,7 @@ SetKeyDelay -1
 ; Presets: saved-inputs\*.txt
 ; CSV batches: csv-batches\*.csv
 ; Bundles: Share as folder or optional ZIP; Import from manifest.json folder or .zip
-; Esc saves recording (Cancel on the save dialog discards). Esc stops Run or a CSV batch.
+; Esc stops Run or a CSV batch. PgUp toggles Record start/save. Right/Left Run forward/reverse; PgDn pause/resume (Left also switches to reverse while paused).
 
 EnableDpiAwareness()
 CoordMode "Mouse", "Screen"
@@ -169,20 +169,21 @@ Delete
 Remove the selected recording.
 
 Record (bottom)
-Start capturing clicks, keys, and delays for a new recording.
+Start capturing clicks, keys, and delays for a new recording. PgUp also toggles Record start/save (key is not sent).
 
 Run (bottom)
 Replay the selected recording. Supply variable values on the Data Inputs or Bulk Inputs tab first.
 
 While recording
-- Esc saves (Cancel on the save dialog discards)
+- PgUp saves (Cancel on the save dialog discards). Default save name uses the first 1–2 words of the target title (max 16 characters) plus 1, 2, 3… (e.g. Book1 Excel-1).
+- If the recording created variable placeholders (a, b, c), the save dialog lists them so you can add optional labels inline.
 - Normal clicks stay clicks
 - Hold Caps Lock to record a delay (Caps Lock is suppressed while recording)
 - Hold or drag left-click for Excel-style selection
 - Ctrl, Shift, or Alt shortcuts are recorded and replayed
 - Type any character (a, b, c) to add a variable placeholder
 
-Run: press Esc to stop playback.
+Run: Right Arrow plays forward; Left Arrow plays in reverse (clicks/scrolls/holds undo direction; typing is skipped in reverse). PgDn pauses/resumes; Left while paused rewinds from the current step. Esc or either arrow stops while running.
     )",
     presetsTabHelpMessage: "
     (
@@ -218,10 +219,10 @@ Type commas in values normally (Value I, LEE). They are escaped automatically wh
 
 Other tabs
 Speed Settings: speed multipliers and initial delay.
-Run Options: mouse movement, typing style, and timing pauses.
+Run Options: mouse movement, typing style, click offset, and timing pauses.
 
 Run (bottom)
-Replay uses the selected data input's values. Esc stops playback.
+Replay uses the selected data input's values. PgDn pauses/resumes; Esc stops playback.
     )",
     csvBatchHelpMessage: "
     (
@@ -274,29 +275,34 @@ Single variable column: header value, then one value per row.
 Blank lines and lines starting with # are ignored.
 
 Run (bottom)
-Each row supplies values for that pass. Esc stops the whole batch.
+Each row supplies values for that pass. PgDn pauses/resumes the current row; Esc stops the whole batch.
     )",
     runOptionsTabHelpMessage: "
     (
 These options apply to the next Run.
 
 Mouse movement:
-- Smooth: curved, natural mouse movement
+- Smooth: curved Bezier movement between targets
+- Linear: straight moves between targets; hold/drag replays the drawn path exactly (use for circles and precise shapes)
 - Instant: jump directly to each target
 
 Typing:
 - Human-like: per-key delays
 - Instant: send text immediately
 
+Mouse click offset (px):
+Random ±N pixel jitter on each click so the cursor does not land on the exact same pixel every time. 0 = exact recorded position.
+
 Timing & pauses:
-Click pause: after move, before click (ms)
-Step pause: after each target before the next (ms)
+- Click pause: after move, before click (ms)
+- Step pause: after each target before the next (ms)
 
 Between steps:
-- Fixed pauses only: use click and step pause values; ignore recorded gaps
+- Fixed pauses only: use click and step pause values; ignore recorded gaps from Record
 - Recorded gaps: replay seconds between steps from Record
 
 For speed multipliers and initial delay, use the Speed Settings tab.
+Run and Speed tab values are saved automatically and restored on next launch.
     )",
     speedSettingsTabHelpMessage: "
     (
@@ -305,11 +311,15 @@ These options apply to the next Run.
 Run speed: overall playback speed multiplier
 Typing speed: how fast typed variable values are sent
 Move speed: how fast the mouse moves between targets
+Move speed variability (%): random ±% change to each mouse move duration. 0 = constant speed.
+Hold speed: how fast recorded hold/drag paths are replayed (1 = recorded timing)
+Hold speed variability (%): random ±% change to each hold/drag duration. 0 = constant speed.
 Initial delay: wait time (ms) before playback starts
 
-Higher speed values run faster.
+Higher speed values run faster. Hold speed 1 replays draws at recorded timing. Move/hold variability randomizes each move or draw (±%). Initial delay waits before playback starts.
+Run and Speed tab values are saved automatically and restored on next launch.
     )",
-    recordingTipText: "Esc = Save · Click = click · Hold Caps Lock = delay · Hold/drag LMB = hold",
+    recordingTipText: "PgUp = Save · Click = click · Hold/drag LMB = path · Hold Caps Lock = delay",
     recordingTipOffsetX: 240,
     recordingTipOffsetY: 16,
     cursorTipOffsetX: 12,
@@ -340,6 +350,22 @@ Higher speed values run faster.
     stateRecordingKey: "recording",
     stateCsvKey: "csv",
     stateCsvAskNextLineKey: "csvAskNextLine",
+    stateRunSettingsSection: "runSettings",
+    stateMouseMoveModeKey: "mouse_move_mode",
+    stateHumanTypingKey: "human_typing",
+    stateMouseClickOffsetKey: "mouse_click_offset_px",
+    stateClickPauseKey: "click_pause_ms",
+    stateSegmentPauseKey: "segment_pause_ms",
+    stateUseRecordedTimingKey: "use_recorded_timing",
+    statePlaybackSpeedKey: "playback_speed",
+    stateTypingSpeedKey: "typing_speed",
+    stateMoveSpeedKey: "move_speed",
+    stateMoveSpeedVariabilityKey: "move_speed_variability_pct",
+    stateHoldSpeedKey: "hold_speed",
+    stateHoldSpeedVariabilityKey: "hold_speed_variability_pct",
+    stateInitialDelayKey: "initial_delay_ms",
+    stateHotkeysSection: "hotkeys",
+    hotkeyEditorDialogTitle: "Edit hotkeys",
     inputSourcePreset: "preset",
     inputSourceCsv: "csv",
 
@@ -362,12 +388,20 @@ Higher speed values run faster.
     defaultPlaybackSpeed: 1.0,
     defaultTypingSpeed: 1.0,
     defaultMoveSpeed: 10,
+    defaultMoveSpeedVariabilityPct: 0,
+    defaultHoldSpeed: 1.0,
+    defaultHoldSpeedVariabilityPct: 0,
     defaultInitialDelayMs: 1000,
     defaultClickPauseMs: 150,
     defaultSegmentPauseMs: 200,
     defaultUseRecordedTiming: false,
     defaultSmoothMouse: true,
     defaultHumanTyping: true,
+    defaultMouseClickOffsetPx: 0,
+    recordingMouseHoldPathMinPx: 4,
+    recordingMouseHoldPathMaxPoints: 4000,
+    mouseHoldPathStepMs: 8,
+    mouseHoldPathMinStepPx: 1.5,
 
     minKeyDelayMs: 8,
     maxKeyDelayMs: 186,
@@ -560,6 +594,13 @@ UI := {
     recordingLogEditorDescEditH: 52,
     presetEditorDescLabelH: 16,
     presetEditorDescEditH: 52,
+    hotkeyEditorWidth: 420,
+    hotkeyEditorRowHeight: 28,
+    hotkeyEditorKeyBtnWidth: 108,
+    saveRecordingDialogWidth: 420,
+    saveRecordingDialogListHeight: 148,
+    saveRecordingDialogInlineEditPadX: 4,
+    saveRecordingDialogInlineEditPadY: 2,
 }
 
 ; Recording log header / event format (must initialize before CreateManageGui → RefreshRecordingList).
@@ -575,6 +616,56 @@ RECORDING_LOG_PLAYBACK_OFFSET_Y_PREFIX := "# playback_offset_y: "
 /** Reference client size used when rescaling all click coordinates in the log editor. */
 RECORDING_LOG_PLAYBACK_REF_CLIENT_W_PREFIX := "# playback_reference_client_w: "
 RECORDING_LOG_PLAYBACK_REF_CLIENT_H_PREFIX := "# playback_reference_client_h: "
+/** Max words from the target window title used in the default Save Recording name. */
+RECORDING_SAVE_TITLE_MAX_WORDS := 2
+/** Max characters for the title portion of the default Save Recording name (before -1, -2). */
+RECORDING_SAVE_TITLE_MAX_CHARS := 16
+
+MOUSE_MOVE_MODE_SMOOTH := "smooth"
+MOUSE_MOVE_MODE_LINEAR := "linear"
+MOUSE_MOVE_MODE_INSTANT := "instant"
+
+/**
+ * Remappable app hotkey actions (handler resolved at registration time).
+ * condition: recording | playbackStop | applying | idle
+ */
+MANAGE_HOTKEY_ACTIONS := [
+    {
+        id: "toggleRecording",
+        category: "Recording",
+        label: "Start / save recording",
+        defaultKey: "PgUp",
+        condition: "recordToggle"
+    },
+    {
+        id: "stopPlayback",
+        category: "Playback",
+        label: "Stop Run or batch",
+        defaultKey: "Esc",
+        condition: "playbackStop"
+    },
+    {
+        id: "pauseResumePlayback",
+        category: "Playback",
+        label: "Pause / resume Run",
+        defaultKey: "PgDn",
+        condition: "applying"
+    },
+    {
+        id: "runForward",
+        category: "Playback",
+        label: "Run forward / stop",
+        defaultKey: "Right",
+        condition: "idle"
+    },
+    {
+        id: "runReverse",
+        category: "Playback",
+        label: "Run reverse / stop (rewind while paused)",
+        defaultKey: "Left",
+        condition: "idleOrPausedReverse"
+    }
+]
 
 ; Main window title — must match CreateManageGui; used for #SingleInstance rediscovery.
 APP_GUI_TITLE := "Data Entry Autonoma v" C.appVersion
@@ -589,6 +680,9 @@ AUTHOR_COPYRIGHT_YEAR := "2026"
 S := {
     recording: false,
     applying: false,
+    applyPaused: false,
+    playbackReverse: false,
+    playbackSeekReverseFromPause: false,
     batchRunning: false,
     stopBatch: false,
     csvAskNextLine: false,
@@ -615,6 +709,7 @@ S := {
     leftHoldDownY: 0,
     leftHoldEndX: 0,
     leftHoldEndY: 0,
+    leftHoldPathPoints: [],
     capsLockHoldPending: false,
     capsLockHoldActive: false,
     capsLockHoldDownAt: 0,
@@ -628,12 +723,17 @@ S := {
     playbackSpeed: C.defaultPlaybackSpeed,
     typingSpeed: C.defaultTypingSpeed,
     moveSpeed: C.defaultMoveSpeed,
+    moveSpeedVariabilityPct: C.defaultMoveSpeedVariabilityPct,
+    holdSpeed: C.defaultHoldSpeed,
+    holdSpeedVariabilityPct: C.defaultHoldSpeedVariabilityPct,
     initialDelayMs: C.defaultInitialDelayMs,
     clickPauseMs: C.defaultClickPauseMs,
     segmentPauseMs: C.defaultSegmentPauseMs,
     useRecordedTiming: C.defaultUseRecordedTiming,
     smoothMouse: C.defaultSmoothMouse,
+    mouseMoveMode: MOUSE_MOVE_MODE_SMOOTH,
     humanTyping: C.defaultHumanTyping,
+    mouseClickOffsetPx: C.defaultMouseClickOffsetPx,
     virtualBounds: "",
 
     mouseHook: 0,
@@ -684,14 +784,19 @@ S := {
     usePresetRadio: "",
     useCsvRadio: "",
     smoothMouseRadio: "",
+    linearMouseRadio: "",
     instantMouseRadio: "",
     humanTypingRadio: "",
     instantTypingRadio: "",
     playbackSpeedEdit: "",
     typingSpeedEdit: "",
     moveSpeedEdit: "",
+    moveSpeedVariabilityEdit: "",
+    holdSpeedEdit: "",
+    holdSpeedVariabilityEdit: "",
     initialDelayEdit: "",
     clickPauseEdit: "",
+    clickOffsetEdit: "",
     segmentPauseEdit: "",
     fixedPausesRadio: "",
     recordedGapsRadio: "",
@@ -719,25 +824,27 @@ S := {
     listTooltipPendingY: 0,
     presetEditorEnterCallback: "",
     recordingDescCache: Map(),
-    presetDescCache: Map()
+    presetDescCache: Map(),
+    hotkeyBindings: Map(),
+    registeredHotkeys: [],
+    hotkeyEditorGui: "",
+    hotkeyEditorButtons: Map(),
+    hotkeyCaptureHook: "",
+    hotkeyCaptureBtn: "",
+    hotkeyCaptureActionId: "",
+    hotkeyHintCtrl: ""
 }
 
 ActivateExistingManageInstance()
 ApplyManageStartupIcon()
+LoadManageHotkeyBindings()
 
 CreateManageGui()
 EnsureDir(C.savesDir)
 EnsureDir(C.csvBatchesDir)
 EnsureDir(C.recordingsDir)
 OnExit (*) => Cleanup()
-
-#HotIf IsRecording()
-Esc::SaveRecording()
-#HotIf
-
-#HotIf IsApplying() || IsBatchRunning()
-Esc::RequestStop()
-#HotIf
+RegisterManageHotkeys()
 
 
 ; =============================================================================
@@ -1030,12 +1137,12 @@ GetManageInputTabMetrics() {
         + UI.tabRadioRowH + UI.tabRowGap
         + UI.tabLabelHeight + UI.tabRowGap
         + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool + UI.tabRowGap + UI.btnHeightTool
-    playbackContent := UI.tabLabelHeight + UI.tabRowGap + (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap + 36
+    playbackContent := UI.tabLabelHeight + UI.tabRowGap + (UI.tabLabelHeight + UI.tabRowGap + 24) * 3 + UI.tabRowGap + 36
     runOptionsChrome := playbackContent + UI.tabLabelHeight + UI.tabRowGap
         + (UI.tabLabelHeight + UI.tabRowGap + 24) * 2 + UI.tabRowGap
         + UI.tabLabelHeight + UI.tabRowGap + UI.tabRadioRowH + UI.tabRowGap + 36
     speedChrome := UI.tabLabelHeight + UI.tabRowGap
-        + (UI.tabLabelHeight + UI.tabRowGap + 24) * 4 + UI.tabRowGap + 36
+        + (UI.tabLabelHeight + UI.tabRowGap + 24) * 5 + UI.tabRowGap + 36
 
     recordingTabContentH := recordingChrome + UI.recordingListHeight
     presetTabContentH := presetChrome + UI.presetListHeight
@@ -1362,6 +1469,7 @@ CreateManageGui() {
         "xs" (C.defaultSmoothMouse ? " Checked" : ""),
         "Smooth"
     )
+    S.linearMouseRadio := S.gui.Add("Radio", "x+16", "Linear")
     S.instantMouseRadio := S.gui.Add(
         "Radio",
         "x+16" (!C.defaultSmoothMouse ? " Checked" : ""),
@@ -1378,20 +1486,18 @@ CreateManageGui() {
         "x+16" (!C.defaultHumanTyping ? " Checked" : ""),
         "Instant"
     )
-    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Mouse click offset (px)")
+    S.clickOffsetEdit := S.gui.Add(
+        "Edit",
+        "xs w" UI.tabListWidth " +Background" UI.editBg,
+        C.defaultMouseClickOffsetPx
+    )
     S.gui.Add("Text", "xs Section c" UI.textMuted, "Timing & pauses")
     S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Click pause (ms)")
     S.clickPauseEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultClickPauseMs)
     S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Step pause (ms)")
     S.segmentPauseEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultSegmentPauseMs)
-    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add(
-        "Text",
-        "xs w" UI.tabListWidth " c" UI.textHint,
-        "Click pause: after move, before click. Step pause: after each target before the next."
-    )
-    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
     S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Between steps")
     S.fixedPausesRadio := S.gui.Add(
         "Radio",
@@ -1403,13 +1509,12 @@ CreateManageGui() {
         "x+16" (C.defaultUseRecordedTiming ? " Checked" : ""),
         "Recorded gaps"
     )
-    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add(
-        "Text",
-        "xs w" UI.tabListWidth " c" UI.textHint,
-        "Recorded gaps replay seconds between steps from Record. Fixed pauses only ignores those."
+    S.editHotkeysButton := S.gui.Add(
+        "Button",
+        "xs Section w" UI.tabListWidth " h" hTool " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Edit Hotkeys"
     )
-    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    S.editHotkeysButton.OnEvent("Click", ShowManageHotkeyEditorDialog)
 
     ; --- Speed Settings tab ---
     S.mainTab.UseTab(5)
@@ -1421,15 +1526,22 @@ CreateManageGui() {
     S.typingSpeedEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultTypingSpeed)
     S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Move speed")
     S.moveSpeedEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultMoveSpeed)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Move speed variability (%)")
+    S.moveSpeedVariabilityEdit := S.gui.Add(
+        "Edit",
+        "xs w" UI.tabListWidth " +Background" UI.editBg,
+        C.defaultMoveSpeedVariabilityPct
+    )
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Hold speed")
+    S.holdSpeedEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultHoldSpeed)
+    S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Hold speed variability (%)")
+    S.holdSpeedVariabilityEdit := S.gui.Add(
+        "Edit",
+        "xs w" UI.tabListWidth " +Background" UI.editBg,
+        C.defaultHoldSpeedVariabilityPct
+    )
     S.gui.Add("Text", "xs w" UI.tabListWidth " c" UI.textMuted, "Initial delay (ms)")
     S.initialDelayEdit := S.gui.Add("Edit", "xs w" UI.tabListWidth " +Background" UI.editBg, C.defaultInitialDelayMs)
-    S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add(
-        "Text",
-        "xs w" UI.tabListWidth " c" UI.textHint,
-        "Higher speed values run faster. Initial delay waits before playback starts."
-    )
-    S.gui.SetFont("s" UI.fontSizeBody, UI.fontFamily)
 
     S.mainTab.UseTab()
 
@@ -1447,15 +1559,18 @@ CreateManageGui() {
         "x+" btnGap " w" primaryBtnW " h" hPrimary " Default +Background" UI.accent " c" UI.accentText,
         "Run"
     )
-    S.applyButton.OnEvent("Click", ApplyFromGui)
+    S.applyButton.OnEvent("Click", RunApplyFromGuiForward)
 
     S.gui.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
-    S.gui.Add(
+    S.hotkeyHintCtrl := S.gui.Add(
         "Text",
         "xm w" UI.contentWidth " c" UI.textHint,
-        "Record: Esc saves, hold Caps Lock for delay, type any char (a,b,c) to add Var. Run: Esc stops."
+        BuildManageHotkeyFooterHint()
     )
     AddManageAuthorFooter(S.gui)
+
+    EnableManageRunSettingsPersistence()
+    RestoreManageRunSettings()
 
     S.gui.Show()
     ApplyManageAppIcon(S.gui)
@@ -1467,6 +1582,8 @@ CreateManageGui() {
 
 GuiClosed(*) {
     global S
+
+    SaveManageRunSettings()
 
     if S.recording
         CancelRecording()
@@ -1494,9 +1611,9 @@ SetInteractiveState(enabled) {
         S.recordingInfoButton, S.presetInfoButton, S.csvBatchInfoButton, S.runOptionsInfoButton,
         S.speedSettingsInfoButton,
         S.csvAskNextLineRadio, S.csvRunAllRowsRadio,
-        S.smoothMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
-        S.playbackSpeedEdit, S.typingSpeedEdit, S.moveSpeedEdit, S.initialDelayEdit,
-        S.clickPauseEdit, S.segmentPauseEdit, S.fixedPausesRadio, S.recordedGapsRadio,
+        S.smoothMouseRadio, S.linearMouseRadio, S.instantMouseRadio, S.humanTypingRadio, S.instantTypingRadio,
+        S.playbackSpeedEdit, S.typingSpeedEdit, S.moveSpeedEdit, S.moveSpeedVariabilityEdit, S.holdSpeedEdit, S.holdSpeedVariabilityEdit, S.initialDelayEdit,
+        S.clickPauseEdit, S.clickOffsetEdit, S.segmentPauseEdit, S.fixedPausesRadio, S.recordedGapsRadio,
         S.mainTab] {
         if ctrl
             ctrl.Enabled := enabled
@@ -1658,16 +1775,19 @@ OnCsvListChange(*) {
 }
 
 /**
- * Sets playback option radio buttons on the main window.
- * @param {Boolean} smoothMouse Whether smooth mouse movement is selected.
+ * Sets mouse-movement and typing radio buttons on the main window.
+ * @param {String} mouseMoveMode One of smooth, linear, or instant.
  * @param {Boolean} humanTyping Whether human-like typing is selected.
  */
-SetPlaybackOptionRadios(smoothMouse, humanTyping) {
-    global S
+SetPlaybackOptionRadios(mouseMoveMode, humanTyping) {
+    global S, MOUSE_MOVE_MODE_SMOOTH, MOUSE_MOVE_MODE_LINEAR, MOUSE_MOVE_MODE_INSTANT
+
+    mouseMoveMode := NormalizeMouseMoveModeValue(mouseMoveMode)
 
     if S.smoothMouseRadio {
-        S.smoothMouseRadio.Value := smoothMouse ? 1 : 0
-        S.instantMouseRadio.Value := smoothMouse ? 0 : 1
+        S.smoothMouseRadio.Value := mouseMoveMode = MOUSE_MOVE_MODE_SMOOTH ? 1 : 0
+        S.linearMouseRadio.Value := mouseMoveMode = MOUSE_MOVE_MODE_LINEAR ? 1 : 0
+        S.instantMouseRadio.Value := mouseMoveMode = MOUSE_MOVE_MODE_INSTANT ? 1 : 0
     }
 
     if S.humanTypingRadio {
@@ -1677,15 +1797,81 @@ SetPlaybackOptionRadios(smoothMouse, humanTyping) {
 }
 
 /**
- * Reads playback option radio buttons from the main window.
- * @returns {{smooth_mouse: Boolean, human_typing: Boolean}}
+ * Returns a normalized mouse movement mode string.
+ * @param {String} mode Raw mode value.
+ * @returns {String}
+ */
+NormalizeMouseMoveModeValue(mode) {
+    global MOUSE_MOVE_MODE_SMOOTH, MOUSE_MOVE_MODE_LINEAR, MOUSE_MOVE_MODE_INSTANT
+
+    switch StrLower(Trim(mode)) {
+        case MOUSE_MOVE_MODE_LINEAR:
+            return MOUSE_MOVE_MODE_LINEAR
+        case MOUSE_MOVE_MODE_INSTANT:
+            return MOUSE_MOVE_MODE_INSTANT
+        default:
+            return MOUSE_MOVE_MODE_SMOOTH
+    }
+}
+
+/**
+ * Reads the selected mouse movement mode from Run Options radios.
+ * @returns {String}
+ */
+GetMouseMoveModeFromGui() {
+    global S, C, MOUSE_MOVE_MODE_SMOOTH, MOUSE_MOVE_MODE_LINEAR, MOUSE_MOVE_MODE_INSTANT
+
+    if S.linearMouseRadio && S.linearMouseRadio.Value
+        return MOUSE_MOVE_MODE_LINEAR
+    if S.instantMouseRadio && S.instantMouseRadio.Value
+        return MOUSE_MOVE_MODE_INSTANT
+    if S.smoothMouseRadio && S.smoothMouseRadio.Value
+        return MOUSE_MOVE_MODE_SMOOTH
+    return C.defaultSmoothMouse ? MOUSE_MOVE_MODE_SMOOTH : MOUSE_MOVE_MODE_INSTANT
+}
+
+/**
+ * Resolves mouse movement mode from preset/settings fields (supports legacy smooth_mouse).
+ * @param {Object} settings Parsed settings object.
+ * @returns {String}
+ */
+ResolveMouseMoveModeFromSettings(settings) {
+    global MOUSE_MOVE_MODE_SMOOTH, MOUSE_MOVE_MODE_INSTANT
+
+    if settings.HasProp("mouse_move_mode") && settings.mouse_move_mode != ""
+        return NormalizeMouseMoveModeValue(settings.mouse_move_mode)
+    return settings.smooth_mouse ? MOUSE_MOVE_MODE_SMOOTH : MOUSE_MOVE_MODE_INSTANT
+}
+
+/**
+ * Copies resolved mouse movement mode into session state.
+ * @param {String} mouseMoveMode One of smooth, linear, or instant.
+ */
+ApplyMouseMoveModeToState(mouseMoveMode) {
+    global S, MOUSE_MOVE_MODE_SMOOTH, MOUSE_MOVE_MODE_LINEAR, MOUSE_MOVE_MODE_INSTANT
+
+    mouseMoveMode := NormalizeMouseMoveModeValue(mouseMoveMode)
+    S.mouseMoveMode := mouseMoveMode
+    S.smoothMouse := mouseMoveMode = MOUSE_MOVE_MODE_SMOOTH
+}
+
+/**
+ * Reads playback option radio buttons and mouse click offset from the main window.
+ * @returns {{mouse_move_mode: String, smooth_mouse: Boolean, human_typing: Boolean, mouse_click_offset_px: Integer}}
  */
 ReadPlaybackOptionsFromGui() {
-    global C, S
+    global C, S, MOUSE_MOVE_MODE_SMOOTH
+
+    mouseMoveMode := GetMouseMoveModeFromGui()
 
     return {
-        smooth_mouse: S.smoothMouseRadio ? S.smoothMouseRadio.Value = 1 : C.defaultSmoothMouse,
-        human_typing: S.humanTypingRadio ? S.humanTypingRadio.Value = 1 : C.defaultHumanTyping
+        mouse_move_mode: mouseMoveMode,
+        smooth_mouse: mouseMoveMode = MOUSE_MOVE_MODE_SMOOTH,
+        human_typing: S.humanTypingRadio ? S.humanTypingRadio.Value = 1 : C.defaultHumanTyping,
+        mouse_click_offset_px: Max(0, SafeInteger(
+            S.clickOffsetEdit ? S.clickOffsetEdit.Value : "",
+            C.defaultMouseClickOffsetPx
+        ))
     }
 }
 
@@ -1698,8 +1884,9 @@ SyncPlaybackOptionsFromGui() {
 
 /**
  * Reads speed fields from the Speed Settings tab and pause/timing fields from the Run Options tab.
- * @returns {{playback_speed: Float, typing_speed: Float, move_speed: Float, initial_delay: Integer,
- *     click_pause_ms: Integer, segment_pause_ms: Integer, use_recorded_timing: Boolean}}
+ * @returns {{playback_speed: Float, typing_speed: Float, move_speed: Float, move_speed_variability_pct: Integer,
+ *     hold_speed: Float, hold_speed_variability_pct: Integer, initial_delay: Integer, click_pause_ms: Integer,
+ *     segment_pause_ms: Integer, use_recorded_timing: Boolean}}
  */
 ReadRunTimingSettingsFromGui() {
     global C, S
@@ -1708,6 +1895,15 @@ ReadRunTimingSettingsFromGui() {
         playback_speed: SafeFloat(S.playbackSpeedEdit ? S.playbackSpeedEdit.Value : "", C.defaultPlaybackSpeed),
         typing_speed: SafeFloat(S.typingSpeedEdit ? S.typingSpeedEdit.Value : "", C.defaultTypingSpeed),
         move_speed: SafeFloat(S.moveSpeedEdit ? S.moveSpeedEdit.Value : "", C.defaultMoveSpeed),
+        move_speed_variability_pct: Min(100, Max(0, SafeInteger(
+            S.moveSpeedVariabilityEdit ? S.moveSpeedVariabilityEdit.Value : "",
+            C.defaultMoveSpeedVariabilityPct
+        ))),
+        hold_speed: SafeFloat(S.holdSpeedEdit ? S.holdSpeedEdit.Value : "", C.defaultHoldSpeed),
+        hold_speed_variability_pct: Min(100, Max(0, SafeInteger(
+            S.holdSpeedVariabilityEdit ? S.holdSpeedVariabilityEdit.Value : "",
+            C.defaultHoldSpeedVariabilityPct
+        ))),
         initial_delay: SafeInteger(S.initialDelayEdit ? S.initialDelayEdit.Value : "", C.defaultInitialDelayMs),
         click_pause_ms: SafeInteger(S.clickPauseEdit ? S.clickPauseEdit.Value : "", C.defaultClickPauseMs),
         segment_pause_ms: SafeInteger(S.segmentPauseEdit ? S.segmentPauseEdit.Value : "", C.defaultSegmentPauseMs),
@@ -1733,12 +1929,17 @@ BuildRunSettings(presetPath := "") {
         playback_speed: timing.playback_speed,
         typing_speed: timing.typing_speed,
         move_speed: timing.move_speed,
+        move_speed_variability_pct: timing.move_speed_variability_pct,
+        hold_speed: timing.hold_speed,
+        hold_speed_variability_pct: timing.hold_speed_variability_pct,
         initial_delay: timing.initial_delay,
         click_pause_ms: timing.click_pause_ms,
         segment_pause_ms: timing.segment_pause_ms,
         use_recorded_timing: timing.use_recorded_timing,
         smooth_mouse: playback.smooth_mouse,
+        mouse_move_mode: playback.mouse_move_mode,
         human_typing: playback.human_typing,
+        mouse_click_offset_px: playback.mouse_click_offset_px,
         description: presetSettings.description,
         variables: presetSettings.variables
     }
@@ -1755,12 +1956,16 @@ SyncRunSettingsFromGui() {
     S.playbackSpeed := Max(0.05, timing.playback_speed)
     S.typingSpeed := Max(0.05, timing.typing_speed)
     S.moveSpeed := Max(0.05, timing.move_speed)
+    S.moveSpeedVariabilityPct := Min(100, Max(0, timing.move_speed_variability_pct))
+    S.holdSpeed := Max(0.05, timing.hold_speed)
+    S.holdSpeedVariabilityPct := Min(100, Max(0, timing.hold_speed_variability_pct))
     S.initialDelayMs := Max(0, timing.initial_delay)
     S.clickPauseMs := Max(0, timing.click_pause_ms)
     S.segmentPauseMs := Max(0, timing.segment_pause_ms)
     S.useRecordedTiming := timing.use_recorded_timing
-    S.smoothMouse := playback.smooth_mouse
+    ApplyMouseMoveModeToState(playback.mouse_move_mode)
     S.humanTyping := playback.human_typing
+    S.mouseClickOffsetPx := playback.mouse_click_offset_px
 }
 
 SetRecordingGuiState(recording) {
@@ -1938,14 +2143,35 @@ EnsureManageOwnDialogs() {
 
 /**
  * Shows a MsgBox owned by the main GUI so it stays on top.
+ * Falls back without +OwnDialogs when the owned dialog cannot open (e.g. from a hotkey thread).
  * @param {String} message Dialog body text.
  * @param {String} title Window title.
  * @param {String} options MsgBox option string.
  * @returns {String} Name of the button pressed.
  */
 ShowManageMsgBox(message, title := APP_GUI_TITLE, options := "Icon!") {
-    EnsureManageOwnDialogs()
-    return MsgBox(message, title, options)
+    global S
+
+    message := String(message)
+    title := title != "" ? String(title) : APP_GUI_TITLE
+    options := options != "" ? String(options) : "Icon!"
+
+    if S.gui
+        S.gui.Show()
+
+    try {
+        EnsureManageOwnDialogs()
+        return MsgBox(message, title, options)
+    } catch {
+        if S.gui
+            S.gui.Opt("-OwnDialogs")
+        try
+            return MsgBox(message, title, options)
+        finally {
+            if S.gui
+                S.gui.Opt("+OwnDialogs")
+        }
+    }
 }
 
 /**
@@ -1959,10 +2185,27 @@ ShowManageMsgBox(message, title := APP_GUI_TITLE, options := "Icon!") {
 ShowManageInputBox(prompt, title, options := "", defaultText := "") {
     global S
 
-    EnsureManageOwnDialogs()
+    prompt := String(prompt)
+    title := String(title)
+    options := options != "" ? String(options) : ""
+    defaultText := String(defaultText)
+
     if S.gui
         S.gui.Show()
-    return InputBox(prompt, title, options, defaultText)
+
+    try {
+        EnsureManageOwnDialogs()
+        return InputBox(prompt, title, options, defaultText)
+    } catch {
+        if S.gui
+            S.gui.Opt("-OwnDialogs")
+        try
+            return InputBox(prompt, title, options, defaultText)
+        finally {
+            if S.gui
+                S.gui.Opt("+OwnDialogs")
+        }
+    }
 }
 
 /**
@@ -2558,6 +2801,7 @@ RememberSelections() {
         presetMode ? "" : Trim(S.csvEdit ? S.csvEdit.Value : ""),
         S.csvAskNextLine
     )
+    SaveManageRunSettings()
 }
 
 GetSelectedRecordingPath() {
@@ -2623,6 +2867,17 @@ SelectCsvListByPath(csvPath) {
     return false
 }
 
+/**
+ * Run button handler — always plays forward.
+ */
+RunApplyFromGuiForward(*) {
+    global S
+
+    SaveManageRunSettings()
+    S.playbackReverse := false
+    ApplyFromGui()
+}
+
 ApplyFromGui(*) {
     global C, S
 
@@ -2660,7 +2915,7 @@ ApplyFromGui(*) {
         return
     }
 
-    SetStatus("Running...")
+    SetStatus(S.playbackReverse ? "Running reverse..." : "Running...")
     SetTimer (ApplySingleTimer).Bind(logPath, presetPath), -1
 }
 
@@ -3761,9 +4016,12 @@ BuildRecordingLogEditorSummary(parts) {
                 ? Format("{} delta {} x{}", parts[3], parts[4], parts[5])
                 : parts[3]
         case "mouse_hold":
-            return parts.Length >= 5
-                ? Format("{} {} ms", parts[3], parts[4])
-                : parts[3]
+            if parts.Length < 5
+                return parts[3]
+            pathPointCount := CountMouseHoldPathPoints(parts)
+            return pathPointCount > 0
+                ? Format("{} {} ms · {} path pts", parts[3], parts[4], pathPointCount)
+                : Format("{} {} ms", parts[3], parts[4])
         case "meta":
             if parts.Length >= 4 && parts[3] = "delay"
                 return Format("delay {} ms", parts[4])
@@ -3828,6 +4086,14 @@ GetRecordingLogEditorDetailFields(parts) {
             fields.Push({ label: "Button", partIndex: 3 })
             if parts.Length >= 5
                 fields.Push({ label: "Duration (ms)", partIndex: 4 })
+            pathPointCount := CountMouseHoldPathPoints(parts)
+            if pathPointCount > 0
+                fields.Push({
+                    label: "Path points",
+                    partIndex: 24,
+                    readOnly: true,
+                    displayValue: pathPointCount " recorded points (replayed as drawn)"
+                })
             windowFields := GetRecordingLogEventWindowFields(parts)
             if IsObject(windowFields) {
                 fields.Push({ label: "Window title", partIndex: windowFields.title, clearsHwnd: true })
@@ -3840,11 +4106,32 @@ GetRecordingLogEditorDetailFields(parts) {
 
     validFields := []
     for field in fields {
-        if field.partIndex >= 1 && field.partIndex <= parts.Length
+        if field.HasProp("readOnly") && field.readOnly
+            validFields.Push(field)
+        else if field.partIndex >= 1 && field.partIndex <= parts.Length
             validFields.Push(field)
     }
 
     return validFields
+}
+
+/**
+ * Counts recorded path points in a mouse_hold log row.
+ * Path data lives in field 24 (after the literal "path" marker in field 23)
+ * as a `x,y;x,y;...` string.
+ * @param {Array} parts Pipe-delimited log fields.
+ * @returns {Integer}
+ */
+CountMouseHoldPathPoints(parts) {
+    if parts.Length < 24
+        return 0
+    raw := Trim(parts[24])
+    if raw = ""
+        return 0
+    count := 0
+    Loop Parse, raw, ";"
+        count := A_Index
+    return count
 }
 
 /**
@@ -5445,6 +5732,8 @@ ShowRecordingLogEditor(*) {
 
         Loop detailFieldDefs.Length {
             fieldDef := detailFieldDefs[A_Index]
+            if fieldDef.HasProp("readOnly") && fieldDef.readOnly
+                continue
             if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length {
                 newValue := Trim(detailEdits[A_Index].Value)
                 if fieldDef.HasProp("clearsHwnd") && fieldDef.clearsHwnd && parts[fieldDef.partIndex] != newValue {
@@ -5491,7 +5780,13 @@ ShowRecordingLogEditor(*) {
                 fieldDef := detailFieldDefs[A_Index]
                 detailLabels[A_Index].Text := fieldDef.label ":"
                 detailLabels[A_Index].Visible := true
-                detailEdits[A_Index].Value := parts[fieldDef.partIndex]
+                if fieldDef.HasProp("displayValue")
+                    detailEdits[A_Index].Value := fieldDef.displayValue
+                else if fieldDef.partIndex >= 1 && fieldDef.partIndex <= parts.Length
+                    detailEdits[A_Index].Value := parts[fieldDef.partIndex]
+                else
+                    detailEdits[A_Index].Value := ""
+                try detailEdits[A_Index].Opt((fieldDef.HasProp("readOnly") && fieldDef.readOnly) ? "+ReadOnly" : "-ReadOnly")
                 detailEdits[A_Index].Visible := true
             } else {
                 detailLabels[A_Index].Text := ""
@@ -6100,6 +6395,25 @@ ShowPresetEditor(createNew := false, *) {
 ; Detect — recording lifecycle
 ; =============================================================================
 
+/**
+ * Up Arrow when idle: start Record (same as the Record button). Key is not sent.
+ */
+StartRecordingFromHotkey(*) {
+    StartRecording()
+}
+
+/**
+ * Toggles Record: starts when idle, saves when already recording.
+ */
+ToggleRecordingFromHotkey(*) {
+    global S
+
+    if S.recording
+        SaveRecording()
+    else
+        StartRecordingFromHotkey()
+}
+
 StartRecording() {
     global C, S
 
@@ -6134,7 +6448,7 @@ StartRecording() {
     SetTimer FlushLog, C.flushIntervalMs
 
     ShowRecordingTip()
-    ShowTransientRecordingTip("Recording... Click = click. Hold Caps Lock = delay. Hold/drag left-click = mouse hold. Ctrl/Shift/Alt shortcuts supported.")
+    ShowTransientRecordingTip("Recording... PgUp = save. Click = click. Hold Caps Lock = delay. Hold/drag left-click = mouse hold. Ctrl/Shift/Alt shortcuts supported.")
     SetTimer MaintainRecordingTip, C.recordingTipRefreshMs
 }
 
@@ -6233,6 +6547,7 @@ ResetRecordingState() {
     S.leftHoldDownY := 0
     S.leftHoldEndX := 0
     S.leftHoldEndY := 0
+    S.leftHoldPathPoints := []
     S.capsLockHoldPending := false
     S.capsLockHoldActive := false
     S.capsLockHoldDownAt := 0
@@ -6330,6 +6645,7 @@ ActivateRecordingLeftMouseHold() {
 
     S.leftHoldActive := true
     S.leftHoldActiveStartedAt := A_TickCount
+    S.leftHoldPathPoints := [{ x: S.leftHoldDownX, y: S.leftHoldDownY }]
     SetTimer CheckLeftMouseHoldRecording, 0
     SetTimer RefreshRecordingLeftMouseHoldTip, C.mouseHoldTipRefreshMs
     RefreshRecordingLeftMouseHoldTip()
@@ -6351,8 +6667,31 @@ UpdateRecordingLeftMouseHoldTracking(x, y) {
 
     if S.leftHoldPending && !S.leftHoldActive && ShouldRecordLeftMouseHold()
         ActivateRecordingLeftMouseHold()
-    else if S.leftHoldActive
+    else if S.leftHoldActive {
+        MaybeRecordMouseHoldPathPoint(x, y)
         RefreshRecordingLeftMouseHoldTip()
+    }
+}
+
+/**
+ * Appends a screen point to the active hold/drag path when it moved enough.
+ * @param {Number} x Screen X coordinate.
+ * @param {Number} y Screen Y coordinate.
+ */
+MaybeRecordMouseHoldPathPoint(x, y) {
+    global C, S
+
+    if !S.leftHoldActive || S.leftHoldPathPoints.Length = 0
+        return
+
+    if S.leftHoldPathPoints.Length >= C.recordingMouseHoldPathMaxPoints
+        return
+
+    lastPoint := S.leftHoldPathPoints[S.leftHoldPathPoints.Length]
+    if Sqrt((x - lastPoint.x) ** 2 + (y - lastPoint.y) ** 2) < C.recordingMouseHoldPathMinPx
+        return
+
+    S.leftHoldPathPoints.Push({ x: x, y: y })
 }
 
 /**
@@ -6413,6 +6752,7 @@ CancelRecordingLeftMouseHoldState() {
     S.leftHoldDownY := 0
     S.leftHoldEndX := 0
     S.leftHoldEndY := 0
+    S.leftHoldPathPoints := []
 
     if IsRecording()
         RestoreRecordingStatusTip()
@@ -6437,6 +6777,7 @@ CommitRecordingLeftMouseHold(*) {
     endX := S.leftHoldEndX
     endY := S.leftHoldEndY
     dragged := HasMouseHoldDragged()
+    pathPoints := S.leftHoldPathPoints.Clone()
 
     S.leftHoldPending := false
     S.leftHoldActive := false
@@ -6446,6 +6787,7 @@ CommitRecordingLeftMouseHold(*) {
     S.leftHoldDownY := 0
     S.leftHoldEndX := 0
     S.leftHoldEndY := 0
+    S.leftHoldPathPoints := []
 
     if !S.recording {
         ToolTip
@@ -6463,7 +6805,7 @@ CommitRecordingLeftMouseHold(*) {
     S.lastTargetX := endX
     S.lastTargetY := endY
     ArmKeyCapture()
-    WriteMouseHoldLine("LButton", durationMs, startCoords, endX, endY, ctx)
+    WriteMouseHoldLine("LButton", durationMs, startCoords, endX, endY, ctx, pathPoints)
 
     seconds := Round(durationMs / 1000, 1)
     ShowTransientRecordingTip(Format("HOLD saved: {1} s", seconds), endX, endY)
@@ -6661,7 +7003,7 @@ JoinShortcutLabel(parts) {
     return label
 }
 
-IsRecording() {
+IsRecording(*) {
     global S
     return S.recording
 }
@@ -7082,9 +7424,10 @@ WriteMouseLine(eventName, button, coords, ctx) {
  * @param {Number} endScreenY End screen Y coordinate.
  * @param {Object} ctx Active window context.
  */
-WriteMouseHoldLine(button, durationMs, startCoords, endScreenX, endScreenY, ctx) {
+WriteMouseHoldLine(button, durationMs, startCoords, endScreenX, endScreenY, ctx, pathPoints := "") {
+    pathSuffix := EncodeMouseHoldPath(pathPoints)
     WriteLine(Format(
-        "{}|mouse_hold|{}|{}|{}|{}|{}|{}|{:.6f}|{:.6f}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}`n",
+        "{}|mouse_hold|{}|{}|{}|{}|{}|{}|{:.6f}|{:.6f}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}`n",
         Elapsed(),
         button,
         durationMs,
@@ -7105,8 +7448,59 @@ WriteMouseHoldLine(button, durationMs, startCoords, endScreenX, endScreenY, ctx)
         ctx.title,
         ctx.exe,
         endScreenX,
-        endScreenY
+        endScreenY,
+        pathSuffix
     ))
+}
+
+/**
+ * Encodes recorded hold/drag path points for the mouse_hold log suffix field.
+ * @param {Array<Object>} pathPoints Array of `{x, y}` screen coordinates.
+ * @returns {String}
+ */
+EncodeMouseHoldPath(pathPoints) {
+    if !IsObject(pathPoints) || pathPoints.Length < 2
+        return ""
+
+    segments := []
+    for point in pathPoints
+        segments.Push(point.x "," point.y)
+
+    return "path|" Join(segments, ";")
+}
+
+/**
+ * Parses an encoded hold/drag path from a mouse_hold log suffix field.
+ * @param {String} encoded Path suffix (`path|x,y;x,y`).
+ * @returns {Array<Object>}
+ */
+ParseMouseHoldPath(encoded) {
+    pathPoints := []
+    encoded := Trim(encoded)
+
+    if encoded = "" || !InStr(encoded, "path|")
+        return pathPoints
+
+    payload := SubStr(encoded, InStr(encoded, "path|") + 5)
+    if payload = ""
+        return pathPoints
+
+    for segment in StrSplit(payload, ";") {
+        segment := Trim(segment)
+        if segment = ""
+            continue
+
+        parts := StrSplit(segment, ",")
+        if parts.Length < 2
+            continue
+
+        pathPoints.Push({
+            x: SafeInteger(parts[1], 0),
+            y: SafeInteger(parts[2], 0)
+        })
+    }
+
+    return pathPoints
 }
 
 WriteScrollLine(direction, delta, notches, coords, ctx) {
@@ -7222,7 +7616,7 @@ WriteHeader(sessionName) {
     WriteLine("# shortcut fields:`n")
     WriteLine("# elapsed_ms|shortcut|sendText|displayLabel|vk|sc|hwnd|class|title|exe`n")
     WriteLine("# mouse_hold fields:`n")
-    WriteLine("# elapsed_ms|mouse_hold|button|duration_ms|startScreenX|startScreenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe|endScreenX|endScreenY`n")
+    WriteLine("# elapsed_ms|mouse_hold|button|duration_ms|startScreenX|startScreenY|clientX|clientY|pctX|pctY|clientW|clientH|winX|winY|winW|winH|hwnd|class|title|exe|endScreenX|endScreenY|path|x,y;x,y`n")
     WriteLine("# delay fields:`n")
     WriteLine("# elapsed_ms|meta|delay|duration_ms`n")
     WriteLine("# optional trailing note (Edit Log only, ignored during playback): |note|your label text`n")
@@ -7278,25 +7672,379 @@ NextRecordingNumber() {
     return maxNumber + 1
 }
 
+/**
+ * Reads the target window title from the first event in a recording log that stores it.
+ * @param {String} logPath Recording log path.
+ * @returns {String}
+ */
+DetectRecordingTargetTitleFromLog(logPath) {
+    if logPath = "" || !FileExist(logPath)
+        return ""
+
+    try {
+        parsedLog := ParseRecordingLogForEditor(logPath)
+        return DetectRecordingReferenceWindowTarget(parsedLog.events).title
+    } catch {
+        return ""
+    }
+}
+
+/**
+ * Sanitizes a window title for use in a recording file base name (before the -1, -2 suffix).
+ * Uses the first 1–2 words only, capped at RECORDING_SAVE_TITLE_MAX_CHARS.
+ * @param {String} title Raw window title.
+ * @returns {String}
+ */
+SanitizeRecordingTitleBaseName(title) {
+    name := Trim(title)
+    name := RegExReplace(name, "[\r\n]+", " ")
+    name := RegExReplace(name, "[\\/:*?`"<>|]", "-")
+    name := RegExReplace(name, "\s+", " ")
+
+    words := []
+    for word in StrSplit(name, " ") {
+        word := Trim(word)
+        if word = "" || RegExMatch(word, "^[-_.]+$")
+            continue
+        words.Push(word)
+        if words.Length >= RECORDING_SAVE_TITLE_MAX_WORDS
+            break
+    }
+
+    if words.Length = 0
+        return ""
+
+    name := words[1]
+    if words.Length >= 2
+        name .= " " words[2]
+
+    if StrLen(name) > RECORDING_SAVE_TITLE_MAX_CHARS {
+        name := SubStr(name, 1, RECORDING_SAVE_TITLE_MAX_CHARS)
+        name := RegExReplace(name, "[\s-]+$", "")
+    }
+
+    name := RegExReplace(name, "^[\s-]+|[\s-]+$", "")
+    return name
+}
+
+/**
+ * Returns the next numeric suffix for recordings named {baseName}-1, {baseName}-2, etc.
+ * @param {String} baseName Sanitized title base (no di- prefix or suffix).
+ * @returns {Integer}
+ */
+GetNextRecordingNumberForTitleBase(baseName) {
+    global C
+
+    maxNumber := 0
+    escapedBase := RegExReplace(baseName, "([\\.*+?^${}()|\[\]])", "\$1")
+    pattern := "^" C.prefix escapedBase "-(\d+)\.log$"
+
+    Loop Files C.recordingsDir "\" C.prefix "*.log" {
+        if RegExMatch(A_LoopFileName, pattern, &match)
+            maxNumber := Max(maxNumber, Integer(match[1]))
+    }
+
+    return maxNumber + 1
+}
+
+/**
+ * Collects unique variable slots from a recording log with any existing note labels.
+ * @param {String} logPath Recording log path.
+ * @returns {Array<Object>} Rows `{slot, label}` in first-seen order.
+ */
+CollectRecordingVariableRowsFromLog(logPath) {
+    rows := []
+    seenSlots := Map()
+
+    if logPath = "" || !FileExist(logPath)
+        return rows
+
+    parsed := ParseRecordingLogForEditor(logPath)
+    for event in parsed.events {
+        parts := event.parts
+        if parts.Length < 3 || parts[2] != "key"
+            continue
+        if !RegExMatch(parts[3], "i)^variable-\d+$")
+            continue
+
+        slot := StrLower(parts[3])
+        if seenSlots.Has(slot)
+            continue
+
+        seenSlots[slot] := true
+        rows.Push({
+            slot: slot,
+            label: GetRecordingLogEventNote(parts)
+        })
+    }
+
+    return rows
+}
+
+/**
+ * Writes optional note labels onto every key event for each variable slot in a log.
+ * @param {String} logPath Recording log path.
+ * @param {Array<Object>} variableRows `{slot, label}` rows from the save dialog.
+ */
+ApplyRecordingVariableLabelsToLog(logPath, variableRows) {
+    if logPath = "" || !FileExist(logPath) || !IsObject(variableRows) || variableRows.Length = 0
+        return
+
+    labelBySlot := Map()
+    for row in variableRows
+        labelBySlot[row.slot] := Trim(row.label)
+
+    parsed := ParseRecordingLogForEditor(logPath)
+    changed := false
+
+    for event in parsed.events {
+        parts := event.parts
+        if parts.Length < 3 || parts[2] != "key"
+            continue
+        if !RegExMatch(parts[3], "i)^variable-\d+$")
+            continue
+
+        slot := StrLower(parts[3])
+        if !labelBySlot.Has(slot)
+            continue
+
+        updatedParts := SetRecordingLogEventNote(parts.Clone(), labelBySlot[slot])
+        if Join(updatedParts, "|") != Join(parts, "|")
+            changed := true
+        event.parts := updatedParts
+    }
+
+    if !changed
+        return
+
+    logFile := FileOpen(logPath, "w", "UTF-8")
+    if !logFile
+        throw Error("Could not write recording labels: " logPath)
+
+    logFile.Write(SerializeRecordingLogFromEditor(parsed.headerLines, parsed.events))
+    logFile.Close()
+}
+
+/**
+ * Refreshes one row in the Save Recording variable ListView.
+ * @param {Gui.ListView} listView Target ListView.
+ * @param {Integer} rowIndex One-based data row index.
+ * @param {Object} row `{slot, label}`.
+ */
+RefreshSaveRecordingVariableListRow(listView, rowIndex, row) {
+    listView.Modify(rowIndex, "", row.slot, row.label)
+}
+
+/**
+ * Shows the Save Recording dialog with optional inline variable label editing.
+ * @param {String} defaultName Suggested recording name (without di- prefix).
+ * @param {Array<Object>} variableRows `{slot, label}` rows; empty skips the grid.
+ * @returns {{confirmed: Boolean, name: String, variableRows: Array<Object>}}
+ */
+ShowSaveRecordingDialog(defaultName, variableRows := []) {
+    global S, UI
+
+    confirmed := false
+    resultName := Trim(defaultName)
+    hasVariables := IsObject(variableRows) && variableRows.Length > 0
+    dlgWidth := UI.saveRecordingDialogWidth
+    btnW := Floor((dlgWidth - UI.btnGap) / 2)
+    btnH := UI.btnHeightSecondary
+    labelColIndex := 2
+
+    dlg := Gui(
+        "+ToolWindow -MaximizeBox -MinimizeBox",
+        "Save Recording"
+    )
+    BindManageChildGui(dlg)
+    ApplyManageGuiTheme(dlg)
+    dlg.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+    dlg.MarginX := UI.marginX
+    dlg.MarginY := UI.marginY
+
+    dlg.Add("Text", "xm w" dlgWidth " c" UI.textMuted, "Recording name")
+    nameEdit := dlg.Add("Edit", "xs w" dlgWidth " +Background" UI.editBg, resultName)
+
+    variablesList := ""
+    inlineEditCtrl := ""
+    inlineEditRow := 0
+    inlineEditOriginal := ""
+    dialogActive := true
+
+    CommitSaveRecordingInlineEdit(*) {
+        if !hasVariables || !dialogActive || inlineEditRow < 1
+            return
+
+        try {
+            if !inlineEditCtrl.Visible
+                return
+        } catch {
+            return
+        }
+
+        inlineEditCtrl.Visible := false
+        if inlineEditRow >= 1 && inlineEditRow <= variableRows.Length {
+            variableRows[inlineEditRow].label := Trim(inlineEditCtrl.Value)
+            RefreshSaveRecordingVariableListRow(variablesList, inlineEditRow, variableRows[inlineEditRow])
+        }
+
+        inlineEditRow := 0
+        inlineEditOriginal := ""
+    }
+
+    StartSaveRecordingInlineEdit(visualRowIndex, colIndex) {
+        if !hasVariables
+            return
+        if colIndex != labelColIndex
+            return
+
+        CommitSaveRecordingInlineEdit()
+
+        if visualRowIndex < 1 || visualRowIndex > variableRows.Length
+            return
+
+        ControlGetPos &listX, &listY, , , variablesList
+        rect := GetManageListViewSubItemRect(variablesList, visualRowIndex, colIndex)
+        cellW := rect.right - rect.left
+        cellH := rect.bottom - rect.top
+        editW := Max(cellW - UI.saveRecordingDialogInlineEditPadX, 40)
+        editH := Max(cellH - UI.saveRecordingDialogInlineEditPadY, 22)
+
+        inlineEditRow := visualRowIndex
+        inlineEditOriginal := variableRows[inlineEditRow].label
+        inlineEditCtrl.Move(listX + rect.left + 1, listY + rect.top + 1, editW, editH)
+        inlineEditCtrl.Value := inlineEditOriginal
+        inlineEditCtrl.Visible := true
+        inlineEditCtrl.Focus()
+    }
+
+    OnSaveRecordingListClick(ctrl, info) {
+        if info.col != labelColIndex
+            return
+        StartSaveRecordingInlineEdit(info.row, info.col)
+    }
+
+    OnSaveRecordingListDoubleClick(ctrl, info) {
+        StartSaveRecordingInlineEdit(info.row, info.col)
+    }
+
+    if hasVariables {
+        dlg.Add("Text", "xs w" dlgWidth " c" UI.textMuted, "Variable labels (optional)")
+        dlg.Add(
+            "Text",
+            "xs w" dlgWidth " h" UI.presetEditorHelpHeight " c" UI.textHint,
+            "Click Label to edit inline. Labels appear in Edit Log and are ignored during Run."
+        )
+        variablesList := dlg.Add(
+            "ListView",
+            "xs w" dlgWidth " h" UI.saveRecordingDialogListHeight " -Multi +Background" UI.listBg,
+            ["Slot", "Label"]
+        )
+        for row in variableRows
+            variablesList.Add("", row.slot, row.label)
+
+        inlineEditCtrl := dlg.Add("Edit", "Hidden w10 h22")
+        variablesList.OnEvent("Click", OnSaveRecordingListClick)
+        variablesList.OnEvent("DoubleClick", OnSaveRecordingListDoubleClick)
+        inlineEditCtrl.OnEvent("LoseFocus", CommitSaveRecordingInlineEdit)
+    }
+
+    saveBtn := dlg.Add(
+        "Button",
+        "xm w" btnW " h" btnH " Default +Background" UI.accent " c" UI.accentText,
+        "Save"
+    )
+    cancelBtn := dlg.Add(
+        "Button",
+        "x+" UI.btnGap " w" btnW " h" btnH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Cancel"
+    )
+
+    ConfirmSave(*) {
+        if hasVariables
+            CommitSaveRecordingInlineEdit()
+        confirmed := true
+        resultName := Trim(nameEdit.Value)
+        dlg.Destroy()
+    }
+
+    CancelSave(*) {
+        confirmed := false
+        dlg.Destroy()
+    }
+
+    saveBtn.OnEvent("Click", ConfirmSave)
+    cancelBtn.OnEvent("Click", CancelSave)
+    dlg.OnEvent("Close", CancelSave)
+    dlg.OnEvent("Escape", CancelSave)
+
+    dlg.Show("Center")
+    WinWaitClose("ahk_id " dlg.Hwnd)
+    dialogActive := false
+
+    return {
+        confirmed: confirmed,
+        name: resultName,
+        variableRows: variableRows
+    }
+}
+
+/**
+ * Default Save Recording name: first 1–2 words of the target title (max 16 chars) plus 1, 2, 3… suffix.
+ * @param {String} logPath Recording log path.
+ * @returns {String} Name without the di- prefix (shown in the save dialog).
+ */
+GetDefaultRecordingSaveName(logPath) {
+    try {
+        title := DetectRecordingTargetTitleFromLog(logPath)
+        baseName := SanitizeRecordingTitleBaseName(title)
+    } catch {
+        baseName := ""
+    }
+
+    if baseName = ""
+        baseName := "recording"
+
+    return baseName "-" GetNextRecordingNumberForTitleBase(baseName)
+}
+
 RenameRecording(savedPath) {
     global C, S
 
-    result := ShowManageInputBox("Recording name:", "Save Recording", "w360 h130", DisplayName(savedPath))
+    defaultName := GetDefaultRecordingSaveName(savedPath)
+    variableRows := CollectRecordingVariableRowsFromLog(savedPath)
 
-    if result.Result != "OK" {
-        DiscardRecordingFile(savedPath)
-        S.filePath := ""
-        SetStatus("Recording cancelled.")
-        return
-    }
-
-    fileName := SafeRecordingFileName(result.Value)
-
-    if fileName = "" {
-        DiscardRecordingFile(savedPath)
-        S.filePath := ""
-        SetStatus("Recording cancelled.")
-        return
+    if variableRows.Length > 0 {
+        saveResult := ShowSaveRecordingDialog(defaultName, variableRows)
+        if !saveResult.confirmed {
+            DiscardRecordingFile(savedPath)
+            S.filePath := ""
+            SetStatus("Recording cancelled.")
+            return
+        }
+        fileName := SafeRecordingFileName(saveResult.name)
+        if fileName = "" {
+            DiscardRecordingFile(savedPath)
+            S.filePath := ""
+            SetStatus("Recording cancelled.")
+            return
+        }
+    } else {
+        result := ShowManageInputBox("Recording name:", "Save Recording", "w360 h130", defaultName)
+        if result.Result != "OK" {
+            DiscardRecordingFile(savedPath)
+            S.filePath := ""
+            SetStatus("Recording cancelled.")
+            return
+        }
+        fileName := SafeRecordingFileName(result.Value)
+        if fileName = "" {
+            DiscardRecordingFile(savedPath)
+            S.filePath := ""
+            SetStatus("Recording cancelled.")
+            return
+        }
+        saveResult := { confirmed: true, name: result.Value, variableRows: [] }
     }
 
     newPath := C.recordingsDir "\" fileName ".log"
@@ -7306,6 +8054,10 @@ RenameRecording(savedPath) {
             FileMove savedPath, newPath, 1
 
         S.filePath := newPath
+
+        if saveResult.variableRows.Length > 0
+            ApplyRecordingVariableLabelsToLog(newPath, saveResult.variableRows)
+
         SetStatus("Saved as " DisplayName(newPath))
     } catch as err {
         ShowManageMsgBox "Could not rename file:`n" err.Message, "Save Recording", "Icon!"
@@ -7607,6 +8359,8 @@ BeginApplySession(parsed, batchMode := false) {
     global S
 
     S.applying := true
+    S.applyPaused := false
+    S.playbackSeekReverseFromPause := false
 
     if !batchMode {
         SetApplyGuiState(true)
@@ -7614,7 +8368,9 @@ BeginApplySession(parsed, batchMode := false) {
             S.gui.Hide()
     }
 
-    ToolTip "Running " parsed.actions.Length " action(s)... Press Esc to stop."
+    directionLabel := S.playbackReverse ? "reverse" : "forward"
+    pauseKey := GetManageHotkeyBinding("pauseResumePlayback")
+    ToolTip "Running " directionLabel " — " parsed.actions.Length " action(s)... " pauseKey " pause/resume. Esc or arrow keys stop."
     SetTimer ClearTip, -3500
 }
 
@@ -7626,6 +8382,8 @@ EndApplySession(restoreGui := true) {
     global S
 
     S.applying := false
+    S.applyPaused := false
+    S.playbackReverse := false
     S.playbackOffsetX := 0
     S.playbackOffsetY := 0
     UninstallMouseBlock()
@@ -7645,12 +8403,14 @@ ResetApplyRuntimeState() {
     global S
 
     S.applying := false
+    S.applyPaused := false
+    S.playbackReverse := false
     UninstallMouseBlock()
     ToolTip
 }
 
 /**
- * Executes one full pass through parsed.actions.
+ * Executes one full pass through parsed.actions, supporting pause and rewind-from-pause.
  * @param {Object} parsed Parsed recording.
  * @returns {Object} Result with success, stopped, applied, and scrolled counts.
  */
@@ -7660,6 +8420,17 @@ ExecuteApplyPlayback(parsed) {
     applied := 0
     scrolled := 0
     stopped := false
+    actionCount := parsed.actions.Length
+
+    if actionCount = 0 {
+        return { success: true, stopped: false, applied: 0, scrolled: 0 }
+    }
+
+    dir := S.playbackReverse ? -1 : 1
+    pos := dir = 1 ? 1 : actionCount
+    anchorElapsed := dir = -1 ? parsed.actions[pos].elapsed : parsed.actions[1].elapsed
+    previousRelativeElapsed := 0
+    hasDispatchedOnce := false
 
     try {
         SleepWhileApplying(S.initialDelayMs)
@@ -7667,21 +8438,41 @@ ExecuteApplyPlayback(parsed) {
         if C.blockUserMouse && S.applying
             InstallMouseBlock()
 
-        firstElapsed := parsed.actions[1].elapsed
-        previousRelativeElapsed := 0
+        while S.applying && !S.stopBatch {
+            WaitWhileApplyPaused()
 
-        for action in parsed.actions {
             if !S.applying || S.stopBatch {
                 stopped := true
                 break
             }
 
-            relativeElapsed := action.elapsed - firstElapsed
+            if S.playbackSeekReverseFromPause {
+                S.playbackSeekReverseFromPause := false
+                if dir = 1 {
+                    pos := pos > 1 ? pos - 1 : actionCount
+                    dir := -1
+                    S.playbackReverse := true
+                    anchorElapsed := parsed.actions[pos].elapsed
+                    previousRelativeElapsed := 0
+                    hasDispatchedOnce := false
+                    revKey := GetManageHotkeyBinding("runReverse")
+                    ToolTip "Rewinding from current step — " revKey " / Esc to stop."
+                    SetTimer ClearTip, -2200
+                }
+            }
 
-            if S.useRecordedTiming {
+            action := parsed.actions[pos]
+
+            relativeElapsed := dir = -1
+                ? anchorElapsed - action.elapsed
+                : action.elapsed - anchorElapsed
+
+            if S.useRecordedTiming && hasDispatchedOnce {
                 delay := Max(0, (relativeElapsed - previousRelativeElapsed) / S.playbackSpeed)
                 previousRelativeElapsed := relativeElapsed
                 SleepWhileApplying(delay)
+            } else {
+                previousRelativeElapsed := relativeElapsed
             }
 
             if !S.applying || S.stopBatch {
@@ -7689,26 +8480,20 @@ ExecuteApplyPlayback(parsed) {
                 break
             }
 
-            if action.type = "apply" {
-                ReplayApply(action)
-                applied += 1
-            } else if action.type = "scroll" {
-                ReplayScroll(action)
-                scrolled += 1
-            } else if action.type = "mouse_hold" {
-                ReplayMouseHold(action)
-                applied += 1
-            } else if action.type = "shortcut" {
-                ReplayShortcut(action)
-            } else if action.type = "delay" && !S.useRecordedTiming {
-                SleepWhileApplying(action.delayMs)
-            }
+            DispatchPlaybackAction(action, &applied, &scrolled)
+            hasDispatchedOnce := true
+
+            pos += dir
+            if pos < 1 || pos > actionCount
+                break
         }
     } catch as err {
         stopped := true
         throw err
     } finally {
         S.applying := false
+        S.applyPaused := false
+        S.playbackSeekReverseFromPause := false
         UninstallMouseBlock()
     }
 
@@ -7720,19 +8505,42 @@ ExecuteApplyPlayback(parsed) {
     }
 }
 
+/**
+ * Replays one parsed action during Run (forward or reverse).
+ * @param {Object} action Parsed action.
+ * @param {Integer} appliedInOut Running count of apply/mouse_hold steps.
+ * @param {Integer} scrolledInOut Running count of scroll steps.
+ */
+DispatchPlaybackAction(action, &appliedInOut, &scrolledInOut) {
+    global S
+
+    if action.type = "apply" {
+        ReplayApply(action)
+        appliedInOut += 1
+    } else if action.type = "scroll" {
+        ReplayScroll(action)
+        scrolledInOut += 1
+    } else if action.type = "mouse_hold" {
+        ReplayMouseHold(action)
+        appliedInOut += 1
+    } else if action.type = "shortcut" {
+        ReplayShortcut(action)
+    } else if action.type = "delay" && !S.useRecordedTiming {
+        SleepWhileApplying(action.delayMs)
+    }
+}
+
 ReplayApply(action) {
     global C, S
 
     text := action.variable != "" ? ResolveVariableText(action.variable) : ""
     point := ResolveTargetPoint(action.target)
+    jitteredPoint := ApplyMouseClickHumanOffset(point.x, point.y)
 
     if text != ""
-        ShowVariableAssignmentTip(action.variable, point.x, point.y)
+        ShowVariableAssignmentTip(action.variable, jitteredPoint.x, jitteredPoint.y)
 
-    if S.smoothMouse
-        NaturalMouseMove(point.x, point.y)
-    else
-        MoveMouseInstant(point.x, point.y)
+    MoveMouseToTarget(jitteredPoint.x, jitteredPoint.y)
 
     if !S.applying || S.stopBatch
         return
@@ -7742,12 +8550,12 @@ ReplayApply(action) {
     if !S.applying || S.stopBatch
         return
 
-    ClickPoint(point.x, point.y, action.target.button)
+    ClickPoint(jitteredPoint.x, jitteredPoint.y, action.target.button)
 
     if !S.applying || S.stopBatch
         return
 
-    if text != "" {
+    if text != "" && !S.playbackReverse {
         if S.humanTyping
             TypeTextHuman(text)
         else
@@ -7761,18 +8569,16 @@ ReplayScroll(action) {
     global C, S
 
     point := ResolveTargetPoint(action.target)
+    direction := S.playbackReverse ? InvertWheelDirection(action.direction) : action.direction
 
-    if S.smoothMouse
-        NaturalMouseMove(point.x, point.y)
-    else
-        MoveMouseInstant(point.x, point.y)
+    MoveMouseToTarget(point.x, point.y)
 
     if !S.applying || S.stopBatch
         return
 
     SleepWhileApplying(50)
 
-    wheelCommand := MapWheel(action.direction)
+    wheelCommand := MapWheel(direction)
     steps := Max(1, action.notches)
 
     if action.delta != 0
@@ -7792,13 +8598,20 @@ ReplayScroll(action) {
 ReplayMouseHold(action) {
     global C, S
 
-    startPoint := ResolveTargetPoint(action.startTarget)
-    endPoint := ResolveTargetPoint(action.endTarget)
+    startTarget := S.playbackReverse ? action.endTarget : action.startTarget
+    endTarget := S.playbackReverse ? action.startTarget : action.endTarget
+    startPoint := ResolveTargetPoint(startTarget)
+    endPoint := ResolveTargetPoint(endTarget)
+    pathPoints := action.HasProp("pathPoints") ? action.pathPoints : []
 
-    if S.smoothMouse
-        NaturalMouseMove(startPoint.x, startPoint.y)
-    else
-        MoveMouseInstant(startPoint.x, startPoint.y)
+    if S.playbackReverse && pathPoints.Length >= 2 {
+        reversedPath := []
+        Loop pathPoints.Length
+            reversedPath.Push(pathPoints[pathPoints.Length - A_Index + 1])
+        pathPoints := reversedPath
+    }
+
+    MoveMouseToTarget(startPoint.x, startPoint.y)
 
     if !S.applying || S.stopBatch
         return
@@ -7810,18 +8623,18 @@ ReplayMouseHold(action) {
 
     ShowCursorToolTip(C.mouseHoldIndicatorText)
 
+    SendAbsoluteMouseMove(Round(startPoint.x), Round(startPoint.y))
     MouseButtonDown(action.button)
 
     if !S.applying || S.stopBatch
         return
 
-    if startPoint.x != endPoint.x || startPoint.y != endPoint.y {
-        if S.smoothMouse
-            NaturalMouseMove(endPoint.x, endPoint.y)
-        else
-            MoveMouseInstant(endPoint.x, endPoint.y)
+    if pathPoints.Length >= 2 {
+        ReplayMouseHoldPathSegments(pathPoints, GetHoldReplayDurationMs(action.durationMs), startPoint, endPoint)
+    } else if startPoint.x != endPoint.x || startPoint.y != endPoint.y {
+        ReplayMouseHoldLinearDrag(startPoint, endPoint, GetHoldReplayDurationMs(action.durationMs))
     } else if action.durationMs > 0 {
-        SleepWhileApplying(action.durationMs)
+        SleepWhileApplying(GetHoldReplayDurationMs(action.durationMs))
     }
 
     if !S.applying || S.stopBatch
@@ -7830,6 +8643,157 @@ ReplayMouseHold(action) {
     MouseButtonUp(action.button)
     ToolTip
     SleepWhileApplying(S.segmentPauseMs)
+}
+
+/**
+ * Replays a hold/drag along recorded screen path points with linear segments.
+ * @param {Array<Object>} pathPoints Recorded `{x, y}` screen points.
+ * @param {Integer} durationMs Total hold duration to spread across segments.
+ * @param {Array} startPoint Resolved start `{x, y}`.
+ * @param {Array} endPoint Resolved end `{x, y}`.
+ */
+ReplayMouseHoldPathSegments(pathPoints, durationMs, startPoint, endPoint) {
+    global C, S
+
+    segments := MapRecordedHoldPathToResolved(pathPoints, startPoint, endPoint)
+    if segments.Length < 2
+        return
+
+    cumulative := [0.0]
+    totalDistance := 0.0
+    Loop segments.Length - 1 {
+        totalDistance += MousePathDistance(segments[A_Index], segments[A_Index + 1])
+        cumulative.Push(totalDistance)
+    }
+
+    if totalDistance <= 0 {
+        SendAbsoluteMouseMove(Round(endPoint.x), Round(endPoint.y))
+        return
+    }
+
+    durationMs := Max(1, durationMs)
+    stepMs := Max(1, C.mouseHoldPathStepMs)
+    totalSteps := Max(2, Ceil(durationMs / stepMs))
+    startTick := A_TickCount
+    cursorIndex := 1
+    lastX := segments[1].x
+    lastY := segments[1].y
+    SendAbsoluteMouseMove(Round(lastX), Round(lastY))
+
+    Loop totalSteps {
+        if !S.applying || S.stopBatch
+            return
+
+        pathElapsedMs := A_TickCount - startTick
+        if pathElapsedMs >= durationMs
+            break
+
+        t := pathElapsedMs / durationMs
+        targetDist := totalDistance * t
+
+        while cursorIndex < segments.Length && cumulative[cursorIndex + 1] < targetDist
+            cursorIndex += 1
+
+        fromPoint := segments[cursorIndex]
+        toPoint := segments[Min(cursorIndex + 1, segments.Length)]
+        segmentStartDist := cumulative[cursorIndex]
+        segmentLen := cumulative[Min(cursorIndex + 1, segments.Length)] - segmentStartDist
+        segT := segmentLen > 0 ? (targetDist - segmentStartDist) / segmentLen : 0
+        x := fromPoint.x + (toPoint.x - fromPoint.x) * segT
+        y := fromPoint.y + (toPoint.y - fromPoint.y) * segT
+
+        if Abs(x - lastX) >= C.mouseHoldPathMinStepPx || Abs(y - lastY) >= C.mouseHoldPathMinStepPx {
+            point := ClampPoint(x, y)
+            SendAbsoluteMouseMove(point.x, point.y)
+            lastX := x
+            lastY := y
+        }
+
+        SleepWhileApplying(stepMs)
+    }
+
+    if S.applying && !S.stopBatch {
+        finalPoint := segments[segments.Length]
+        SendAbsoluteMouseMove(Round(finalPoint.x), Round(finalPoint.y))
+    }
+}
+
+/**
+ * Re-anchors recorded screen path points so the first/last align with the resolved
+ * start and end points for this replay (handles moved/resized target windows).
+ * Applies an affine translate + axis scale so the curve shape is preserved.
+ * @param {Array<Object>} pathPoints Recorded `{x, y}` screen coords.
+ * @param {Object} startPoint Resolved start `{x, y}`.
+ * @param {Object} endPoint Resolved end `{x, y}`.
+ * @returns {Array<Object>} Mapped segment points, with endPoint appended if needed.
+ */
+MapRecordedHoldPathToResolved(pathPoints, startPoint, endPoint) {
+    segments := []
+    if !IsObject(pathPoints) || pathPoints.Length < 2 {
+        segments.Push({ x: startPoint.x, y: startPoint.y })
+        segments.Push({ x: endPoint.x, y: endPoint.y })
+        return segments
+    }
+
+    recStart := pathPoints[1]
+    recEnd := pathPoints[pathPoints.Length]
+    recDx := recEnd.x - recStart.x
+    recDy := recEnd.y - recStart.y
+    resDx := endPoint.x - startPoint.x
+    resDy := endPoint.y - startPoint.y
+
+    ; Only rescale an axis when both the recorded gesture and the resolved
+    ; gesture span a meaningful distance on it. Otherwise (closed loops,
+    ; nearly-vertical/horizontal drags, or same-window replay where the
+    ; resolved delta is ~0) keep scale = 1 so the recorded shape is preserved
+    ; via pure translation. Without this guard, dividing tiny resolved deltas
+    ; by recorded deltas collapses the path onto the start point.
+    minAxisScalePx := 30
+    scaleX := (Abs(recDx) >= minAxisScalePx && Abs(resDx) >= minAxisScalePx)
+        ? resDx / recDx
+        : 1.0
+    scaleY := (Abs(recDy) >= minAxisScalePx && Abs(resDy) >= minAxisScalePx)
+        ? resDy / recDy
+        : 1.0
+
+    for point in pathPoints {
+        mappedX := startPoint.x + (point.x - recStart.x) * scaleX
+        mappedY := startPoint.y + (point.y - recStart.y) * scaleY
+        segments.Push({ x: mappedX, y: mappedY })
+    }
+
+    lastPoint := segments[segments.Length]
+    if Abs(lastPoint.x - endPoint.x) > 0.5 || Abs(lastPoint.y - endPoint.y) > 0.5
+        segments.Push({ x: endPoint.x, y: endPoint.y })
+
+    return segments
+}
+
+/**
+ * Replays a hold/drag as one straight segment using the selected mouse movement mode.
+ * @param {Array} startPoint Resolved start `{x, y}`.
+ * @param {Array} endPoint Resolved end `{x, y}`.
+ * @param {Integer} durationMs Hold duration while dragging.
+ */
+ReplayMouseHoldLinearDrag(startPoint, endPoint, durationMs) {
+    global S, MOUSE_MOVE_MODE_SMOOTH, MOUSE_MOVE_MODE_LINEAR
+
+    if S.mouseMoveMode = MOUSE_MOVE_MODE_SMOOTH
+        NaturalMouseMove(endPoint.x, endPoint.y)
+    else if S.mouseMoveMode = MOUSE_MOVE_MODE_LINEAR
+        LinearMouseMove(startPoint.x, startPoint.y, endPoint.x, endPoint.y, durationMs)
+    else
+        MoveMouseInstant(endPoint.x, endPoint.y)
+}
+
+/**
+ * Returns the distance between two screen points.
+ * @param {Object} fromPoint `{x, y}`.
+ * @param {Object} toPoint `{x, y}`.
+ * @returns {Float}
+ */
+MousePathDistance(fromPoint, toPoint) {
+    return Sqrt((toPoint.x - fromPoint.x) ** 2 + (toPoint.y - fromPoint.y) ** 2)
 }
 
 /**
@@ -7842,6 +8806,9 @@ ReplayShortcut(action) {
     if !S.applying || S.stopBatch
         return
 
+    if S.playbackReverse
+        return
+
     SendInput action.sendText
     SleepWhileApplying(S.segmentPauseMs)
 }
@@ -7849,14 +8816,628 @@ ReplayShortcut(action) {
 RequestStop(*) {
     global S
 
-    if S.applying
+    if S.applying {
         S.applying := false
+        S.applyPaused := false
+        S.playbackSeekReverseFromPause := false
+        S.playbackReverse := false
+    }
 
     if S.batchRunning
         S.stopBatch := true
 }
 
-IsApplying() {
+/**
+ * Right Arrow: starts Run forward when idle; stops Run or a CSV batch while playback is active.
+ */
+ToggleRunFromHotkey(*) {
+    global S
+
+    if S.applying || S.batchRunning {
+        RequestStop()
+        return
+    }
+
+    S.playbackReverse := false
+    ApplyFromGui()
+}
+
+/**
+ * Left Arrow: starts Run in reverse when idle; stops active Run; while paused, rewinds from the current step.
+ */
+ToggleRunReverseFromHotkey(*) {
+    global C, S
+
+    if S.batchRunning {
+        RequestStop()
+        return
+    }
+
+    if S.applying && S.applyPaused {
+        S.playbackSeekReverseFromPause := true
+        S.playbackReverse := true
+        S.applyPaused := false
+        return
+    }
+
+    if S.applying {
+        RequestStop()
+        return
+    }
+
+    if S.inputSourceMode = C.inputSourceCsv {
+        SetStatus("Reverse Run uses data input mode — select a data input, not a CSV batch.")
+        return
+    }
+
+    S.playbackReverse := true
+    ApplyFromGui()
+}
+
+/**
+ * Page Down during Run: pause or resume without sending the key.
+ */
+ToggleApplyPauseFromHotkey(*) {
+    global S
+
+    if !S.applying
+        return
+
+    S.applyPaused := !S.applyPaused
+    pauseKey := GetManageHotkeyBinding("pauseResumePlayback")
+    revKey := GetManageHotkeyBinding("runReverse")
+
+    if S.applyPaused
+        ToolTip "Paused — " pauseKey " to resume. " revKey " to rewind from here. Esc or arrow keys to stop."
+    else {
+        ToolTip "Resumed."
+        SetTimer ClearTip, -1200
+    }
+}
+
+; =============================================================================
+; Hotkeys — remapping, persistence, editor
+; =============================================================================
+
+/**
+ * No-op used to validate hotkey names with the Hotkey command.
+ */
+ManageHotkeyValidateNoop(*) {
+}
+
+/**
+ * True when Esc should stop Run or a CSV batch (playback-stop hotkey context).
+ * @returns {Boolean}
+ */
+IsPlaybackStopHotkeyActive(*) {
+    return IsApplying() || IsBatchRunning()
+}
+
+/**
+ * True when idle hotkeys (Run forward) are active.
+ * @returns {Boolean}
+ */
+IsIdleForManageHotkey(*) {
+    return !IsRecording()
+}
+
+/**
+ * True when the start/save recording toggle hotkey is active.
+ * @returns {Boolean}
+ */
+IsRecordToggleHotkeyActive(*) {
+    global S
+    return !S.applying && !S.batchRunning
+}
+
+/**
+ * True when reverse Run hotkey is active (idle or paused during Run).
+ * @returns {Boolean}
+ */
+IsIdleOrPausedReverseHotkey(*) {
+    global S
+    return (!IsRecording() && !S.applying && !S.batchRunning)
+        || (S.applying && S.applyPaused && !S.batchRunning)
+}
+
+/**
+ * Activates HotIf context for a hotkey action context name.
+ * Uses direct function references (HotIf accepts Func objects by name).
+ * @param {String} conditionName recording | playbackStop | applying | idle
+ */
+SetManageHotkeyConditionContext(conditionName) {
+    switch conditionName {
+        case "recording":
+            HotIf IsRecording
+        case "recordToggle":
+            HotIf IsRecordToggleHotkeyActive
+        case "playbackStop":
+            HotIf IsPlaybackStopHotkeyActive
+        case "applying":
+            HotIf IsApplying
+        case "idle":
+            HotIf IsIdleForManageHotkey
+        case "idleOrPausedReverse":
+            HotIf IsIdleOrPausedReverseHotkey
+        default:
+            throw Error("Unknown hotkey condition: " conditionName)
+    }
+}
+
+/**
+ * Returns the condition function for a hotkey action context name.
+ * @param {String} conditionName recording | playbackStop | applying | idle
+ * @returns {Func}
+ */
+GetManageHotkeyCondition(conditionName) {
+    switch conditionName {
+        case "recording":
+            return IsRecording
+        case "recordToggle":
+            return IsRecordToggleHotkeyActive
+        case "playbackStop":
+            return IsPlaybackStopHotkeyActive
+        case "applying":
+            return IsApplying
+        case "idle":
+            return IsIdleForManageHotkey
+        case "idleOrPausedReverse":
+            return IsIdleOrPausedReverseHotkey
+    }
+    throw Error("Unknown hotkey condition: " conditionName)
+}
+
+/**
+ * Returns the handler for a remappable hotkey action id.
+ * @param {String} actionId Action identifier from MANAGE_HOTKEY_ACTIONS.
+ * @returns {Func}
+ */
+GetManageHotkeyHandler(actionId) {
+    switch actionId {
+        case "toggleRecording":
+            return ToggleRecordingFromHotkey
+        case "stopPlayback":
+            return RequestStop
+        case "pauseResumePlayback":
+            return ToggleApplyPauseFromHotkey
+        case "runForward":
+            return ToggleRunFromHotkey
+        case "runReverse":
+            return ToggleRunReverseFromHotkey
+    }
+    throw Error("Unknown hotkey action: " actionId)
+}
+
+/**
+ * Returns metadata for a hotkey action id.
+ * @param {String} actionId Action identifier.
+ * @returns {Object|""}
+ */
+GetManageHotkeyAction(actionId) {
+    global MANAGE_HOTKEY_ACTIONS
+
+    for action in MANAGE_HOTKEY_ACTIONS {
+        if action.id = actionId
+            return action
+    }
+    return ""
+}
+
+/**
+ * Returns the current binding for an action (persisted or default).
+ * @param {String} actionId Action identifier.
+ * @returns {String}
+ */
+GetManageHotkeyBinding(actionId) {
+    global S
+
+    if S.hotkeyBindings.Has(actionId)
+        return S.hotkeyBindings[actionId]
+
+    action := GetManageHotkeyAction(actionId)
+    return action ? action.defaultKey : ""
+}
+
+/**
+ * Loads persisted hotkey bindings from apply-state.ini into S.hotkeyBindings.
+ * @returns {Map}
+ */
+LoadManageHotkeyBindings() {
+    global C, S, MANAGE_HOTKEY_ACTIONS
+
+    bindings := Map()
+    for action in MANAGE_HOTKEY_ACTIONS {
+        defaultKey := action.defaultKey
+        stored := FileExist(C.stateFile)
+            ? Trim(IniRead(C.stateFile, C.stateHotkeysSection, action.id, defaultKey))
+            : defaultKey
+        bindings[action.id] := stored != "" ? stored : defaultKey
+    }
+
+    if FileExist(C.stateFile) {
+        legacyToggle := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "toggleRecording", ""))
+        if legacyToggle = "" {
+            legacyStart := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "startRecording", ""))
+            legacySaveUp := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "saveRecordingUp", ""))
+            if legacyStart != ""
+                bindings["toggleRecording"] := legacyStart
+            else if legacySaveUp != ""
+                bindings["toggleRecording"] := legacySaveUp
+        }
+
+        legacyPause := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "pauseResumePlayback", ""))
+        if legacyPause = "Down" && bindings["pauseResumePlayback"] = "Down"
+            bindings["pauseResumePlayback"] := "PgDn"
+    }
+
+    S.hotkeyBindings := bindings
+    return bindings
+}
+
+/**
+ * Persists S.hotkeyBindings to apply-state.ini.
+ */
+SaveManageHotkeyBindings() {
+    global C, S
+
+    EnsureParentDir(C.stateFile)
+    for id, key in S.hotkeyBindings
+        IniWrite key, C.stateFile, C.stateHotkeysSection, id
+}
+
+/**
+ * Unregisters dynamically registered app hotkeys.
+ */
+UnregisterManageHotkeys() {
+    global S
+
+    for reg in S.registeredHotkeys {
+        SetManageHotkeyConditionContext(reg.condition)
+        try Hotkey reg.key, reg.handler, "Off"
+        HotIf
+    }
+    S.registeredHotkeys := []
+}
+
+/**
+ * Registers app hotkeys from S.hotkeyBindings (falls back to defaults when invalid).
+ */
+RegisterManageHotkeys() {
+    global S, MANAGE_HOTKEY_ACTIONS
+
+    UnregisterManageHotkeys()
+
+    for action in MANAGE_HOTKEY_ACTIONS {
+        key := GetManageHotkeyBinding(action.id)
+        if key = "" || !ValidateManageHotkeyKey(key) {
+            key := action.defaultKey
+            S.hotkeyBindings[action.id] := key
+        }
+
+        handler := GetManageHotkeyHandler(action.id)
+        SetManageHotkeyConditionContext(action.condition)
+        try {
+            Hotkey key, handler, "On"
+            S.registeredHotkeys.Push({
+                key: key,
+                handler: handler,
+                condition: action.condition
+            })
+        } catch {
+            if key != action.defaultKey && ValidateManageHotkeyKey(action.defaultKey) {
+                S.hotkeyBindings[action.id] := action.defaultKey
+                try Hotkey action.defaultKey, handler, "On"
+                S.registeredHotkeys.Push({
+                    key: action.defaultKey,
+                    handler: handler,
+                    condition: action.condition
+                })
+            }
+        }
+        HotIf
+    }
+}
+
+/**
+ * Returns true when key is accepted by the Hotkey command.
+ * @param {String} key Hotkey name (for example Esc, Up, F1).
+ * @returns {Boolean}
+ */
+ValidateManageHotkeyKey(key) {
+    try {
+        Hotkey key, ManageHotkeyValidateNoop, "On"
+        Hotkey key, ManageHotkeyValidateNoop, "Off"
+        return true
+    } catch {
+        return false
+    }
+}
+
+/**
+ * Returns the label of another action that already uses key in the same context.
+ * @param {String} actionId Action being edited.
+ * @param {String} key Proposed hotkey name.
+ * @returns {String} Conflicting action label, or empty string.
+ */
+FindManageHotkeyConflict(actionId, key) {
+    global S, MANAGE_HOTKEY_ACTIONS
+
+    action := GetManageHotkeyAction(actionId)
+    if !action
+        return ""
+
+    keyLower := StrLower(key)
+    for other in MANAGE_HOTKEY_ACTIONS {
+        if other.id = actionId || other.condition != action.condition
+            continue
+        otherKey := GetManageHotkeyBinding(other.id)
+        if StrLower(otherKey) = keyLower
+            return other.label
+    }
+    return ""
+}
+
+/**
+ * Applies a new hotkey binding, persists it, and refreshes registration.
+ * @param {String} actionId Action identifier.
+ * @param {String} key Hotkey name.
+ * @returns {Boolean} True when the binding was saved.
+ */
+ApplyManageHotkeyBinding(actionId, key) {
+    global C, S
+
+    if !ValidateManageHotkeyKey(key) {
+        ShowManageMsgBox "That key cannot be used as a hotkey.", C.hotkeyEditorDialogTitle, "Icon!"
+        return false
+    }
+
+    conflict := FindManageHotkeyConflict(actionId, key)
+    if conflict != "" {
+        ShowManageMsgBox "That key is already assigned to:`n" conflict, C.hotkeyEditorDialogTitle, "Icon!"
+        return false
+    }
+
+    S.hotkeyBindings[actionId] := key
+    SaveManageHotkeyBindings()
+    RegisterManageHotkeys()
+
+    if S.hotkeyCaptureBtn
+        S.hotkeyCaptureBtn.Text := key
+
+    UpdateManageHotkeyFooterHint()
+    return true
+}
+
+/**
+ * Builds the main-window footer hint from current hotkey bindings.
+ * @returns {String}
+ */
+BuildManageHotkeyFooterHint() {
+    recordKey := GetManageHotkeyBinding("toggleRecording")
+    runFwdKey := GetManageHotkeyBinding("runForward")
+    runRevKey := GetManageHotkeyBinding("runReverse")
+    pauseKey := GetManageHotkeyBinding("pauseResumePlayback")
+
+    return "Record: " recordKey " start/save. Run: " runFwdKey "/" runRevKey
+        . " forward/reverse; " pauseKey " pause/resume (" revKey " rewinds from pause). Caps Lock = delay; a,b,c = Var."
+}
+
+/**
+ * Updates the main-window hotkey hint text when bindings change.
+ */
+UpdateManageHotkeyFooterHint() {
+    global S
+
+    if S.hotkeyHintCtrl
+        S.hotkeyHintCtrl.Value := BuildManageHotkeyFooterHint()
+}
+
+/**
+ * Refreshes key buttons in the hotkey editor dialog.
+ */
+RefreshManageHotkeyEditorButtons() {
+    global S
+
+    for id, btn in S.hotkeyEditorButtons
+        btn.Text := GetManageHotkeyBinding(id)
+}
+
+/**
+ * Stops hotkey capture and restores registration.
+ */
+CancelManageHotkeyCapture() {
+    global S
+
+    if S.hotkeyCaptureHook {
+        try S.hotkeyCaptureHook.Stop()
+        catch
+        S.hotkeyCaptureHook := ""
+    }
+
+    if S.hotkeyCaptureBtn {
+        S.hotkeyCaptureBtn.Text := GetManageHotkeyBinding(S.hotkeyCaptureActionId)
+        S.hotkeyCaptureBtn := ""
+    }
+
+    S.hotkeyCaptureActionId := ""
+    RegisterManageHotkeys()
+}
+
+/**
+ * InputHook callback: assigns the pressed key to the action being edited.
+ * @param {InputHook} ih Active capture hook.
+ * @param {Integer} vk Virtual-key code.
+ */
+ManageHotkeyCaptureKeyDown(ih, vk, sc) {
+    global C, S
+
+    if vk = C.VK_ESCAPE {
+        ih.Stop()
+        CancelManageHotkeyCapture()
+        return
+    }
+
+    if IsModifierVirtualKey(vk)
+        return
+
+    keyName := GetKeyName(Format("vk{:02X}", vk))
+    if keyName = ""
+        return
+
+    ih.Stop()
+    S.hotkeyCaptureHook := ""
+    if ApplyManageHotkeyBinding(S.hotkeyCaptureActionId, keyName) {
+        CancelManageHotkeyCapture()
+        return
+    }
+
+    UnregisterManageHotkeys()
+    if S.hotkeyCaptureBtn
+        S.hotkeyCaptureBtn.Text := "Press a key…"
+
+    ihRestart := InputHook("L1")
+    ihRestart.UseMouse := false
+    ihRestart.KeyOpt("{All}", "N")
+    ihRestart.OnKeyDown := ManageHotkeyCaptureKeyDown
+    ihRestart.Start()
+    S.hotkeyCaptureHook := ihRestart
+}
+
+/**
+ * Starts one-click hotkey capture for a single action row.
+ * @param {String} actionId Action identifier.
+ * @param {Gui.Button} btnCtrl Key button that was clicked.
+ */
+BeginManageHotkeyCapture(actionId, btnCtrl, *) {
+    global S
+
+    CancelManageHotkeyCapture()
+    UnregisterManageHotkeys()
+
+    S.hotkeyCaptureActionId := actionId
+    S.hotkeyCaptureBtn := btnCtrl
+    btnCtrl.Text := "Press a key…"
+
+    ih := InputHook("L1")
+    ih.UseMouse := false
+    ih.KeyOpt("{All}", "N")
+    ih.OnKeyDown := ManageHotkeyCaptureKeyDown
+    ih.Start()
+    S.hotkeyCaptureHook := ih
+}
+
+/**
+ * Restores default hotkey bindings and refreshes the UI.
+ */
+ResetManageHotkeyBindings(*) {
+    global S, MANAGE_HOTKEY_ACTIONS
+
+    for action in MANAGE_HOTKEY_ACTIONS
+        S.hotkeyBindings[action.id] := action.defaultKey
+
+    SaveManageHotkeyBindings()
+    RegisterManageHotkeys()
+    RefreshManageHotkeyEditorButtons()
+    UpdateManageHotkeyFooterHint()
+}
+
+/**
+ * Closes the hotkey editor and clears editor state.
+ */
+OnManageHotkeyEditorClose(*) {
+    global S
+
+    CancelManageHotkeyCapture()
+    S.hotkeyEditorGui := ""
+    S.hotkeyEditorButtons := Map()
+}
+
+/**
+ * Opens the categorized hotkey editor dialog (Run Options → Edit Hotkeys).
+ */
+ShowManageHotkeyEditorDialog(*) {
+    global S, UI, C, MANAGE_HOTKEY_ACTIONS
+
+    if S.hotkeyEditorGui
+        return
+
+    dlg := Gui(
+        "+Owner" S.gui.Hwnd " +ToolWindow -MaximizeBox -MinimizeBox",
+        C.hotkeyEditorDialogTitle
+    )
+    BindManageChildGui(dlg)
+    ApplyManageGuiTheme(dlg)
+
+    width := UI.hotkeyEditorWidth
+    keyBtnW := UI.hotkeyEditorKeyBtnWidth
+    rowH := UI.hotkeyEditorRowHeight
+    labelW := width - keyBtnW - UI.btnGap
+    btnRowW := (width - UI.btnGap) // 2
+    currentCategory := ""
+    S.hotkeyEditorButtons := Map()
+
+    dlg.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+    dlg.Add(
+        "Text",
+        "xm w" width " c" UI.textHint,
+        "Click a key button, then press the new hotkey. Esc cancels capture."
+    )
+    dlg.Add("Text", "xm w" width " h" UI.tabRowGap, "")
+
+    for action in MANAGE_HOTKEY_ACTIONS {
+        if action.category != currentCategory {
+            if currentCategory != ""
+                dlg.Add("Text", "xm w" width " h" UI.tabRowGap, "")
+            currentCategory := action.category
+            dlg.SetFont("s" UI.fontSizeSmall, UI.fontFamily)
+            dlg.Add("Text", "xm w" width " h" UI.tabLabelHeight " c" UI.textMuted, currentCategory)
+            dlg.SetFont("s" UI.fontSizeBody, UI.fontFamily)
+        }
+
+        dlg.Add("Text", "xm w" labelW " h" rowH, action.label)
+        keyBtn := dlg.Add(
+            "Button",
+            "x+" UI.btnGap " w" keyBtnW " h" rowH " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+            GetManageHotkeyBinding(action.id)
+        )
+        keyBtn.OnEvent("Click", BeginManageHotkeyCapture.Bind(action.id, keyBtn))
+        S.hotkeyEditorButtons[action.id] := keyBtn
+    }
+
+    dlg.Add("Text", "xm w" width " h" UI.tabRowGap, "")
+
+    resetBtn := dlg.Add(
+        "Button",
+        "xm w" btnRowW " h" UI.btnHeightSecondary " +Background" UI.secondaryBtnBg " c" UI.secondaryBtnText,
+        "Reset defaults"
+    )
+    resetBtn.OnEvent("Click", ResetManageHotkeyBindings)
+
+    closeBtn := dlg.Add(
+        "Button",
+        "x+" UI.btnGap " w" btnRowW " h" UI.btnHeightSecondary " Default",
+        "Close"
+    )
+    closeBtn.OnEvent("Click", (*) => dlg.Destroy())
+
+    dlg.OnEvent("Close", OnManageHotkeyEditorClose)
+    dlg.OnEvent("Escape", (*) => dlg.Destroy())
+
+    S.hotkeyEditorGui := dlg
+    dlg.Show("Center")
+}
+
+/**
+ * Blocks while Run is paused; returns when resumed, stopped, or batch cancelled.
+ */
+WaitWhileApplyPaused() {
+    global S
+
+    while S.applyPaused && S.applying && !S.stopBatch
+        Sleep 50
+}
+
+IsApplying(*) {
     global S
     return S.applying
 }
@@ -7872,6 +9453,11 @@ SleepWhileApplying(delayMs) {
     delayMs := Round(delayMs)
 
     while delayMs > 0 && S.applying && !S.stopBatch {
+        WaitWhileApplyPaused()
+
+        if !S.applying || S.stopBatch
+            break
+
         chunk := Min(delayMs, 50)
         Sleep chunk
         delayMs -= chunk
@@ -7883,6 +9469,8 @@ Cleanup(*) {
 
     S.recording := false
     S.applying := false
+    S.applyPaused := false
+    S.playbackReverse := false
     S.batchRunning := false
     S.stopBatch := false
 
@@ -7894,6 +9482,7 @@ Cleanup(*) {
     CloseLogFile()
     UninstallMouseBlock()
     HideRecordingTip()
+    UnregisterManageHotkeys()
 }
 
 
@@ -8225,7 +9814,8 @@ ProcessDetectLogEvent(line, parsed, pendingClick) {
                 button: holdAction.button,
                 durationMs: holdAction.durationMs,
                 startTarget: holdAction.startTarget,
-                endTarget: holdAction.endTarget
+                endTarget: holdAction.endTarget,
+                pathPoints: holdAction.pathPoints
             })
         }
         return ""
@@ -8298,11 +9888,18 @@ ParseMouseHoldAction(parts, coordinateMode) {
         SafeInteger(parts[22], 0)
     )
 
+    pathPoints := []
+    if parts.Length >= 24 && StrLower(Trim(parts[23])) = "path"
+        pathPoints := ParseMouseHoldPath("path|" parts[24])
+    else if parts.Length >= 23
+        pathPoints := ParseMouseHoldPath(parts[23])
+
     return {
         button: NormalizeRecordedButton(parts[3]),
         durationMs: SafeInteger(parts[4], 0),
         startTarget: startTarget,
-        endTarget: endTarget
+        endTarget: endTarget,
+        pathPoints: pathPoints
     }
 }
 
@@ -8586,6 +10183,24 @@ ApplyRecordingPlaybackPixelOffset(point) {
     return ClampPoint(point.x + S.playbackOffsetX, point.y + S.playbackOffsetY)
 }
 
+/**
+ * Applies a random per-click pixel offset when mouse click offset is enabled in Run Options.
+ * @param {Number} x Resolved screen X before jitter.
+ * @param {Number} y Resolved screen Y before jitter.
+ * @returns {Array} `{x, y}` clamped to the virtual screen.
+ */
+ApplyMouseClickHumanOffset(x, y) {
+    global S
+
+    if S.mouseClickOffsetPx <= 0
+        return ClampPoint(x, y)
+
+    return ClampPoint(
+        x + Random(-S.mouseClickOffsetPx, S.mouseClickOffsetPx),
+        y + Random(-S.mouseClickOffsetPx, S.mouseClickOffsetPx)
+    )
+}
+
 FindTargetWindow(target) {
     if target.hwnd != "" {
         try {
@@ -8652,6 +10267,56 @@ ClampPoint(x, y) {
  * Presses a mouse button down at the current cursor position.
  * @param {String} button Recorded button name.
  */
+/**
+ * Synthesizes an absolute mouse move via mouse_event so drag-aware apps
+ * (browsers, Excalidraw, canvas tools) receive real WM_MOUSEMOVE events
+ * during a held drag. SetCursorPos alone moves the pointer but is invisible
+ * to apps that listen only for actual move events.
+ * @param {Number} x Screen X (virtual desktop).
+ * @param {Number} y Screen Y (virtual desktop).
+ */
+SendAbsoluteMouseMove(x, y) {
+    global C
+
+    ; Pin the OS cursor first so any consumer that polls GetCursorPos
+    ; (rather than listening for WM_MOUSEMOVE) sees the right pixel even
+    ; if the kernel coalesces a subsequent move event.
+    DllCall("SetCursorPos", "Int", Round(x), "Int", Round(y))
+
+    vx := DllCall("GetSystemMetrics", "Int", C.SM_XVIRTUALSCREEN, "Int")
+    vy := DllCall("GetSystemMetrics", "Int", C.SM_YVIRTUALSCREEN, "Int")
+    vw := DllCall("GetSystemMetrics", "Int", C.SM_CXVIRTUALSCREEN, "Int")
+    vh := DllCall("GetSystemMetrics", "Int", C.SM_CYVIRTUALSCREEN, "Int")
+
+    if vw < 1
+        vw := 1
+    if vh < 1
+        vh := 1
+
+    absX := Round((x - vx) * 65535 / vw)
+    absY := Round((y - vy) * 65535 / vh)
+
+    ; Build an INPUT struct and call SendInput. MOUSEEVENTF_MOVE_NOCOALESCE
+    ; (0x2000) tells Windows not to merge this move with adjacent ones, which
+    ; is essential for replaying drawn paths into apps like Excalidraw that
+    ; only extend a stroke per delivered move event.
+    ; Flags = MOVE (0x0001) | ABSOLUTE (0x8000) | VIRTUALDESK (0x4000) | NOCOALESCE (0x2000)
+    static INPUT_MOUSE := 0
+    static cbSize := A_PtrSize = 8 ? 40 : 32
+
+    input := Buffer(cbSize, 0)
+    NumPut("UInt", INPUT_MOUSE, input, 0)
+    offset := A_PtrSize = 8 ? 8 : 4
+    NumPut("Int", absX, input, offset)
+    NumPut("Int", absY, input, offset + 4)
+    NumPut("UInt", 0, input, offset + 8)
+    NumPut("UInt", 0x0001 | 0x8000 | 0x4000 | 0x2000, input, offset + 12)
+    NumPut("UInt", 0, input, offset + 16)
+    NumPut("UPtr", 0, input, offset + 20)
+
+    DllCall("SendInput", "UInt", 1, "Ptr", input.Ptr, "Int", cbSize)
+}
+
 MouseButtonDown(button := "LButton") {
     normalized := NormalizeRecordedButton(button)
     downFlag := 0x0002
@@ -8732,6 +10397,78 @@ MoveMouseInstant(targetX, targetY) {
     DllCall("SetCursorPos", "Int", target.x, "Int", target.y)
 }
 
+/**
+ * Moves the cursor using the Run Options mouse movement mode.
+ * @param {Number} targetX Screen X coordinate.
+ * @param {Number} targetY Screen Y coordinate.
+ */
+MoveMouseToTarget(targetX, targetY) {
+    global S, MOUSE_MOVE_MODE_SMOOTH, MOUSE_MOVE_MODE_LINEAR, MOUSE_MOVE_MODE_INSTANT
+
+    switch S.mouseMoveMode {
+        case MOUSE_MOVE_MODE_INSTANT:
+            MoveMouseInstant(targetX, targetY)
+        case MOUSE_MOVE_MODE_LINEAR:
+            MouseGetPos(&startX, &startY)
+            LinearMouseMove(startX, startY, targetX, targetY)
+        default:
+            NaturalMouseMove(targetX, targetY)
+    }
+}
+
+/**
+ * Moves the cursor in a straight line over a target duration (no Bezier curve).
+ * @param {Number} startX Starting screen X.
+ * @param {Number} startY Starting screen Y.
+ * @param {Number} targetX Target screen X.
+ * @param {Number} targetY Target screen Y.
+ * @param {Number} durationMs Optional fixed duration; uses move speed when omitted.
+ */
+LinearMouseMove(startX, startY, targetX, targetY, durationMs := "") {
+    global C, S
+
+    start := ClampPoint(startX, startY)
+    target := ClampPoint(targetX, targetY)
+    startX := start.x
+    startY := start.y
+    targetX := target.x
+    targetY := target.y
+
+    if Abs(startX - targetX) < 2 && Abs(startY - targetY) < 2 {
+        DllCall("SetCursorPos", "Int", targetX, "Int", targetY)
+        return
+    }
+
+    distance := Sqrt((targetX - startX) ** 2 + (targetY - startY) ** 2)
+    if durationMs = ""
+        durationMs := GetMoveDuration(distance)
+    else
+        durationMs := Max(0, Round(durationMs))
+
+    steps := Max(C.moveStepsMin, Ceil(distance * C.moveStepsPerPx))
+    sleepMs := durationMs / steps
+
+    if sleepMs < C.moveStepMinSleepMs {
+        steps := Max(C.moveStepsMin, Ceil(durationMs / C.moveStepMinSleepMs))
+        sleepMs := Max(C.moveStepMinSleepMs, durationMs / steps)
+    }
+
+    Loop steps {
+        if !S.applying || S.stopBatch
+            return
+
+        t := A_Index / steps
+        x := startX + (targetX - startX) * t
+        y := startY + (targetY - startY) * t
+        point := ClampPoint(x, y)
+        DllCall("SetCursorPos", "Int", point.x, "Int", point.y)
+        SleepWhileApplying(sleepMs)
+    }
+
+    if S.applying && !S.stopBatch
+        DllCall("SetCursorPos", "Int", targetX, "Int", targetY)
+}
+
 NaturalMouseMove(targetX, targetY) {
     global C, S
 
@@ -8800,7 +10537,31 @@ NaturalMouseMove(targetX, targetY) {
 
 GetMoveDuration(distance) {
     global C, S
-    return Max(C.moveMinMs, Min(C.moveMaxMs, distance * C.moveMsPerPx)) / S.moveSpeed
+
+    baseMs := Max(C.moveMinMs, Min(C.moveMaxMs, distance * C.moveMsPerPx)) / S.moveSpeed
+
+    if S.moveSpeedVariabilityPct <= 0
+        return baseMs
+
+    spread := S.moveSpeedVariabilityPct / 100
+    return Max(C.moveMinMs, baseMs * Random(1 - spread, 1 + spread))
+}
+
+/**
+ * Scales a recorded hold/drag duration by the Hold speed setting.
+ * @param {Integer} recordedDurationMs Duration captured during Record.
+ * @returns {Integer}
+ */
+GetHoldReplayDurationMs(recordedDurationMs) {
+    global S
+
+    baseMs := recordedDurationMs / S.holdSpeed
+
+    if S.holdSpeedVariabilityPct <= 0
+        return Max(1, Round(baseMs))
+
+    spread := S.holdSpeedVariabilityPct / 100
+    return Max(1, Round(baseMs * Random(1 - spread, 1 + spread)))
 }
 
 EaseInOutCubic(t) {
@@ -8848,6 +10609,21 @@ TypeTextHuman(text) {
 RandomDelay(minMs, maxMs) {
     global S
     return Max(0, Random(minMs / S.typingSpeed, maxMs / S.typingSpeed))
+}
+
+/**
+ * Returns the opposite scroll direction for reverse playback.
+ * @param {String} direction Recorded wheel direction.
+ * @returns {String}
+ */
+InvertWheelDirection(direction) {
+    switch StrLower(direction) {
+        case "up": return "down"
+        case "down": return "up"
+        case "left": return "right"
+        case "right": return "left"
+        default: return direction
+    }
 }
 
 MapWheel(direction) {
@@ -8915,12 +10691,17 @@ DefaultSettings() {
         playback_speed: C.defaultPlaybackSpeed,
         typing_speed: C.defaultTypingSpeed,
         move_speed: C.defaultMoveSpeed,
+        move_speed_variability_pct: C.defaultMoveSpeedVariabilityPct,
+        hold_speed: C.defaultHoldSpeed,
+        hold_speed_variability_pct: C.defaultHoldSpeedVariabilityPct,
         initial_delay: C.defaultInitialDelayMs,
         click_pause_ms: C.defaultClickPauseMs,
         segment_pause_ms: C.defaultSegmentPauseMs,
         use_recorded_timing: C.defaultUseRecordedTiming,
         smooth_mouse: C.defaultSmoothMouse,
+        mouse_move_mode: MOUSE_MOVE_MODE_SMOOTH,
         human_typing: C.defaultHumanTyping,
+        mouse_click_offset_px: C.defaultMouseClickOffsetPx,
         description: "",
         variables: []
     }
@@ -8949,6 +10730,18 @@ ParsePresetFile(filePath) {
                     settings.typing_speed := SafeFloat(value, settings.typing_speed)
                 case "move_speed":
                     settings.move_speed := SafeFloat(value, settings.move_speed)
+                case "move_speed_variability_pct":
+                    settings.move_speed_variability_pct := Min(100, Max(0, SafeInteger(
+                        value,
+                        settings.move_speed_variability_pct
+                    )))
+                case "hold_speed":
+                    settings.hold_speed := SafeFloat(value, settings.hold_speed)
+                case "hold_speed_variability_pct":
+                    settings.hold_speed_variability_pct := Min(100, Max(0, SafeInteger(
+                        value,
+                        settings.hold_speed_variability_pct
+                    )))
                 case "initial_delay":
                     settings.initial_delay := SafeInteger(value, settings.initial_delay)
                 case "click_pause_ms":
@@ -8959,8 +10752,12 @@ ParsePresetFile(filePath) {
                     settings.use_recorded_timing := SafeBool(value, settings.use_recorded_timing)
                 case "smooth_mouse":
                     settings.smooth_mouse := SafeBool(value, settings.smooth_mouse)
+                case "mouse_move_mode":
+                    settings.mouse_move_mode := NormalizeMouseMoveModeValue(value)
                 case "human_typing":
                     settings.human_typing := SafeBool(value, settings.human_typing)
+                case "mouse_click_offset_px":
+                    settings.mouse_click_offset_px := Max(0, SafeInteger(value, settings.mouse_click_offset_px))
                 case "description":
                     settings.description := Trim(value)
             }
@@ -8986,12 +10783,18 @@ ApplySettings(settings) {
     S.playbackSpeed := Max(0.05, settings.playback_speed)
     S.typingSpeed := Max(0.05, settings.typing_speed)
     S.moveSpeed := Max(0.05, settings.move_speed)
+    S.moveSpeedVariabilityPct := Min(100, Max(0, settings.HasProp("move_speed_variability_pct")
+        ? settings.move_speed_variability_pct : 0))
+    S.holdSpeed := Max(0.05, settings.HasProp("hold_speed") ? settings.hold_speed : C.defaultHoldSpeed)
+    S.holdSpeedVariabilityPct := Min(100, Max(0, settings.HasProp("hold_speed_variability_pct")
+        ? settings.hold_speed_variability_pct : 0))
     S.initialDelayMs := Max(0, settings.initial_delay)
     S.clickPauseMs := Max(0, settings.click_pause_ms)
     S.segmentPauseMs := Max(0, settings.segment_pause_ms)
     S.useRecordedTiming := settings.use_recorded_timing
-    S.smoothMouse := settings.smooth_mouse
+    ApplyMouseMoveModeToState(ResolveMouseMoveModeFromSettings(settings))
     S.humanTyping := settings.human_typing
+    S.mouseClickOffsetPx := Max(0, settings.HasProp("mouse_click_offset_px") ? settings.mouse_click_offset_px : 0)
     S.variables := []
     for rawValue in settings.variables
         S.variables.Push(UnescapeManageDelimitedField(StripManageVariableLabel(rawValue)))
@@ -9019,12 +10822,20 @@ SerializePreset(settings) {
         . "playback_speed=" settings.playback_speed "`n"
         . "typing_speed=" settings.typing_speed "`n"
         . "move_speed=" settings.move_speed "`n"
+        . "move_speed_variability_pct=" (settings.HasProp("move_speed_variability_pct")
+            ? settings.move_speed_variability_pct : 0) "`n"
+        . "hold_speed=" (settings.HasProp("hold_speed") ? settings.hold_speed : C.defaultHoldSpeed) "`n"
+        . "hold_speed_variability_pct=" (settings.HasProp("hold_speed_variability_pct")
+            ? settings.hold_speed_variability_pct : 0) "`n"
         . "initial_delay=" settings.initial_delay "`n"
         . "click_pause_ms=" settings.click_pause_ms "`n"
         . "segment_pause_ms=" settings.segment_pause_ms "`n"
         . "use_recorded_timing=" (settings.use_recorded_timing ? 1 : 0) "`n"
         . "smooth_mouse=" (settings.smooth_mouse ? 1 : 0) "`n"
+        . "mouse_move_mode=" (settings.HasProp("mouse_move_mode")
+            ? NormalizeMouseMoveModeValue(settings.mouse_move_mode) : MOUSE_MOVE_MODE_SMOOTH) "`n"
         . "human_typing=" (settings.human_typing ? 1 : 0) "`n"
+        . "mouse_click_offset_px=" (settings.HasProp("mouse_click_offset_px") ? settings.mouse_click_offset_px : 0) "`n"
     if desc != ""
         presetBody .= "`n# optional description shown as tooltip on the Data Inputs list row`ndescription="
             . desc . "`n"
@@ -9052,6 +10863,201 @@ LoadManageState() {
         recording: Trim(IniRead(C.stateFile, C.stateSection, C.stateRecordingKey, "")),
         csv: Trim(IniRead(C.stateFile, C.stateSection, C.stateCsvKey, "")),
         csvAskNextLine: IniRead(C.stateFile, C.stateSection, C.stateCsvAskNextLineKey, "0") = "1"
+    }
+}
+
+/**
+ * Returns default Run Options and Speed Settings values.
+ * @returns {Object}
+ */
+DefaultManageRunSettings() {
+    global C, MOUSE_MOVE_MODE_SMOOTH
+
+    return {
+        mouse_move_mode: MOUSE_MOVE_MODE_SMOOTH,
+        human_typing: C.defaultHumanTyping,
+        mouse_click_offset_px: C.defaultMouseClickOffsetPx,
+        click_pause_ms: C.defaultClickPauseMs,
+        segment_pause_ms: C.defaultSegmentPauseMs,
+        use_recorded_timing: C.defaultUseRecordedTiming,
+        playback_speed: C.defaultPlaybackSpeed,
+        typing_speed: C.defaultTypingSpeed,
+        move_speed: C.defaultMoveSpeed,
+        move_speed_variability_pct: C.defaultMoveSpeedVariabilityPct,
+        hold_speed: C.defaultHoldSpeed,
+        hold_speed_variability_pct: C.defaultHoldSpeedVariabilityPct,
+        initial_delay_ms: C.defaultInitialDelayMs
+    }
+}
+
+/**
+ * Reads persisted Run Options and Speed Settings from apply-state.ini.
+ * @returns {Object}
+ */
+LoadManageRunSettings() {
+    global C
+
+    defaults := DefaultManageRunSettings()
+    section := C.stateRunSettingsSection
+
+    if !FileExist(C.stateFile)
+        return defaults
+
+    return {
+        mouse_move_mode: NormalizeMouseMoveModeValue(IniRead(
+            C.stateFile, section, C.stateMouseMoveModeKey, defaults.mouse_move_mode)),
+        human_typing: IniRead(C.stateFile, section, C.stateHumanTypingKey, defaults.human_typing ? "1" : "0") = "1",
+        mouse_click_offset_px: Max(0, SafeInteger(IniRead(
+            C.stateFile, section, C.stateMouseClickOffsetKey, defaults.mouse_click_offset_px))),
+        click_pause_ms: Max(0, SafeInteger(IniRead(
+            C.stateFile, section, C.stateClickPauseKey, defaults.click_pause_ms))),
+        segment_pause_ms: Max(0, SafeInteger(IniRead(
+            C.stateFile, section, C.stateSegmentPauseKey, defaults.segment_pause_ms))),
+        use_recorded_timing: IniRead(
+            C.stateFile, section, C.stateUseRecordedTimingKey, defaults.use_recorded_timing ? "1" : "0") = "1",
+        playback_speed: Max(0.05, SafeFloat(IniRead(
+            C.stateFile, section, C.statePlaybackSpeedKey, defaults.playback_speed))),
+        typing_speed: Max(0.05, SafeFloat(IniRead(
+            C.stateFile, section, C.stateTypingSpeedKey, defaults.typing_speed))),
+        move_speed: Max(0.05, SafeFloat(IniRead(
+            C.stateFile, section, C.stateMoveSpeedKey, defaults.move_speed))),
+        move_speed_variability_pct: Min(100, Max(0, SafeInteger(IniRead(
+            C.stateFile, section, C.stateMoveSpeedVariabilityKey, defaults.move_speed_variability_pct)))),
+        hold_speed: Max(0.05, SafeFloat(IniRead(
+            C.stateFile, section, C.stateHoldSpeedKey, defaults.hold_speed))),
+        hold_speed_variability_pct: Min(100, Max(0, SafeInteger(IniRead(
+            C.stateFile, section, C.stateHoldSpeedVariabilityKey, defaults.hold_speed_variability_pct)))),
+        initial_delay_ms: Max(0, SafeInteger(IniRead(
+            C.stateFile, section, C.stateInitialDelayKey, defaults.initial_delay_ms)))
+    }
+}
+
+/**
+ * Builds the current Run Options and Speed Settings object from GUI controls.
+ * @returns {Object}
+ */
+BuildManageRunSettingsFromGui() {
+    timing := ReadRunTimingSettingsFromGui()
+    playback := ReadPlaybackOptionsFromGui()
+
+    return {
+        mouse_move_mode: playback.mouse_move_mode,
+        human_typing: playback.human_typing,
+        mouse_click_offset_px: playback.mouse_click_offset_px,
+        click_pause_ms: timing.click_pause_ms,
+        segment_pause_ms: timing.segment_pause_ms,
+        use_recorded_timing: timing.use_recorded_timing,
+        playback_speed: timing.playback_speed,
+        typing_speed: timing.typing_speed,
+        move_speed: timing.move_speed,
+        move_speed_variability_pct: timing.move_speed_variability_pct,
+        hold_speed: timing.hold_speed,
+        hold_speed_variability_pct: timing.hold_speed_variability_pct,
+        initial_delay_ms: timing.initial_delay
+    }
+}
+
+/**
+ * Applies saved Run Options and Speed Settings to the main GUI controls.
+ * @param {Object} settings Settings from LoadManageRunSettings or BuildManageRunSettingsFromGui.
+ */
+ApplyManageRunSettingsToGui(settings) {
+    global S
+
+    SetPlaybackOptionRadios(settings.mouse_move_mode, settings.human_typing)
+
+    if S.clickOffsetEdit
+        S.clickOffsetEdit.Value := settings.mouse_click_offset_px
+    if S.clickPauseEdit
+        S.clickPauseEdit.Value := settings.click_pause_ms
+    if S.segmentPauseEdit
+        S.segmentPauseEdit.Value := settings.segment_pause_ms
+    if S.fixedPausesRadio && S.recordedGapsRadio {
+        S.fixedPausesRadio.Value := settings.use_recorded_timing ? 0 : 1
+        S.recordedGapsRadio.Value := settings.use_recorded_timing ? 1 : 0
+    }
+    if S.playbackSpeedEdit
+        S.playbackSpeedEdit.Value := settings.playback_speed
+    if S.typingSpeedEdit
+        S.typingSpeedEdit.Value := settings.typing_speed
+    if S.moveSpeedEdit
+        S.moveSpeedEdit.Value := settings.move_speed
+    if S.moveSpeedVariabilityEdit
+        S.moveSpeedVariabilityEdit.Value := settings.move_speed_variability_pct
+    if S.holdSpeedEdit
+        S.holdSpeedEdit.Value := settings.hold_speed
+    if S.holdSpeedVariabilityEdit
+        S.holdSpeedVariabilityEdit.Value := settings.hold_speed_variability_pct
+    if S.initialDelayEdit
+        S.initialDelayEdit.Value := settings.initial_delay_ms
+}
+
+/**
+ * Restores persisted Run Options and Speed Settings into the GUI and session state.
+ */
+RestoreManageRunSettings() {
+    ApplyManageRunSettingsToGui(LoadManageRunSettings())
+    SyncRunSettingsFromGui()
+}
+
+/**
+ * Persists current Run Options and Speed Settings to apply-state.ini.
+ */
+SaveManageRunSettings() {
+    global C, S
+
+    if !S.gui
+        return
+
+    settings := BuildManageRunSettingsFromGui()
+    section := C.stateRunSettingsSection
+
+    EnsureParentDir(C.stateFile)
+    IniWrite settings.mouse_move_mode, C.stateFile, section, C.stateMouseMoveModeKey
+    IniWrite settings.human_typing ? "1" : "0", C.stateFile, section, C.stateHumanTypingKey
+    IniWrite settings.mouse_click_offset_px, C.stateFile, section, C.stateMouseClickOffsetKey
+    IniWrite settings.click_pause_ms, C.stateFile, section, C.stateClickPauseKey
+    IniWrite settings.segment_pause_ms, C.stateFile, section, C.stateSegmentPauseKey
+    IniWrite settings.use_recorded_timing ? "1" : "0", C.stateFile, section, C.stateUseRecordedTimingKey
+    IniWrite settings.playback_speed, C.stateFile, section, C.statePlaybackSpeedKey
+    IniWrite settings.typing_speed, C.stateFile, section, C.stateTypingSpeedKey
+    IniWrite settings.move_speed, C.stateFile, section, C.stateMoveSpeedKey
+    IniWrite settings.move_speed_variability_pct, C.stateFile, section, C.stateMoveSpeedVariabilityKey
+    IniWrite settings.hold_speed, C.stateFile, section, C.stateHoldSpeedKey
+    IniWrite settings.hold_speed_variability_pct, C.stateFile, section, C.stateHoldSpeedVariabilityKey
+    IniWrite settings.initial_delay_ms, C.stateFile, section, C.stateInitialDelayKey
+}
+
+/**
+ * Saves Run/Speed settings whenever a related control changes.
+ */
+PersistManageRunSettingsHandler(*) {
+    SaveManageRunSettings()
+    SyncRunSettingsFromGui()
+}
+
+/**
+ * Wires Change handlers so Run Options and Speed Settings persist automatically.
+ */
+EnableManageRunSettingsPersistence() {
+    global S
+
+    for ctrl in [
+        S.smoothMouseRadio, S.linearMouseRadio, S.instantMouseRadio,
+        S.humanTypingRadio, S.instantTypingRadio,
+        S.fixedPausesRadio, S.recordedGapsRadio
+    ] {
+        if ctrl
+            ctrl.OnEvent("Click", PersistManageRunSettingsHandler)
+    }
+
+    for ctrl in [
+        S.clickOffsetEdit, S.clickPauseEdit, S.segmentPauseEdit,
+        S.playbackSpeedEdit, S.typingSpeedEdit, S.moveSpeedEdit,
+        S.moveSpeedVariabilityEdit, S.holdSpeedEdit, S.holdSpeedVariabilityEdit, S.initialDelayEdit
+    ] {
+        if ctrl
+            ctrl.OnEvent("Change", PersistManageRunSettingsHandler)
     }
 }
 
