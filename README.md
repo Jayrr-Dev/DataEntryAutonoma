@@ -14,7 +14,7 @@ Show the app what to do once. It remembers your mouse clicks, scrolls, and keypr
 
 **Developers:** the source is built with [AutoHotkey v2](https://www.autohotkey.com/) and compiled into that exe.
 
-**Current release:** v1.2.0
+**Current release:** v1.3.0
 
 ## What it does
 
@@ -26,6 +26,16 @@ Data Entry Autonoma works like showing someone how to fill out a form and having
 4. Store the text to type in a **data input** or **CSV file**. Each run or each CSV row can fill the form with new values while you watch or walk away.
 
 You are not writing automation code. You are demonstrating the task once; the app plays it back like a macro and handles the typing for you. The interface stays small and clear: two main buttons, five tabs, **Share** and **Import** on the title row, tab-specific **i** help buttons, list hover tooltips, and plain-language guidance while you work.
+
+## What's new (v1.3.0)
+
+- **Edit Hotkeys:** PgUp toggles Record start/save; Esc saves while recording; PgDn pause/resume; arrow keys Run forward/reverse (Left rewinds while paused)
+- **Mouse hold/drag replay:** full drawn paths (circles, drags) replay correctly; **Hold speed** on Speed Settings
+- **Save Recording** dialog with variable labels; default name from target window title
+- **Label sync:** blue synced labels + `Sync from {recording}` tooltip in Edit Data Input / Edit CSV; merged labels at Run time
+- **Double-click Name** on list rows to open Edit Log, Edit Data Input, or Edit CSV
+
+See [Version history](#version-history) for v1.2.0 and earlier.
 
 ## What's new (v1.2.0)
 
@@ -194,7 +204,7 @@ There is no separate Help button; use the **i** on the tab you are working in.
 
 ### App behavior
 
-- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.2.0`)
+- **Version in title:** window title shows the current release (for example `Data Entry Autonoma v1.3.0`)
 - **Single instance**: only one app window at a time
 - **Always on top** main window for quick access
 - Remembers last selected recording, data input, and CSV in `apply-state.ini`
@@ -223,7 +233,7 @@ Windows only. **AutoHotkey is not required** to run the app.
 ### Download the release zip (recommended)
 
 1. Open [GitHub Releases](https://github.com/Jayrr-Dev/DataEntryAutonoma/releases) for **Data Entry Autonoma**.
-2. Download **`DataEntryAutonoma-v1.2.0-win64.zip`** (or the latest release asset for your version).
+2. Download **`DataEntryAutonoma-v1.3.0-win64.zip`** (or the latest release asset for your version).
 3. Extract the ZIP to a folder, for example `%LOCALAPPDATA%\Programs\DataEntryAutonoma` or `C:\Tools\DataEntryAutonoma`.
 4. Double-click **`DataEntryAutonoma.exe`** to run, or use **`runInstallWizard.bat`** from the extracted folder for guided setup.
 
@@ -382,7 +392,7 @@ For maintainers or anyone packaging the app for others. Requires AutoHotkey v2 w
 
 5. **Find the output**
    - Built file: `dist\DataEntryAutonoma.exe`
-   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.2.0-win64.zip`
+   - Package for distribution: `.\packageRelease.ps1` creates `release\DataEntryAutonoma-v1.3.0-win64.zip`
    - Publish to GitHub: `.\publishRelease.ps1` builds and uploads the zip
    - Copy the exe plus empty `recordings\`, `saved-inputs\`, and `csv-batches\` folders when sharing with others (same layout as Path 1).
 
@@ -567,6 +577,7 @@ Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Version | Highlights |
 |---------|------------|
+| **1.3.0** | Edit Hotkeys, hold/drag path replay + hold speed, Save Recording labels, label sync (blue + tooltip), double-click list to edit, reverse-from-pause |
 | **1.2.0** | Edit Log Global Adjust tab, playback offset, screen rescale, target window picker, per-row window fields |
 | **1.1.2** | Edit Data Input and CSV editor UX, Create CSV button, default move speed 10, release exe validation |
 | **1.1.1** | Install wizard auto-download and layout fixes, publishRelease script, source-vs-release guidance |

@@ -96,14 +96,14 @@ packageRelease.bat
 
 **Output:**
 
-- `release\DataEntryAutonoma-v<VERSION>-win64.zip` (for example `DataEntryAutonoma-v1.2.0-win64.zip`)
+- `release\DataEntryAutonoma-v<VERSION>-win64.zip` (for example `DataEntryAutonoma-v1.3.0-win64.zip`)
 - `release\DataEntryAutonoma-v<VERSION>-win64\` (same layout for inspection)
 
 **Version sync (keep these aligned on every release):**
 
 | File | Field |
 |------|--------|
-| `VERSION` | Plain text, for example `1.2.0` |
+| `VERSION` | Plain text, for example `1.3.0` |
 | `dataEntryAutonoma.ahk` | `C.appVersion` |
 | `CHANGELOG.md` | New release section |
 | `README.md` | Download zip name and version history table |

@@ -5,6 +5,37 @@ All notable changes to **Data Entry Autonoma** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-05-28
+
+### Added
+
+- **Edit Hotkeys** (Run Options): remappable recording and playback keys, persisted in `apply-state.ini`
+  - **PgUp** — start / save recording (toggle)
+  - **Esc** — save recording (while recording) or stop Run / CSV batch (while running)
+  - **PgDn** — pause / resume Run; **Right** / **Left** — Run forward / reverse (Left rewinds from pause)
+- **Save Recording** dialog with inline variable **Label** editing when the recording uses `variable-N` slots
+- Default save name from target window title (e.g. `Book1 Excel-1`, `Book1 Excel-2`, …)
+- **Hold speed** and **Hold speed variability (%)** on Speed Settings (for hold/drag path replay)
+- **Label sync:** data input and CSV labels win; recording `|note|` labels fill empty slots at Run time
+- **Synced label preview** in Edit Data Input and Edit CSV: blue text + hover tooltip `Sync from {recording}` (display-only until you Save)
+- **Var1**, **Var2**, … slot names in variable tables
+- **Double-click Name** on Recordings, Data Inputs, or Bulk Inputs lists to open Edit Log / Edit Data Input / Edit CSV
+- Windows-style hover timing for synced-label tooltips (initial delay + autopop)
+
+### Changed
+
+- **Mouse hold / drag replay:** full path parsing, time-driven path follower, real `SendInput` move events (canvas/browser apps), closed-loop scale guard for circles
+- Edit Log shows hold rows as `LButton 1984 ms · 187 path pts` (duration + path point count)
+- Reverse while paused rewinds from the current step instead of restarting from the beginning
+- Tab help moved to **ⓘ** dialogs; footer hint reflects current hotkey bindings
+- CSV editor synced-label hover uses polled mouse tracking (more reliable than ListView `MouseMove` alone)
+- Main-window list description tooltips pause while editor dialogs are open
+
+### Fixed
+
+- Save Recording ListView click handler (AHK v2 double-click / column hit-test)
+- Recording log `mouse_hold` path field parsing when stored as `path|x,y;…`
+
 ## [1.2.0] - 2026-05-27
 
 ### Added
@@ -198,6 +229,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone `DataEntryAutonoma.exe` (no AutoHotkey required on target PCs)
 - MIT license with required attribution
 
+[1.3.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/Jayrr-Dev/DataEntryAutonoma/compare/v1.1.0...v1.1.1

@@ -6,7 +6,7 @@ SetMouseDelay -1
 SetKeyDelay -1
 
 ; dataEntryAutonoma.ahk
-; Data Entry Autonoma v1.2.0 — record clicks, scrolls, and keys; replay with presets or CSV batches.
+; Data Entry Autonoma v1.3.0 — record clicks, scrolls, and keys; replay with presets or CSV batches.
 ; Copyright (c) 2026 Jayrr Dev — https://github.com/Jayrr-Dev/DataEntryAutonoma
 ; SPDX-License-Identifier: MIT
 ; Unified Record and Run module with CSV batch support.
@@ -25,7 +25,7 @@ CoordMode "ToolTip", "Screen"
 ; =============================================================================
 
 C := {
-    appVersion: "1.2.0", ; keep in sync with VERSION at project root
+    appVersion: "1.3.0", ; keep in sync with VERSION at project root
     recordingsDir: A_ScriptDir "\recordings",
     savesDir: A_ScriptDir "\saved-inputs",
     csvBatchesDir: A_ScriptDir "\csv-batches",
@@ -339,6 +339,10 @@ Run and Speed tab values are saved automatically and restored on next launch.
     manageListTooltipMissHide: 3,
     manageListTooltipMouseMoveMinMs: 50,
     manageListTooltipShowDelayMs: 500,
+    manageEditorSyncedLabelPollMs: 100,
+    manageEditorSyncedLabelTooltipAutopopMs: 5000,
+    managePresetEditorLabelListViewSubItem: 2,
+    manageSyncedLabelListViewStyle: 0x010000,
     minRecordedDelayMs: 200,
     mouseHoldDragThresholdPx: 5,
     mouseHoldTipRefreshMs: 100,
@@ -833,6 +837,13 @@ S := {
     listTooltipPendingRow: 0,
     listTooltipPendingX: 0,
     listTooltipPendingY: 0,
+    manageHoverTooltipHoverKey: "",
+    manageHoverTooltipHoverSince: 0,
+    manageHoverTooltipPendingTip: "",
+    manageHoverTooltipPendingX: 0,
+    manageHoverTooltipPendingY: 0,
+    manageHoverTooltipShownTip: "",
+    manageHoverTooltipMissStreak: 0,
     syncedLabelListViewContexts: Map(),
     syncedLabelNotifyListViews: Map(),
     presetEditorEnterCallback: "",
@@ -3663,6 +3674,8 @@ ShowCsvEditor(createNew := false, *) {
     if S.gui
         S.gui.Hide()
 
+    SetManageMainListTooltipPolling(false)
+
     editor := Gui("+ToolWindow", csvEditorDialogTitle)
     BindManageChildGui(editor)
     editor.MarginX := UI.csvEditorMarginX
@@ -3836,37 +3849,40 @@ ShowCsvEditor(createNew := false, *) {
         if !csvEditorActive
             return
 
-        if !ManageIsMouseInGuiControl(csvList) {
-            HideManageListDescOverlay()
-            return
+        inListView := ManageIsMouseInGuiControl(csvList)
+        showTip := false
+        tipText := ""
+        screenX := 0
+        screenY := 0
+        hoverKey := ""
+
+        if inListView {
+            ControlGetPos &listX, &listY, , , csvList
+            CoordMode "Mouse", "Client"
+            MouseGetPos &mouseX, &mouseY, , &controlHwnd, 2
+            if controlHwnd = csvList.Hwnd {
+                hit := GetManageListViewHitSubItem(csvList, mouseX - listX, mouseY - listY)
+                if hit.row < 1
+                    hit.row := ManageGetListViewRowFromClientY(csvList, mouseY - listY)
+
+                recordingPath := GetSelectedRecordingPath()
+                dataColIndex := hit.col - 1
+                if hit.row = 1 && hit.col >= 2 {
+                    headerRow := csvEditorRows[1]
+                    storedValue := dataColIndex <= headerRow.Length ? headerRow[dataColIndex] : ""
+                    if IsVariableLabelSyncedFromRecording(storedValue, dataColIndex - 1, recordingPath) {
+                        anchor := GetManageListViewSubItemScreenAnchor(csvList, hit.row, hit.col)
+                        tipText := FormatSyncedLabelTooltip(recordingPath)
+                        hoverKey := "csvEditor|1|" hit.col
+                        screenX := anchor.x
+                        screenY := anchor.y
+                        showTip := true
+                    }
+                }
+            }
         }
 
-        ControlGetPos &listX, &listY, , , csvList
-        CoordMode "Mouse", "Client"
-        MouseGetPos &mouseX, &mouseY, , &controlHwnd, 2
-        if controlHwnd != csvList.Hwnd {
-            HideManageListDescOverlay()
-            return
-        }
-
-        hit := GetManageListViewHitSubItem(csvList, mouseX - listX, mouseY - listY)
-        recordingPath := GetSelectedRecordingPath()
-        dataColIndex := hit.col - 1
-        if hit.row != 1 || dataColIndex < 2 {
-            HideManageListDescOverlay()
-            return
-        }
-
-        headerRow := csvEditorRows[1]
-        storedValue := dataColIndex <= headerRow.Length ? headerRow[dataColIndex] : ""
-        if !IsVariableLabelSyncedFromRecording(storedValue, dataColIndex - 1, recordingPath) {
-            HideManageListDescOverlay()
-            return
-        }
-
-        CoordMode "Mouse", "Screen"
-        MouseGetPos &mouseX, &mouseY
-        ShowManageListDescOverlay(FormatSyncedLabelTooltip(recordingPath), mouseX, mouseY)
+        ManageUpdateHoverToolTip(showTip, tipText, screenX, screenY, hoverKey, inListView)
     }
 
     LoadCsvEditorRow(rowIndex) {
@@ -3992,11 +4008,13 @@ ShowCsvEditor(createNew := false, *) {
         SetTimer(OnCsvEditorListMouseMove, 0)
         csvEditorActive := false
         S.syncCsvEditorLabels := ""
-        HideManageListDescOverlay()
+        ResetManageHoverToolTip()
         UnregisterManageSyncedLabelListViewDraw(csvList, editor)
 
-        if S.gui
+        if S.gui {
             S.gui.Show()
+            SetManageMainListTooltipPolling(true)
+        }
 
         RefreshCsvList()
         SelectByBaseName(S.csvList, S.csvPaths, FileBaseName(csvPath))
@@ -4014,11 +4032,13 @@ ShowCsvEditor(createNew := false, *) {
         csvEditorActive := false
         SetTimer(OnCsvEditorListMouseMove, 0)
         S.syncCsvEditorLabels := ""
-        HideManageListDescOverlay()
+        ResetManageHoverToolTip()
         UnregisterManageSyncedLabelListViewDraw(csvList, editor)
         editor.Destroy()
-        if S.gui
+        if S.gui {
             S.gui.Show()
+            SetManageMainListTooltipPolling(true)
+        }
     }
 
     csvList.OnEvent("ItemSelect", OnCsvEditorListSelect)
@@ -4045,8 +4065,9 @@ ShowCsvEditor(createNew := false, *) {
         "w" (UI.csvEditorWidth + 24)
         " h" GetManageChildGuiClientHeight(editor, closeBtn, UI.csvEditorBottomPad)
     )
-    SetTimer(OnCsvEditorListMouseMove, C.manageListTooltipMouseMoveMinMs)
+    SetTimer(OnCsvEditorListMouseMove, C.manageEditorSyncedLabelPollMs)
     ApplyCsvEditorListColumns(csvList, csvEditorColCount)
+    EnsureManageSyncedLabelListViewNotify(csvList)
     csvList.Focus()
 }
 
@@ -5172,17 +5193,229 @@ ShowManageListDescOverlay(message, screenX, screenY) {
     if tipX + winW > A_ScreenWidth
         tipX := Max(0, A_ScreenWidth - winW)
 
-    if S.listDescOverlayShown
-        && S.listDescOverlayLastText = text
-        && S.listDescOverlayLastX = tipX
-        && S.listDescOverlayLastY = tipY
+    if S.listDescOverlayShown && S.listDescOverlayLastText = text {
+        if S.listDescOverlayLastX = tipX && S.listDescOverlayLastY = tipY
+            return
+
+        try S.listDescOverlayGui.Move(tipX, tipY, winW, winH)
+        catch {
+            S.listDescOverlayGui.Show(Format("x{} y{} w{} h{} NoActivate", tipX, tipY, winW, winH))
+        }
+
+        S.listDescOverlayLastX := tipX
+        S.listDescOverlayLastY := tipY
         return
+    }
 
     S.listDescOverlayGui.Show(Format("x{} y{} w{} h{} NoActivate", tipX, tipY, winW, winH))
     S.listDescOverlayShown := true
     S.listDescOverlayLastText := text
     S.listDescOverlayLastX := tipX
     S.listDescOverlayLastY := tipY
+}
+
+/**
+ * Returns the Windows default initial tooltip delay (~500 ms).
+ * @returns {Integer}
+ */
+GetManageTooltipInitialDelayMs() {
+    static initialMs := 0
+
+    if initialMs > 0
+        return initialMs
+
+    doubleClickMs := DllCall("GetDoubleClickTime", "UInt")
+    initialMs := doubleClickMs > 0 ? doubleClickMs : 500
+    return initialMs
+}
+
+/**
+ * Returns the Windows default tooltip autopop duration (~5 seconds).
+ * @returns {Integer}
+ */
+GetManageHoverToolTipAutopopMs() {
+    global C
+
+    return Max(C.manageEditorSyncedLabelTooltipAutopopMs, GetManageTooltipInitialDelayMs() * 10)
+}
+
+/**
+ * Returns a stable screen anchor for one ListView subitem (top-center of the cell).
+ * @param {Gui.ListView} listView Target ListView control.
+ * @param {Integer} rowIndex One-based row index.
+ * @param {Integer} colIndex One-based column index.
+ * @returns {{x: Integer, y: Integer}}
+ */
+GetManageListViewSubItemScreenAnchor(listView, rowIndex, colIndex) {
+    rect := GetManageListViewSubItemRect(listView, rowIndex, colIndex)
+    if rect.right <= rect.left || rect.bottom <= rect.top
+        return { x: 0, y: 0 }
+
+    try {
+        listView.GetPos(&listX, &listY)
+        guiHw := listView.Gui.Hwnd
+    } catch {
+        return { x: 0, y: 0 }
+    }
+
+    if !guiHw
+        return { x: 0, y: 0 }
+
+    anchorX := listX + rect.left + ((rect.right - rect.left) // 2)
+    anchorY := listY + rect.top
+    pt := Buffer(8, 0)
+    NumPut("int", anchorX, pt, 0)
+    NumPut("int", anchorY, pt, 4)
+    if !DllCall("ClientToScreen", "Ptr", guiHw, "Ptr", pt)
+        return { x: 0, y: 0 }
+
+    return {
+        x: NumGet(pt, 0, "int"),
+        y: NumGet(pt, 4, "int")
+    }
+}
+
+/**
+ * Cancels pending editor synced-label tooltip timers.
+ */
+CancelManageHoverToolTipTimers() {
+    SetTimer(DelayedShowManageHoverToolTip, 0)
+    SetTimer(HideManageHoverToolTipAutopop, 0)
+}
+
+/**
+ * Shows the editor synced-label tooltip once and starts the autopop timer.
+ * @param {String} tip Tooltip text.
+ * @param {Integer} screenX Screen X.
+ * @param {Integer} screenY Screen Y.
+ */
+ManageShowHoverToolTip(tip, screenX, screenY) {
+    global C, S
+
+    text := ManageTruncateTooltipText(tip)
+    if text = ""
+        return
+
+    SetTimer(HideManageHoverToolTipAutopop, 0)
+    CoordMode("ToolTip", "Screen")
+    ToolTip(text, screenX + C.cursorTipOffsetX, screenY + C.cursorTipOffsetY)
+    S.manageHoverTooltipShownTip := tip
+    SetTimer(HideManageHoverToolTipAutopop, -GetManageHoverToolTipAutopopMs())
+}
+
+/**
+ * Timer callback: show after the standard initial hover delay if still on the same cell.
+ */
+DelayedShowManageHoverToolTip(*) {
+    global S
+
+    tip := S.manageHoverTooltipPendingTip
+    hoverKey := S.manageHoverTooltipHoverKey
+    if tip = "" || hoverKey = ""
+        return
+
+    if S.manageHoverTooltipShownTip != ""
+        return
+
+    if A_TickCount - S.manageHoverTooltipHoverSince < GetManageTooltipInitialDelayMs()
+        return
+
+    ManageShowHoverToolTip(
+        tip,
+        S.manageHoverTooltipPendingX,
+        S.manageHoverTooltipPendingY
+    )
+}
+
+/**
+ * Timer callback: hide after the standard autopop duration.
+ */
+HideManageHoverToolTipAutopop(*) {
+    ResetManageHoverToolTip()
+}
+
+/**
+ * Begins tracking one synced label cell using Windows-default tooltip timing.
+ * @param {String} tip Tooltip text.
+ * @param {Integer} screenX Stable screen X for the cell anchor.
+ * @param {Integer} screenY Stable screen Y for the cell anchor.
+ * @param {String} hoverKey Stable key for the hovered label cell.
+ */
+ManageTrackHoverToolTip(tip, screenX, screenY, hoverKey) {
+    global S
+
+    if hoverKey != S.manageHoverTooltipHoverKey {
+        CancelManageHoverToolTipTimers()
+        ToolTip()
+        S.manageHoverTooltipShownTip := ""
+        S.manageHoverTooltipHoverKey := hoverKey
+        S.manageHoverTooltipHoverSince := A_TickCount
+        S.manageHoverTooltipPendingTip := tip
+        S.manageHoverTooltipPendingX := screenX
+        S.manageHoverTooltipPendingY := screenY
+        SetTimer(DelayedShowManageHoverToolTip, -GetManageTooltipInitialDelayMs())
+        return
+    }
+
+    if S.manageHoverTooltipShownTip != ""
+        return
+
+    if A_TickCount - S.manageHoverTooltipHoverSince >= GetManageTooltipInitialDelayMs()
+        ManageShowHoverToolTip(tip, screenX, screenY)
+}
+
+/**
+ * Updates a hover tooltip with sticky behavior while the pointer stays on target.
+ * Used for synced editor labels and main-window data input descriptions.
+ * @param {Boolean} showTip True when the pointer is on a tooltip target.
+ * @param {String} tip Tooltip text when showTip is true.
+ * @param {Integer} screenX Stable screen X for the anchor.
+ * @param {Integer} screenY Stable screen Y for the anchor.
+ * @param {String} hoverKey Stable key for the hovered target.
+ * @param {Boolean} inListView True when the pointer is still inside the target ListView.
+ */
+ManageUpdateHoverToolTip(showTip, tip, screenX, screenY, hoverKey := "", inListView := false) {
+    global C, S
+
+    if S.manageHoverTooltipShownTip != "" {
+        if inListView && showTip && hoverKey = S.manageHoverTooltipHoverKey
+            return
+
+        if !inListView {
+            S.manageHoverTooltipMissStreak++
+            if S.manageHoverTooltipMissStreak >= C.manageListTooltipMissHide
+                ResetManageHoverToolTip()
+            return
+        }
+
+        if !showTip || hoverKey != S.manageHoverTooltipHoverKey
+            ResetManageHoverToolTip()
+        return
+    }
+
+    S.manageHoverTooltipMissStreak := 0
+
+    if !inListView || !showTip || tip = "" || hoverKey = ""
+        return
+
+    ManageTrackHoverToolTip(tip, screenX, screenY, hoverKey)
+}
+
+/**
+ * Hides the editor synced-label tooltip and clears display state.
+ */
+ResetManageHoverToolTip() {
+    global S
+
+    CancelManageHoverToolTipTimers()
+    ToolTip()
+    S.manageHoverTooltipHoverKey := ""
+    S.manageHoverTooltipHoverSince := 0
+    S.manageHoverTooltipPendingTip := ""
+    S.manageHoverTooltipPendingX := 0
+    S.manageHoverTooltipPendingY := 0
+    S.manageHoverTooltipShownTip := ""
+    S.manageHoverTooltipMissStreak := 0
 }
 
 /**
@@ -5246,21 +5479,15 @@ DelayedShowManageListDescOverlay(*) {
     catch
         return
 
-    if kind = "recording" {
-        if activeTab != 1 || !ManageIsMouseInGuiControl(S.recordingList)
-            return
-        currentRow := ManageGetListViewRowAtScreenPos(S.recordingList, mx, my)
-        if currentRow != row || ManageGetRecordingListDescTip(row) != tip
-            return
-    } else if kind = "preset" {
-        if activeTab != 2 || !ManageIsMouseInGuiControl(S.presetList)
-            return
-        currentRow := ManageGetListViewRowAtScreenPos(S.presetList, mx, my)
-        if currentRow != row || ManageGetPresetListDescTip(row) != tip
-            return
-    } else {
+    if kind != "recording"
         return
-    }
+
+    if activeTab != 1 || !ManageIsMouseInGuiControl(S.recordingList)
+        return
+
+    currentRow := ManageGetListViewRowAtScreenPos(S.recordingList, mx, my)
+    if currentRow != row || ManageGetRecordingListDescTip(row) != tip
+        return
 
     ManageShowListDescTipForRow(tip, mx, my, row, kind)
 }
@@ -5296,15 +5523,9 @@ ManageTrackListDescHover(tip, screenX, screenY, row, listKind) {
     S.listTooltipPendingY := screenY
     S.listTooltipPendingTip := tip
 
-    if S.listDescOverlayShown && S.listTooltipShownText = tip {
-        if listKind = "recording" && row = S.listTooltipRecordingRow {
-            ShowManageListDescOverlay(ManageTruncateTooltipText(tip), screenX, screenY)
-            return
-        }
-        if listKind = "preset" && row = S.listTooltipPresetRow {
-            ShowManageListDescOverlay(ManageTruncateTooltipText(tip), screenX, screenY)
-            return
-        }
+    if S.listDescOverlayShown && S.listTooltipShownText = tip && listKind = "recording" && row = S.listTooltipRecordingRow {
+        ShowManageListDescOverlay(ManageTruncateTooltipText(tip), screenX, screenY)
+        return
     }
 
     if !S.listDescOverlayShown && (A_TickCount - S.listTooltipHoverSince >= C.manageListTooltipShowDelayMs)
@@ -5319,6 +5540,7 @@ ManageHideMainListTooltips(*) {
 
     CancelManageListDescShowTimer()
     HideManageListDescOverlay()
+    ResetManageHoverToolTip()
     S.listTooltipMissStreak := 0
     S.listTooltipHoverKey := ""
     S.listTooltipHoverSince := 0
@@ -5407,14 +5629,10 @@ ManageShowListDescTipForRow(tip, screenX, screenY, row, listKind) {
         ShowManageListDescOverlay(truncated, screenX, screenY)
         return
     }
-    if row = S.listTooltipPresetRow && tip = S.listTooltipShownText && listKind = "preset" {
-        ShowManageListDescOverlay(truncated, screenX, screenY)
-        return
-    }
 
     S.listTooltipShownText := tip
-    S.listTooltipRecordingRow := listKind = "recording" ? row : 0
-    S.listTooltipPresetRow := listKind = "preset" ? row : 0
+    S.listTooltipRecordingRow := row
+    S.listTooltipPresetRow := 0
     ShowManageListDescOverlay(truncated, screenX, screenY)
 }
 
@@ -5437,6 +5655,10 @@ ManagePollMainWindowListTooltips(*) {
         ManageHideMainListTooltips()
         return
     }
+
+    ; Edit dialogs hide the main window; do not clear editor-owned tooltips.
+    if !DllCall("IsWindowVisible", "Ptr", mainHw)
+        return
 
     if WinGetMinMax("ahk_id " mainHw) = -1 {
         ManageHideMainListTooltips()
@@ -5462,19 +5684,28 @@ ManagePollMainWindowListTooltips(*) {
         return
     }
 
-    if activeTab = 2 && ManageIsMouseInGuiControl(S.presetList) {
-        prow := ManageGetListViewRowAtScreenPos(S.presetList, mx, my)
-        ptip := ManageGetPresetListDescTip(prow)
+    if activeTab = 2 {
+        inListView := ManageIsMouseInGuiControl(S.presetList)
+        showTip := false
+        tipText := ""
+        screenX := 0
+        screenY := 0
+        hoverKey := ""
 
-        if prow < 1 || ptip = "" {
-            S.listTooltipMissStreak++
-            if S.listTooltipMissStreak >= C.manageListTooltipMissHide
-                ManageHideMainListTooltips()
-            return
+        if inListView {
+            prow := ManageGetListViewRowAtScreenPos(S.presetList, mx, my)
+            ptip := ManageGetPresetListDescTip(prow)
+            if prow >= 1 && ptip != "" {
+                anchor := GetManageListViewSubItemScreenAnchor(S.presetList, prow, 1)
+                tipText := ptip
+                hoverKey := "preset|" prow
+                screenX := anchor.x
+                screenY := anchor.y
+                showTip := true
+            }
         }
 
-        S.listTooltipMissStreak := 0
-        ManageTrackListDescHover(ptip, mx, my, prow, "preset")
+        ManageUpdateHoverToolTip(showTip, tipText, screenX, screenY, hoverKey, inListView)
         return
     }
 
@@ -6284,6 +6515,8 @@ ShowPresetEditor(createNew := false, *) {
     if S.gui
         S.gui.Hide()
 
+    SetManageMainListTooltipPolling(false)
+
     editor := Gui("+ToolWindow", "Edit Data Input")
     BindManageChildGui(editor)
     editor.MarginX := UI.marginX
@@ -6524,36 +6757,45 @@ ShowPresetEditor(createNew := false, *) {
         if !presetEditorActive
             return
 
-        if !ManageIsMouseInGuiControl(variablesList) {
-            HideManageListDescOverlay()
-            return
+        inListView := ManageIsMouseInGuiControl(variablesList)
+        showTip := false
+        tipText := ""
+        screenX := 0
+        screenY := 0
+        hoverKey := ""
+
+        if inListView {
+            ControlGetPos &listX, &listY, , , variablesList
+            CoordMode "Mouse", "Client"
+            MouseGetPos &mouseX, &mouseY, , &controlHwnd, 2
+            if controlHwnd = variablesList.Hwnd {
+                hit := GetManageListViewHitSubItem(variablesList, mouseX - listX, mouseY - listY)
+                if hit.row < 1
+                    hit.row := ManageGetListViewRowFromClientY(variablesList, mouseY - listY)
+
+                recordingPath := GetSelectedRecordingPath()
+                if hit.row >= 1 {
+                    dataRowIndex := GetManageListViewDataRowIndex(variablesList, hit.row, 1)
+                    labelRect := GetManageListViewSubItemRect(variablesList, hit.row, presetVarColLabel)
+                    localX := mouseX - listX
+                    onLabelCol := hit.col = presetVarColLabel
+                        || (labelRect.right > labelRect.left
+                            && localX >= labelRect.left && localX < labelRect.right)
+                    if onLabelCol && dataRowIndex >= 1
+                        && IsVariableLabelSyncedFromRecording(
+                            editorVariableRows[dataRowIndex].label, dataRowIndex, recordingPath) {
+                        anchor := GetManageListViewSubItemScreenAnchor(variablesList, hit.row, presetVarColLabel)
+                        tipText := FormatSyncedLabelTooltip(recordingPath)
+                        hoverKey := "presetEditor|" dataRowIndex
+                        screenX := anchor.x
+                        screenY := anchor.y
+                        showTip := true
+                    }
+                }
+            }
         }
 
-        ControlGetPos &listX, &listY, , , variablesList
-        CoordMode "Mouse", "Client"
-        MouseGetPos &mouseX, &mouseY, , &controlHwnd, 2
-        if controlHwnd != variablesList.Hwnd {
-            HideManageListDescOverlay()
-            return
-        }
-
-        hit := GetManageListViewHitSubItem(variablesList, mouseX - listX, mouseY - listY)
-        recordingPath := GetSelectedRecordingPath()
-        if hit.col != presetVarColLabel || hit.row < 1 {
-            HideManageListDescOverlay()
-            return
-        }
-
-        dataRowIndex := GetManageListViewDataRowIndex(variablesList, hit.row, 1)
-        if dataRowIndex < 1
-            || !IsVariableLabelSyncedFromRecording(editorVariableRows[dataRowIndex].label, dataRowIndex, recordingPath) {
-            HideManageListDescOverlay()
-            return
-        }
-
-        CoordMode "Mouse", "Screen"
-        MouseGetPos &mouseX, &mouseY
-        ShowManageListDescOverlay(FormatSyncedLabelTooltip(recordingPath), mouseX, mouseY)
+        ManageUpdateHoverToolTip(showTip, tipText, screenX, screenY, hoverKey, inListView)
     }
 
     SaveEditor(*) {
@@ -6617,11 +6859,13 @@ ShowPresetEditor(createNew := false, *) {
         presetEditorActive := false
         SetTimer(OnPresetEditorVariablesListMouseMove, 0)
         S.syncPresetEditorLabels := ""
-        HideManageListDescOverlay()
+        ResetManageHoverToolTip()
         UnregisterManageSyncedLabelListViewDraw(variablesList, editor)
         try editor.Destroy()
-        if S.gui
+        if S.gui {
             S.gui.Show()
+            SetManageMainListTooltipPolling(true)
+        }
     }
 
     OnEditorEscape(*) {
@@ -6661,8 +6905,9 @@ ShowPresetEditor(createNew := false, *) {
         "w" (UI.presetEditorWidth + 24)
         " h" GetManageChildGuiClientHeight(editor, closeBtn, UI.presetEditorBottomPad)
     )
-    SetTimer(OnPresetEditorVariablesListMouseMove, C.manageListTooltipMouseMoveMinMs)
+    SetTimer(OnPresetEditorVariablesListMouseMove, C.manageEditorSyncedLabelPollMs)
     ApplyPresetEditorVariablesListColumns(variablesList)
+    EnsureManageSyncedLabelListViewNotify(variablesList)
     if editorVariableRows.Length
         variablesList.Focus()
     else
@@ -8167,11 +8412,13 @@ FormatSyncedLabelTooltip(recordingLogPath := "") {
  * @returns {Map}
  */
 BuildPresetEditorSyncedLabelCells(variableRows, recordingLogPath := "") {
+    global C
+
     syncedCells := Map()
 
     Loop variableRows.Length {
         if IsVariableLabelSyncedFromRecording(variableRows[A_Index].label, A_Index, recordingLogPath)
-            syncedCells[A_Index "|2"] := true
+            syncedCells[A_Index "|" C.managePresetEditorLabelListViewSubItem] := true
     }
 
     return syncedCells
@@ -8211,33 +8458,40 @@ BuildCsvEditorSyncedLabelCells(csvEditorRows, colCount, recordingLogPath := "") 
  * @returns {Integer}
  */
 OnManageSyncedLabelListViewCustomDraw(listView, lParam, *) {
-    global S, UI
+    global C, S, UI
 
-    hwndFrom := NumGet(lParam, 0, "Ptr")
-    if !S.syncedLabelListViewContexts.Has(hwndFrom)
+    Critical
+
+    if !S.syncedLabelListViewContexts.Has(listView.Hwnd)
         return 0
 
-    ctx := S.syncedLabelListViewContexts[hwndFrom]
-    stage := NumGet(lParam, 24, "UInt")
+    ctx := S.syncedLabelListViewContexts[listView.Hwnd]
 
+    static sizeNmhdr := A_PtrSize * 3
+    static sizeNcd := sizeNmhdr + 16 + (A_PtrSize * 5)
+    static offDrawStage := sizeNmhdr
+    static offItem := sizeNmhdr + 16 + (A_PtrSize * 2)
+    static offClrText := sizeNcd
+    static offSubItem := sizeNcd + 8
     static CDDS_PREPAINT := 0x00000001
     static CDDS_ITEMPREPAINT := 0x00010001
     static CDDS_SUBITEMPREPAINT := 0x00030001
     static CDRF_NOTIFYITEMDRAW := 0x00000020
-    static CDRF_NOTIFYSUBITEMDRAW := 0x00000080
     static CDRF_NEWFONT := 0x00000002
+
+    stage := NumGet(lParam, offDrawStage, "UInt")
 
     if stage = CDDS_PREPAINT
         return CDRF_NOTIFYITEMDRAW
 
     if stage = CDDS_ITEMPREPAINT
-        return CDRF_NOTIFYSUBITEMDRAW
+        return CDRF_NOTIFYITEMDRAW
 
     if stage != CDDS_SUBITEMPREPAINT
         return 0
 
-    visualRow := NumGet(lParam, 56, "UPtr") + 1
-    subItem := NumGet(lParam, 88, "Int")
+    visualRow := NumGet(lParam, offItem, "UPtr") + 1
+    subItem := NumGet(lParam, offSubItem, "Int")
     dataRow := GetManageListViewDataRowIndex(ctx.listView, visualRow, 1)
     if dataRow < 1
         return 0
@@ -8246,8 +8500,30 @@ OnManageSyncedLabelListViewCustomDraw(listView, lParam, *) {
     if !ctx.syncedCells.Has(cellKey)
         return 0
 
-    NumPut("UInt", UI.syncedLabelTextColorRef, lParam, 80)
+    NumPut("UInt", UI.syncedLabelTextColorRef, lParam, offClrText)
     return CDRF_NEWFONT
+}
+
+/**
+ * Attaches NM_CUSTOMDRAW once the editor ListView is shown.
+ * @param {Gui.ListView} listView Target ListView.
+ */
+EnsureManageSyncedLabelListViewNotify(listView) {
+    global C, S
+
+    if S.syncedLabelNotifyListViews.Has(listView.Hwnd)
+        return
+
+    try listView.Opt("+LV" Format("{:X}", C.manageSyncedLabelListViewStyle))
+    catch {
+    }
+
+    listView.OnNotify(-12, OnManageSyncedLabelListViewCustomDraw)
+    S.syncedLabelNotifyListViews[listView.Hwnd] := true
+
+    try listView.Redraw()
+    catch {
+    }
 }
 
 /**
@@ -8263,12 +8539,6 @@ BindManageSyncedLabelListViewDraw(listView, parentGui, syncedCells) {
         listView: listView,
         syncedCells: syncedCells
     }
-
-    if S.syncedLabelNotifyListViews.Has(listView.Hwnd)
-        return
-
-    listView.OnNotify(-12, OnManageSyncedLabelListViewCustomDraw)
-    S.syncedLabelNotifyListViews[listView.Hwnd] := true
 }
 
 /**

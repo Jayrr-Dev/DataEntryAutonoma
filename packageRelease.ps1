@@ -17,7 +17,7 @@ $VERSION_FILE = Join-Path $PROJECT_ROOT "VERSION"
 if (Test-Path $VERSION_FILE) {
     $VERSION = (Get-Content -LiteralPath $VERSION_FILE -Raw).Trim()
 } else {
-    $VERSION = "1.2.0"
+    $VERSION = "1.3.0"
 }
 $DIST_EXE = Join-Path $PROJECT_ROOT "dist\DataEntryAutonoma.exe"
 $RELEASE_DIR = Join-Path $PROJECT_ROOT "release"
