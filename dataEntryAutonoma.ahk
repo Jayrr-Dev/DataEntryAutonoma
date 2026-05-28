@@ -14,7 +14,7 @@ SetKeyDelay -1
 ; Presets: saved-inputs\*.txt
 ; CSV batches: csv-batches\*.csv
 ; Bundles: Share as folder or optional ZIP; Import from manifest.json folder or .zip
-; Esc saves a recording (while recording) and stops Run or a CSV batch (while running). PgUp starts recording. Right/Left Run forward/reverse; PgDn pause/resume.
+; Esc saves a recording (while recording) and stops Run or a CSV batch (while running). PgUp toggles Record start/save. Right/Left Run forward/reverse; PgDn pause/resume.
 
 EnableDpiAwareness()
 CoordMode "Mouse", "Screen"
@@ -169,13 +169,13 @@ Delete
 Remove the selected recording.
 
 Record (bottom)
-Start capturing clicks, keys, and delays for a new recording. Your configured start-recording hotkey also works (default PgUp; key is not sent).
+Start capturing clicks, keys, and delays for a new recording. PgUp toggles start/save (default; remappable in Edit Hotkeys). The key is not sent to the target app.
 
 Run (bottom)
 Replay the selected recording. Supply variable values on the Data Inputs or Bulk Inputs tab first.
 
 While recording
-- Your save-recording hotkey saves (default Esc; Cancel on the save dialog discards). Default save name uses the first 1–2 words of the target title (max 16 characters) plus 1, 2, 3… (e.g. Book1 Excel-1).
+- PgUp saves when pressed again; Esc also saves (default). Cancel on the save dialog discards. Default save name uses the first 1–2 words of the target title (max 16 characters) plus 1, 2, 3… (e.g. Book1 Excel-1).
 - If the recording created variable placeholders (a, b, c), the save dialog lists them so you can add optional labels inline.
 - Normal clicks stay clicks
 - Hold Caps Lock to record a delay (Caps Lock is suppressed while recording)
@@ -486,6 +486,7 @@ UI := {
     editBg: "FFFFFF",
     listTooltipBg: "FFFFFF",
     listTooltipText: "6B7280",
+    syncedLabelTextColorRef: 0xEB6325,
     secondaryBtnBg: "FFFFFF",
     secondaryBtnText: "374151",
     fontFamily: "Segoe UI",
@@ -631,11 +632,11 @@ MOUSE_MOVE_MODE_INSTANT := "instant"
  */
 MANAGE_HOTKEY_ACTIONS := [
     {
-        id: "startRecording",
+        id: "toggleRecording",
         category: "Recording",
-        label: "Start recording",
+        label: "Start / save recording",
         defaultKey: "PgUp",
-        condition: "recordStart"
+        condition: "recordToggle"
     },
     {
         id: "saveRecording",
@@ -832,6 +833,8 @@ S := {
     listTooltipPendingRow: 0,
     listTooltipPendingX: 0,
     listTooltipPendingY: 0,
+    syncedLabelListViewContexts: Map(),
+    syncedLabelNotifyGuis: Map(),
     presetEditorEnterCallback: "",
     recordingDescCache: Map(),
     presetDescCache: Map(),
@@ -3549,15 +3552,18 @@ ApplyCsvEditorListColumns(listView, colCount) {
  * @param {Array<Array<String>>} rows Editable rows.
  * @param {Integer} colCount Number of editable columns.
  */
-PopulateCsvEditorList(listView, rows, colCount) {
+PopulateCsvEditorList(listView, rows, colCount, recordingLogPath := "") {
     global UI
 
     listView.Delete()
 
     Loop rows.Length
-        RefreshCsvEditorListRow(listView, A_Index, rows[A_Index], colCount, true)
+        RefreshCsvEditorListRow(listView, A_Index, rows[A_Index], colCount, true, recordingLogPath)
 
     ApplyCsvEditorListColumns(listView, colCount)
+    if recordingLogPath = ""
+        recordingLogPath := GetSelectedRecordingPath()
+    RefreshManageSyncedLabelListViewCells(listView, BuildCsvEditorSyncedLabelCells(rows, colCount, recordingLogPath))
 }
 
 /**
@@ -3676,7 +3682,7 @@ ShowCsvEditor(createNew := false, *) {
     editor.Add(
         "Text",
         "xm w" listW " h" UI.csvEditorHelpTextH " c555555",
-        "Row 1 is the header. Empty variable labels show from the selected recording and update when you change recordings. Click a cell to edit inline."
+        "Row 1 is the header. Blue labels are synced from the selected recording (hover for source). Click a cell to edit inline."
     )
     csvList := editor.Add(
         "ListView",
@@ -3684,6 +3690,11 @@ ShowCsvEditor(createNew := false, *) {
         BuildCsvEditorListColumns(csvEditorColCount)
     )
     PopulateCsvEditorList(csvList, csvEditorRows, csvEditorColCount)
+    BindManageSyncedLabelListViewDraw(
+        csvList,
+        editor,
+        BuildCsvEditorSyncedLabelCells(csvEditorRows, csvEditorColCount, GetSelectedRecordingPath())
+    )
     csvInlineEdit := editor.Add("Edit", "Hidden w10 h22")
 
     addRowBtn := editor.Add(
@@ -3763,6 +3774,10 @@ ShowCsvEditor(createNew := false, *) {
                 row.Push("")
             row[dataCol] := Trim(csvInlineEdit.Value)
             RefreshCsvEditorListRow(csvList, csvInlineRow, row, csvEditorColCount)
+            RefreshManageSyncedLabelListViewCells(
+                csvList,
+                BuildCsvEditorSyncedLabelCells(csvEditorRows, csvEditorColCount, GetSelectedRecordingPath())
+            )
         }
 
         csvInlineRow := 0
@@ -3815,6 +3830,30 @@ ShowCsvEditor(createNew := false, *) {
         selectedCsvRowIndex := GetManageListViewDataRowIndex(csvList, hit.row, 1)
         csvList.Modify(hit.row, "Select Focus")
         StartCsvInlineEdit(hit.row, hit.col)
+    }
+
+    OnCsvEditorListMouseMove(ctl, x, y, *) {
+        if !csvEditorActive
+            return
+
+        hit := GetManageListViewHitSubItem(csvList, x, y)
+        recordingPath := GetSelectedRecordingPath()
+        dataColIndex := hit.col - 1
+        if hit.row != 1 || dataColIndex < 2 {
+            HideManageListDescOverlay()
+            return
+        }
+
+        headerRow := csvEditorRows[1]
+        storedValue := dataColIndex <= headerRow.Length ? headerRow[dataColIndex] : ""
+        if !IsVariableLabelSyncedFromRecording(storedValue, dataColIndex - 1, recordingPath) {
+            HideManageListDescOverlay()
+            return
+        }
+
+        CoordMode "Mouse", "Screen"
+        MouseGetPos &mouseX, &mouseY
+        ShowManageListDescOverlay(FormatSyncedLabelTooltip(recordingPath), mouseX, mouseY)
     }
 
     LoadCsvEditorRow(rowIndex) {
@@ -3939,6 +3978,8 @@ ShowCsvEditor(createNew := false, *) {
         editor.Destroy()
         csvEditorActive := false
         S.syncCsvEditorLabels := ""
+        HideManageListDescOverlay()
+        UnregisterManageSyncedLabelListViewDraw(csvList, editor)
 
         if S.gui
             S.gui.Show()
@@ -3958,6 +3999,8 @@ ShowCsvEditor(createNew := false, *) {
     CloseCsvEditor(*) {
         csvEditorActive := false
         S.syncCsvEditorLabels := ""
+        HideManageListDescOverlay()
+        UnregisterManageSyncedLabelListViewDraw(csvList, editor)
         editor.Destroy()
         if S.gui
             S.gui.Show()
@@ -3966,6 +4009,7 @@ ShowCsvEditor(createNew := false, *) {
     csvList.OnEvent("ItemSelect", OnCsvEditorListSelect)
     csvList.OnEvent("Click", OnCsvEditorListClick)
     csvList.OnEvent("DoubleClick", OnCsvEditorListClick)
+    csvList.OnEvent("MouseMove", OnCsvEditorListMouseMove)
     csvInlineEdit.OnEvent("LoseFocus", CommitCsvInlineEdit)
     addRowBtn.OnEvent("Click", AddCsvEditorRow)
     deleteRowBtn.OnEvent("Click", DeleteCsvEditorRow)
@@ -5661,6 +5705,7 @@ PopulatePresetVariablesList(listView, variableRows, recordingLogPath := "") {
     }
 
     ApplyPresetEditorVariablesListColumns(listView)
+    RefreshManageSyncedLabelListViewCells(listView, BuildPresetEditorSyncedLabelCells(variableRows, recordingLogPath))
 }
 
 /**
@@ -6248,7 +6293,7 @@ ShowPresetEditor(createNew := false, *) {
     editor.Add(
         "Text",
         "xs w" UI.presetEditorWidth " h" UI.presetEditorHelpHeight " c555555",
-        "Click Label or Value to edit inline. Empty labels show from the selected recording and update when you change recordings. Save stores only labels you enter here."
+        "Click Label or Value to edit inline. Blue labels are synced from the selected recording (hover for source). Save stores only labels you enter here."
     )
     addRowBtn := editor.Add(
         "Button",
@@ -6266,6 +6311,11 @@ ShowPresetEditor(createNew := false, *) {
         ["#", "Slot", "Label", "Value"]
     )
     PopulatePresetVariablesList(variablesList, editorVariableRows, selectedRecording)
+    BindManageSyncedLabelListViewDraw(
+        variablesList,
+        editor,
+        BuildPresetEditorSyncedLabelCells(editorVariableRows, selectedRecording)
+    )
     inlineEditCtrl := editor.Add("Edit", "Hidden w10 h22")
 
     RefreshPresetEditorLabelDisplay(*) {
@@ -6326,6 +6376,10 @@ ShowPresetEditor(createNew := false, *) {
             else if inlineEditCol = presetVarColValue
                 editorVariableRows[inlineEditRow].value := newText
             RefreshPresetVariableListRow(variablesList, inlineEditRow, editorVariableRows[inlineEditRow])
+            RefreshManageSyncedLabelListViewCells(
+                variablesList,
+                BuildPresetEditorSyncedLabelCells(editorVariableRows, GetSelectedRecordingPath())
+            )
         }
 
         inlineEditRow := 0
@@ -6451,6 +6505,29 @@ ShowPresetEditor(createNew := false, *) {
         StartVariableInlineEdit(hit.row, hit.col)
     }
 
+    OnPresetEditorVariablesListMouseMove(ctl, x, y, *) {
+        if !presetEditorActive
+            return
+
+        hit := GetManageListViewHitSubItem(variablesList, x, y)
+        recordingPath := GetSelectedRecordingPath()
+        if hit.col != presetVarColLabel || hit.row < 1 {
+            HideManageListDescOverlay()
+            return
+        }
+
+        dataRowIndex := GetManageListViewDataRowIndex(variablesList, hit.row, 1)
+        if dataRowIndex < 1
+            || !IsVariableLabelSyncedFromRecording(editorVariableRows[dataRowIndex].label, dataRowIndex, recordingPath) {
+            HideManageListDescOverlay()
+            return
+        }
+
+        CoordMode "Mouse", "Screen"
+        MouseGetPos &mouseX, &mouseY
+        ShowManageListDescOverlay(FormatSyncedLabelTooltip(recordingPath), mouseX, mouseY)
+    }
+
     SaveEditor(*) {
         CommitVariableInlineEdit()
         DisablePresetEditorInlineEnterHotkey()
@@ -6511,6 +6588,8 @@ ShowPresetEditor(createNew := false, *) {
         DisablePresetInlineEditHotkeys()
         presetEditorActive := false
         S.syncPresetEditorLabels := ""
+        HideManageListDescOverlay()
+        UnregisterManageSyncedLabelListViewDraw(variablesList, editor)
         try editor.Destroy()
         if S.gui
             S.gui.Show()
@@ -6536,6 +6615,7 @@ ShowPresetEditor(createNew := false, *) {
     variablesList.OnEvent("ItemSelect", OnVariablesListSelect)
     variablesList.OnEvent("Click", OnVariablesListClick)
     variablesList.OnEvent("DoubleClick", OnVariablesListClick)
+    variablesList.OnEvent("MouseMove", OnPresetEditorVariablesListMouseMove)
     inlineEditCtrl.OnEvent("LoseFocus", CommitVariableInlineEdit)
     addRowBtn.OnEvent("Click", AddPresetVariableRow)
     deleteRowBtn.OnEvent("Click", DeletePresetVariableRow)
@@ -6566,10 +6646,15 @@ ShowPresetEditor(createNew := false, *) {
 ; =============================================================================
 
 /**
- * Up Arrow when idle: start Record (same as the Record button). Key is not sent.
+ * PgUp (or remapped key): start Record when idle, save when already recording. Key is not sent.
  */
-StartRecordingFromHotkey(*) {
-    StartRecording()
+ToggleRecordingFromHotkey(*) {
+    global S
+
+    if S.recording
+        SaveRecording()
+    else
+        StartRecording()
 }
 
 /**
@@ -8024,6 +8109,174 @@ GetCsvEditorDisplayCellValue(rowIndex, dataColIndex, storedValue, recordingLogPa
 }
 
 /**
+ * Returns true when a label cell is empty in storage but shown from the recording.
+ * @param {String} storedLabel Label saved in the data input or CSV header.
+ * @param {Integer} rowIndex One-based variable index.
+ * @param {String} recordingLogPath Selected recording path.
+ * @returns {Boolean}
+ */
+IsVariableLabelSyncedFromRecording(storedLabel, rowIndex, recordingLogPath := "") {
+    return Trim(storedLabel) = "" && ResolveMergedVariableLabel("", rowIndex, recordingLogPath) != ""
+}
+
+/**
+ * Builds the hover tooltip for a recording-synced label cell.
+ * @param {String} recordingLogPath Selected recording path.
+ * @returns {String}
+ */
+FormatSyncedLabelTooltip(recordingLogPath := "") {
+    if recordingLogPath = "" || !FileExist(recordingLogPath)
+        return "Sync from recording"
+
+    return "Sync from " FormatRecordingName(recordingLogPath)
+}
+
+/**
+ * Builds synced-label cell keys for the preset editor ListView.
+ * @param {Array<Object>} variableRows Parsed variable rows.
+ * @param {String} recordingLogPath Selected recording path.
+ * @returns {Map}
+ */
+BuildPresetEditorSyncedLabelCells(variableRows, recordingLogPath := "") {
+    syncedCells := Map()
+
+    Loop variableRows.Length {
+        if IsVariableLabelSyncedFromRecording(variableRows[A_Index].label, A_Index, recordingLogPath)
+            syncedCells[A_Index "|2"] := true
+    }
+
+    return syncedCells
+}
+
+/**
+ * Builds synced-label cell keys for the CSV editor header row.
+ * @param {Array<Array<String>>} csvEditorRows CSV editor rows.
+ * @param {Integer} colCount Number of editable data columns.
+ * @param {String} recordingLogPath Selected recording path.
+ * @returns {Map}
+ */
+BuildCsvEditorSyncedLabelCells(csvEditorRows, colCount, recordingLogPath := "") {
+    syncedCells := Map()
+
+    if !IsObject(csvEditorRows) || csvEditorRows.Length < 1
+        return syncedCells
+
+    headerRow := csvEditorRows[1]
+    Loop colCount {
+        dataColIndex := A_Index
+        if dataColIndex < 2
+            continue
+
+        storedValue := dataColIndex <= headerRow.Length ? headerRow[dataColIndex] : ""
+        if IsVariableLabelSyncedFromRecording(storedValue, dataColIndex - 1, recordingLogPath)
+            syncedCells["1|" dataColIndex] := true
+    }
+
+    return syncedCells
+}
+
+/**
+ * NM_CUSTOMDRAW handler: paints recording-synced label cells blue in editor ListViews.
+ * @param {Gui} gui Owner dialog.
+ * @param {Ptr} lParam NMLVCUSTOMDRAW pointer.
+ * @returns {Integer}
+ */
+OnManageSyncedLabelListViewCustomDraw(gui, lParam, *) {
+    global S, UI
+
+    hwndFrom := NumGet(lParam, 0, "Ptr")
+    if !S.syncedLabelListViewContexts.Has(hwndFrom)
+        return 0
+
+    ctx := S.syncedLabelListViewContexts[hwndFrom]
+    stage := NumGet(lParam, 24, "UInt")
+
+    static CDDS_PREPAINT := 0x00000001
+    static CDDS_ITEMPREPAINT := 0x00010001
+    static CDDS_SUBITEMPREPAINT := 0x00030001
+    static CDRF_NOTIFYITEMDRAW := 0x00000020
+    static CDRF_NOTIFYSUBITEMDRAW := 0x00000080
+    static CDRF_NEWFONT := 0x00000002
+
+    if stage = CDDS_PREPAINT
+        return CDRF_NOTIFYITEMDRAW
+
+    if stage = CDDS_ITEMPREPAINT
+        return CDRF_NOTIFYSUBITEMDRAW
+
+    if stage != CDDS_SUBITEMPREPAINT
+        return 0
+
+    visualRow := NumGet(lParam, 56, "UPtr") + 1
+    subItem := NumGet(lParam, 88, "Int")
+    dataRow := GetManageListViewDataRowIndex(ctx.listView, visualRow, 1)
+    if dataRow < 1
+        return 0
+
+    cellKey := dataRow "|" subItem
+    if !ctx.syncedCells.Has(cellKey)
+        return 0
+
+    NumPut("UInt", UI.syncedLabelTextColorRef, lParam, 80)
+    return CDRF_NEWFONT
+}
+
+/**
+ * Registers custom draw and synced-cell tracking for one editor ListView.
+ * @param {Gui.ListView} listView Target ListView.
+ * @param {Gui} parentGui Owning dialog.
+ * @param {Map} syncedCells `{row|subItem}` keys for blue synced labels.
+ */
+BindManageSyncedLabelListViewDraw(listView, parentGui, syncedCells) {
+    global S
+
+    S.syncedLabelListViewContexts[listView.Hwnd] := {
+        listView: listView,
+        syncedCells: syncedCells
+    }
+
+    if S.syncedLabelNotifyGuis.Has(parentGui.Hwnd)
+        return
+
+    parentGui.OnNotify(-12, OnManageSyncedLabelListViewCustomDraw)
+    S.syncedLabelNotifyGuis[parentGui.Hwnd] := true
+}
+
+/**
+ * Updates synced-label cell keys for one registered editor ListView.
+ * @param {Gui.ListView} listView Target ListView.
+ * @param {Map} syncedCells `{row|subItem}` keys for blue synced labels.
+ */
+RefreshManageSyncedLabelListViewCells(listView, syncedCells) {
+    global S
+
+    if !S.syncedLabelListViewContexts.Has(listView.Hwnd)
+        return
+
+    S.syncedLabelListViewContexts[listView.Hwnd].syncedCells := syncedCells
+    try listView.Redraw()
+}
+
+/**
+ * Removes synced-label custom draw tracking for one editor ListView.
+ * @param {Gui.ListView} listView Target ListView.
+ * @param {Gui} parentGui Owning dialog.
+ */
+UnregisterManageSyncedLabelListViewDraw(listView, parentGui := "") {
+    global S
+
+    try S.syncedLabelListViewContexts.Delete(listView.Hwnd)
+    catch {
+    }
+
+    if parentGui != "" {
+        try S.syncedLabelNotifyGuis.Delete(parentGui.Hwnd)
+        catch {
+        }
+    }
+}
+
+/**
  * Refreshes open data-input and CSV editors when the recording selection changes.
  */
 RefreshManageInputEditorsFromRecordingSelection() {
@@ -9224,12 +9477,12 @@ IsIdleForManageHotkey(*) {
 }
 
 /**
- * True when the start-recording hotkey is active (idle, not applying or batching).
+ * True when the start/save recording toggle hotkey is active.
  * @returns {Boolean}
  */
-IsRecordStartHotkeyActive(*) {
+IsRecordToggleHotkeyActive(*) {
     global S
-    return !S.recording && !S.applying && !S.batchRunning
+    return !S.applying && !S.batchRunning
 }
 
 /**
@@ -9251,8 +9504,8 @@ SetManageHotkeyConditionContext(conditionName) {
     switch conditionName {
         case "recording":
             HotIf IsRecording
-        case "recordStart":
-            HotIf IsRecordStartHotkeyActive
+        case "recordToggle":
+            HotIf IsRecordToggleHotkeyActive
         case "playbackStop":
             HotIf IsPlaybackStopHotkeyActive
         case "applying":
@@ -9275,8 +9528,8 @@ GetManageHotkeyCondition(conditionName) {
     switch conditionName {
         case "recording":
             return IsRecording
-        case "recordStart":
-            return IsRecordStartHotkeyActive
+        case "recordToggle":
+            return IsRecordToggleHotkeyActive
         case "playbackStop":
             return IsPlaybackStopHotkeyActive
         case "applying":
@@ -9296,8 +9549,8 @@ GetManageHotkeyCondition(conditionName) {
  */
 GetManageHotkeyHandler(actionId) {
     switch actionId {
-        case "startRecording":
-            return StartRecordingFromHotkey
+        case "toggleRecording":
+            return ToggleRecordingFromHotkey
         case "saveRecording":
             return SaveRecordingFromHotkey
         case "stopPlayback":
@@ -9359,12 +9612,15 @@ LoadManageHotkeyBindings() {
     }
 
     if FileExist(C.stateFile) {
-        legacyToggle := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "toggleRecording", ""))
-        if legacyToggle != "" {
-            explicitStart := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "startRecording", "__missing__"))
-            if explicitStart = "__missing__"
-                bindings["startRecording"] := legacyToggle
+        storedToggle := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "toggleRecording", "__missing__"))
+        if storedToggle = "__missing__" {
+            legacyStart := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "startRecording", "__missing__"))
+            if legacyStart != "__missing__"
+                bindings["toggleRecording"] := legacyStart
         }
+
+        if StrLower(bindings["toggleRecording"]) = "up"
+            bindings["toggleRecording"] := "PgUp"
 
         legacyPause := Trim(IniRead(C.stateFile, C.stateHotkeysSection, "pauseResumePlayback", ""))
         if legacyPause = "Down" && bindings["pauseResumePlayback"] = "Down"
@@ -9514,8 +9770,9 @@ ApplyManageHotkeyBinding(actionId, key) {
  * @returns {String}
  */
 BuildRecordingTipText() {
+    toggleKey := GetManageHotkeyBinding("toggleRecording")
     saveKey := GetManageHotkeyBinding("saveRecording")
-    return saveKey " = Save · Click = click · Hold/drag LMB = path · Hold Caps Lock = delay"
+    return toggleKey " / " saveKey " = Save · Click = click · Hold/drag LMB = path · Hold Caps Lock = delay"
 }
 
 /**
@@ -9523,8 +9780,9 @@ BuildRecordingTipText() {
  * @returns {String}
  */
 BuildRecordingTransientTipText() {
+    toggleKey := GetManageHotkeyBinding("toggleRecording")
     saveKey := GetManageHotkeyBinding("saveRecording")
-    return "Recording... " saveKey " = save. Click = click. Hold Caps Lock = delay. Hold/drag left-click = mouse hold. Ctrl/Shift/Alt shortcuts supported."
+    return "Recording... " toggleKey " or " saveKey " = save. Click = click. Hold Caps Lock = delay. Hold/drag left-click = mouse hold. Ctrl/Shift/Alt shortcuts supported."
 }
 
 /**
@@ -9532,13 +9790,13 @@ BuildRecordingTransientTipText() {
  * @returns {String}
  */
 BuildManageHotkeyFooterHint() {
-    hintStartKey := GetManageHotkeyBinding("startRecording")
+    hintToggleKey := GetManageHotkeyBinding("toggleRecording")
     hintSaveKey := GetManageHotkeyBinding("saveRecording")
     hintRunFwdKey := GetManageHotkeyBinding("runForward")
     hintRunRevKey := GetManageHotkeyBinding("runReverse")
     hintPauseKey := GetManageHotkeyBinding("pauseResumePlayback")
 
-    return "Record: " hintStartKey " start, " hintSaveKey " save. Run: " hintRunFwdKey "/" hintRunRevKey
+    return "Record: " hintToggleKey " start/save, " hintSaveKey " save. Run: " hintRunFwdKey "/" hintRunRevKey
         . " forward/reverse; " hintPauseKey " pause/resume (" hintRunRevKey " rewinds from pause). Caps Lock = delay; a,b,c = Var."
 }
 
