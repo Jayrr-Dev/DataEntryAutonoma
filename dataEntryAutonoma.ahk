@@ -834,7 +834,7 @@ S := {
     listTooltipPendingX: 0,
     listTooltipPendingY: 0,
     syncedLabelListViewContexts: Map(),
-    syncedLabelNotifyGuis: Map(),
+    syncedLabelNotifyListViews: Map(),
     presetEditorEnterCallback: "",
     recordingDescCache: Map(),
     presetDescCache: Map(),
@@ -3832,11 +3832,24 @@ ShowCsvEditor(createNew := false, *) {
         StartCsvInlineEdit(hit.row, hit.col)
     }
 
-    OnCsvEditorListMouseMove(ctl, x, y, *) {
+    OnCsvEditorListMouseMove(*) {
         if !csvEditorActive
             return
 
-        hit := GetManageListViewHitSubItem(csvList, x, y)
+        if !ManageIsMouseInGuiControl(csvList) {
+            HideManageListDescOverlay()
+            return
+        }
+
+        ControlGetPos &listX, &listY, , , csvList
+        CoordMode "Mouse", "Client"
+        MouseGetPos &mouseX, &mouseY, , &controlHwnd, 2
+        if controlHwnd != csvList.Hwnd {
+            HideManageListDescOverlay()
+            return
+        }
+
+        hit := GetManageListViewHitSubItem(csvList, mouseX - listX, mouseY - listY)
         recordingPath := GetSelectedRecordingPath()
         dataColIndex := hit.col - 1
         if hit.row != 1 || dataColIndex < 2 {
@@ -3976,6 +3989,7 @@ ShowCsvEditor(createNew := false, *) {
         }
 
         editor.Destroy()
+        SetTimer(OnCsvEditorListMouseMove, 0)
         csvEditorActive := false
         S.syncCsvEditorLabels := ""
         HideManageListDescOverlay()
@@ -3998,6 +4012,7 @@ ShowCsvEditor(createNew := false, *) {
 
     CloseCsvEditor(*) {
         csvEditorActive := false
+        SetTimer(OnCsvEditorListMouseMove, 0)
         S.syncCsvEditorLabels := ""
         HideManageListDescOverlay()
         UnregisterManageSyncedLabelListViewDraw(csvList, editor)
@@ -4009,7 +4024,6 @@ ShowCsvEditor(createNew := false, *) {
     csvList.OnEvent("ItemSelect", OnCsvEditorListSelect)
     csvList.OnEvent("Click", OnCsvEditorListClick)
     csvList.OnEvent("DoubleClick", OnCsvEditorListClick)
-    csvList.OnEvent("MouseMove", OnCsvEditorListMouseMove)
     csvInlineEdit.OnEvent("LoseFocus", CommitCsvInlineEdit)
     addRowBtn.OnEvent("Click", AddCsvEditorRow)
     deleteRowBtn.OnEvent("Click", DeleteCsvEditorRow)
@@ -4031,6 +4045,7 @@ ShowCsvEditor(createNew := false, *) {
         "w" (UI.csvEditorWidth + 24)
         " h" GetManageChildGuiClientHeight(editor, closeBtn, UI.csvEditorBottomPad)
     )
+    SetTimer(OnCsvEditorListMouseMove, C.manageListTooltipMouseMoveMinMs)
     ApplyCsvEditorListColumns(csvList, csvEditorColCount)
     csvList.Focus()
 }
@@ -6505,11 +6520,24 @@ ShowPresetEditor(createNew := false, *) {
         StartVariableInlineEdit(hit.row, hit.col)
     }
 
-    OnPresetEditorVariablesListMouseMove(ctl, x, y, *) {
+    OnPresetEditorVariablesListMouseMove(*) {
         if !presetEditorActive
             return
 
-        hit := GetManageListViewHitSubItem(variablesList, x, y)
+        if !ManageIsMouseInGuiControl(variablesList) {
+            HideManageListDescOverlay()
+            return
+        }
+
+        ControlGetPos &listX, &listY, , , variablesList
+        CoordMode "Mouse", "Client"
+        MouseGetPos &mouseX, &mouseY, , &controlHwnd, 2
+        if controlHwnd != variablesList.Hwnd {
+            HideManageListDescOverlay()
+            return
+        }
+
+        hit := GetManageListViewHitSubItem(variablesList, mouseX - listX, mouseY - listY)
         recordingPath := GetSelectedRecordingPath()
         if hit.col != presetVarColLabel || hit.row < 1 {
             HideManageListDescOverlay()
@@ -6587,6 +6615,7 @@ ShowPresetEditor(createNew := false, *) {
     CloseEditor(*) {
         DisablePresetInlineEditHotkeys()
         presetEditorActive := false
+        SetTimer(OnPresetEditorVariablesListMouseMove, 0)
         S.syncPresetEditorLabels := ""
         HideManageListDescOverlay()
         UnregisterManageSyncedLabelListViewDraw(variablesList, editor)
@@ -6615,7 +6644,6 @@ ShowPresetEditor(createNew := false, *) {
     variablesList.OnEvent("ItemSelect", OnVariablesListSelect)
     variablesList.OnEvent("Click", OnVariablesListClick)
     variablesList.OnEvent("DoubleClick", OnVariablesListClick)
-    variablesList.OnEvent("MouseMove", OnPresetEditorVariablesListMouseMove)
     inlineEditCtrl.OnEvent("LoseFocus", CommitVariableInlineEdit)
     addRowBtn.OnEvent("Click", AddPresetVariableRow)
     deleteRowBtn.OnEvent("Click", DeletePresetVariableRow)
@@ -6633,6 +6661,7 @@ ShowPresetEditor(createNew := false, *) {
         "w" (UI.presetEditorWidth + 24)
         " h" GetManageChildGuiClientHeight(editor, closeBtn, UI.presetEditorBottomPad)
     )
+    SetTimer(OnPresetEditorVariablesListMouseMove, C.manageListTooltipMouseMoveMinMs)
     ApplyPresetEditorVariablesListColumns(variablesList)
     if editorVariableRows.Length
         variablesList.Focus()
@@ -8177,11 +8206,11 @@ BuildCsvEditorSyncedLabelCells(csvEditorRows, colCount, recordingLogPath := "") 
 
 /**
  * NM_CUSTOMDRAW handler: paints recording-synced label cells blue in editor ListViews.
- * @param {Gui} gui Owner dialog.
+ * @param {Gui.ListView} listView Source ListView control.
  * @param {Ptr} lParam NMLVCUSTOMDRAW pointer.
  * @returns {Integer}
  */
-OnManageSyncedLabelListViewCustomDraw(gui, lParam, *) {
+OnManageSyncedLabelListViewCustomDraw(listView, lParam, *) {
     global S, UI
 
     hwndFrom := NumGet(lParam, 0, "Ptr")
@@ -8235,11 +8264,11 @@ BindManageSyncedLabelListViewDraw(listView, parentGui, syncedCells) {
         syncedCells: syncedCells
     }
 
-    if S.syncedLabelNotifyGuis.Has(parentGui.Hwnd)
+    if S.syncedLabelNotifyListViews.Has(listView.Hwnd)
         return
 
-    parentGui.OnNotify(-12, OnManageSyncedLabelListViewCustomDraw)
-    S.syncedLabelNotifyGuis[parentGui.Hwnd] := true
+    listView.OnNotify(-12, OnManageSyncedLabelListViewCustomDraw)
+    S.syncedLabelNotifyListViews[listView.Hwnd] := true
 }
 
 /**
@@ -8269,8 +8298,11 @@ UnregisterManageSyncedLabelListViewDraw(listView, parentGui := "") {
     catch {
     }
 
-    if parentGui != "" {
-        try S.syncedLabelNotifyGuis.Delete(parentGui.Hwnd)
+    if S.syncedLabelNotifyListViews.Has(listView.Hwnd) {
+        try listView.OnNotify(-12, OnManageSyncedLabelListViewCustomDraw, 0)
+        catch {
+        }
+        try S.syncedLabelNotifyListViews.Delete(listView.Hwnd)
         catch {
         }
     }
